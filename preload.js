@@ -13,4 +13,6 @@ contextBridge.exposeInMainWorld('api', {
   toggleFullscreen: () => ipcRenderer.send('win:toggle-fullscreen'),
   setThemeBg: (color) => ipcRenderer.send('app:theme-bg', color),
   rendered: () => ipcRenderer.send('dev:rendered'),
+  onUpdateReady: (cb) => ipcRenderer.on('update-ready', (_e, version) => cb(version)),
+  installUpdate: () => ipcRenderer.send('app:install-update'),
 });

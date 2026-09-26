@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { unzipSync } = require('fflate');
+const { autoUpdater } = require('electron-updater');
 
 const BOOK_EXTS = new Set(['fb2', 'epub', 'txt', 'zip']);
 const MAX_BOOK_SIZE = 300 * 1024 * 1024;
@@ -120,6 +121,34 @@ function setupMenu() {
   }
 }
 
+// ---------- автообновление ----------
+
+let updateReady = null;
+
+// Новые версии берутся из GitHub Releases: скачиваются в фоне и ставятся при выходе
+// (или сразу по кнопке «Перезапустить»). Работает для установленной версии на Windows и AppImage на Linux;
+// переносной exe и неподписанные сборки для macOS обновлять себя не умеют.
+function setupAutoUpdate() {
+  const supported = app.isPackaged &&
+    !process.env.PORTABLE_EXECUTABLE_DIR &&
+    !process.env.SVITOK_SCREENSHOT &&
+    (process.platform === 'win32' || (process.platform === 'linux' && process.env.APPIMAGE));
+  if (!supported) return;
+
+  autoUpdater.logger = console;
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on('update-downloaded', (info) => {
+    updateReady = info.version;
+    if (win) win.webContents.send('update-ready', info.version);
+  });
+  autoUpdater.on('error', (e) => console.warn('update check failed:', e && e.message));
+
+  const check = () => autoUpdater.checkForUpdates().catch(() => {});
+  check();
+  setInterval(check, 4 * 60 * 60 * 1000);
+}
+
 // ---------- IPC ----------
 
 function registerIpc() {
@@ -152,7 +181,14 @@ function registerIpc() {
     rendererReady = true;
     const p = pendingPath;
     pendingPath = null;
+    // обновление могло скачаться раньше, чем окно было готово
+    if (updateReady && win) win.webContents.send('update-ready', updateReady);
     return p;
+  });
+
+  ipcMain.on('app:install-update', () => {
+    // тихая установка и сразу запуск новой версии
+    if (updateReady) autoUpdater.quitAndInstall(true, true);
   });
 
   ipcMain.on('app:open-external', (_e, url) => {
@@ -215,6 +251,7 @@ if (!app.requestSingleInstanceLock()) {
     setupMenu();
     registerIpc();
     createWindow();
+    setupAutoUpdate();
     app.on('activate', () => {
       if (!BrowserWindow.getAllWindows().length) createWindow();
     });

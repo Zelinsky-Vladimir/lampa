@@ -622,6 +622,24 @@ kbd {
 }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
 
+#update-banner {
+  position: fixed;
+  top: calc(var(--bar-h) + 10px);
+  right: 14px;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 28px);
+  padding: 8px 8px 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+}
+#update-banner .primary-btn { padding: 7px 14px; font-size: 13px; }
+
 #drop-overlay {
   position: fixed;
   inset: 12px;

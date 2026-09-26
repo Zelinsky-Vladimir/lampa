@@ -1270,6 +1270,18 @@
     bindUI();
     renderHome();
     api.onOpenPath(openPath);
+    api.onUpdateReady((version) => {
+      $('#update-text').textContent = `Готова новая версия ${version}`;
+      $('#update-banner').hidden = false;
+    });
+    $('#update-restart').addEventListener('click', () => {
+      savePosition();
+      api.installUpdate();
+    });
+    $('#update-later').addEventListener('click', () => {
+      $('#update-banner').hidden = true;
+      toast('Обновление установится, когда вы закроете Svitok', 3000);
+    });
     const initial = await api.takeInitialPath();
     if (initial) openPath(initial);
     else api.rendered();
