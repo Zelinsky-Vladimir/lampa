@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ru" data-mode="home">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; font-src 'self'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Svitok</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header id="bar">
+    <button class="icon-btn reader-only" id="btn-home" title="Библиотека">
+      <svg viewBox="0 0 24 24"><path d="M5 4h3v16H5zM10 4h3v16h-3zM15.2 5.1l2.9-.8 3.6 15-2.9.8z"/></svg>
+    </button>
+    <button class="icon-btn reader-only" id="btn-toc" title="Оглавление (T)">
+      <svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></svg>
+    </button>
+    <div id="bar-title" class="reader-only"><span id="bar-book"></span><span id="bar-chapter"></span></div>
+    <div class="spacer home-only"></div>
+    <span id="progress-text" class="reader-only"></span>
+    <button class="icon-btn reader-only" id="btn-auto" title="Автопрокрутка (A)">
+      <svg viewBox="0 0 24 24"><path d="M12 4v14M6.5 12.5 12 18l5.5-5.5M6 21h12"/></svg>
+    </button>
+    <button class="icon-btn" id="btn-full" title="Полный экран (F11)">
+      <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+    </button>
+    <button class="icon-btn" id="btn-settings" title="Оформление (S)">
+      <svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17" r="2"/></svg>
+    </button>
+    <button class="icon-btn" id="btn-open" title="Открыть книгу (Ctrl+O)">
+      <svg viewBox="0 0 24 24"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></svg>
+    </button>
+  </header>
+
+  <main id="home">
+    <div class="home-inner">
+      <section class="hero">
+        <div class="logo">Svitok</div>
+        <p class="tagline">Книга одной лентой — просто листайте вниз</p>
+        <button class="primary-btn" id="home-open">
+          <svg viewBox="0 0 24 24"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></svg>
+          Открыть книгу
+        </button>
+        <p class="hint">или перетащите файл в окно · FB2, FB2.ZIP, EPUB, TXT</p>
+      </section>
+      <section id="recent-section" hidden>
+        <h2 class="section-title">Недавние</h2>
+        <div class="grid" id="recent"></div>
+      </section>
+    </div>
+  </main>
+
+  <div id="scroller" tabindex="-1" hidden>
+    <article id="book"></article>
+  </div>
+  <div id="progress" class="reader-only"><div id="progress-fill"></div></div>
+
+  <div id="scrim"></div>
+
+  <aside class="panel left" id="toc-panel" aria-label="Оглавление">
+    <header>
+      <h3>Оглавление</h3>
+      <button class="icon-btn" data-close title="Закрыть (Esc)"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </header>
+    <nav class="body" id="toc"></nav>
+  </aside>
+
+  <aside class="panel right" id="settings-panel" aria-label="Оформление">
+    <header>
+      <h3>Оформление</h3>
+      <button class="icon-btn" data-close title="Закрыть (Esc)"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </header>
+    <div class="body">
+      <div class="setting">
+        <div class="label">Тема</div>
+        <div class="themes" id="themes"></div>
+        <div class="custom-colors" id="custom-colors">
+          <label>Фон <input type="color" id="custom-bg"></label>
+          <label>Текст <input type="color" id="custom-fg"></label>
+        </div>
+      </div>
+      <div class="setting">
+        <label class="label" for="font">Шрифт</label>
+        <select id="font"></select>
+      </div>
+      <div class="setting">
+        <label class="label" for="font-size">Размер <span id="font-size-val"></span></label>
+        <input type="range" id="font-size" min="12" max="44" step="1">
+      </div>
+      <div class="setting">
+        <label class="label" for="line-height">Межстрочный интервал <span id="line-height-val"></span></label>
+        <input type="range" id="line-height" min="1.1" max="2.4" step="0.05">
+      </div>
+      <div class="setting">
+        <label class="label" for="width">Ширина колонки <span id="width-val"></span></label>
+        <input type="range" id="width" min="480" max="1600" step="20">
+      </div>
+      <div class="setting">
+        <div class="label">Выравнивание</div>
+        <div class="seg" data-key="justify">
+          <button data-value="true">По ширине</button>
+          <button data-value="false">По левому краю</button>
+        </div>
+      </div>
+      <div class="setting">
+        <div class="label">Абзацы</div>
+        <div class="seg" data-key="indent">
+          <button data-value="true">Красная строка</button>
+          <button data-value="false">Интервал</button>
+        </div>
+      </div>
+      <div class="setting">
+        <label class="label" for="auto-speed">Скорость автопрокрутки <span id="auto-speed-val"></span></label>
+        <input type="range" id="auto-speed" min="10" max="300" step="5">
+      </div>
+      <button class="text-btn" id="reset-settings">Сбросить оформление</button>
+
+      <div class="setting shortcuts">
+        <div class="label">Клавиши</div>
+        <dl>
+          <dt><kbd>Пробел</kbd> <kbd>PgDn</kbd></dt><dd>страница вниз</dd>
+          <dt><kbd>Shift</kbd>+<kbd>Пробел</kbd></dt><dd>страница вверх</dd>
+          <dt><kbd>T</kbd></dt><dd>оглавление</dd>
+          <dt><kbd>S</kbd></dt><dd>оформление</dd>
+          <dt><kbd>A</kbd></dt><dd>автопрокрутка, <kbd>[</kbd> <kbd>]</kbd> — скорость</dd>
+          <dt><kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>−</kbd></dt><dd>размер шрифта</dd>
+          <dt><kbd>Ctrl</kbd>+<kbd>O</kbd></dt><dd>открыть книгу</dd>
+          <dt><kbd>F11</kbd></dt><dd>полный экран</dd>
+        </dl>
+      </div>
+    </div>
+  </aside>
+
+  <div id="note-pop" hidden></div>
+  <button id="back-btn" hidden>← Вернуться</button>
+  <div id="drop-overlay">Отпустите файл, чтобы открыть</div>
+  <div id="toast" role="status"></div>
+
+  <script src="decode.js"></script>
+  <script src="parsers.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
