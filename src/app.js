@@ -332,7 +332,10 @@
     saveSettings();
     applySettings();
     if (langChanged) applyLanguage();
-    if (anchor) scrollToAnchor(anchor);
+    if (anchor) {
+      quietScroll();
+      scrollToAnchor(anchor);
+    }
     updateProgress();
   }
 
@@ -724,6 +727,13 @@
   // ---------- панели сверху и снизу ----------
 
   let lastScrollTop = 0;
+  // Мышь над панелью — панели не прячутся; подкрутка самим приложением (смена шрифта, ширины) их тоже не прячет.
+  let chromeHover = false;
+  let quietScrollUntil = 0;
+  const quietScroll = () => {
+    quietScrollUntil = performance.now() + 350;
+  };
+
   function setBar(visible) {
     root.dataset.chrome = visible ? 'shown' : 'hidden';
   }
@@ -731,7 +741,7 @@
   let editorOpenedAt = 0;
   function onScroll() {
     const st = ui.scroller.scrollTop;
-    if (!anyPanelOpen() && !displayOpen()) {
+    if (!anyPanelOpen() && !displayOpen() && !chromeHover && performance.now() > quietScrollUntil) {
       if (st > lastScrollTop + 6 && st > 120) setBar(false);
       else if (st < lastScrollTop - 6) setBar(true);
     }
@@ -1330,6 +1340,7 @@
     const anchor = blockAtTop();
     ui.searchPanel.classList.add('open');
     root.dataset.search = 'open';
+    quietScroll();
     scrollToAnchor(anchor);
     setBar(true);
     // подсветка возвращается, если поиск открыли повторно
@@ -1348,6 +1359,7 @@
     const anchor = readerVisible() ? blockAtTop() : null;
     ui.searchPanel.classList.remove('open');
     delete root.dataset.search;
+    quietScroll();
     if (anchor) scrollToAnchor(anchor);
     clearHighlights();
     ui.scroller.focus({ preventScroll: true });
@@ -1970,6 +1982,14 @@
     ui.backBtn.addEventListener('click', goBack);
 
     ui.scroller.addEventListener('scroll', onScroll, { passive: true });
+    for (const panel of [ui.bar, $('#footer')]) {
+      panel.addEventListener('mouseenter', () => {
+        chromeHover = true;
+      });
+      panel.addEventListener('mouseleave', () => {
+        chromeHover = false;
+      });
+    }
     window.addEventListener('wheel', onWheel, { passive: false });
     ui.book.addEventListener('click', (e) => {
       const a = e.target.closest('a');
