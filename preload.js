@@ -4,7 +4,7 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
   platform: process.platform,
-  openDialog: () => ipcRenderer.invoke('dialog:open'),
+  openDialog: (labels) => ipcRenderer.invoke('dialog:open', labels),
   loadBook: (p) => ipcRenderer.invoke('book:load', p),
   takeInitialPath: () => ipcRenderer.invoke('app:take-initial-path'),
   onOpenPath: (cb) => ipcRenderer.on('open-path', (_e, p) => cb(p)),

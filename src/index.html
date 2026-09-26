@@ -1,36 +1,55 @@
 <!doctype html>
-<html lang="ru" data-mode="home">
+<html lang="en" data-mode="home">
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; font-src 'self'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Svitok</title>
+  <title>Lampa</title>
+  <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header id="bar">
-    <button class="icon-btn reader-only" id="btn-home" title="Библиотека">
+    <button class="icon-btn reader-only" id="btn-home" data-i18n-title="library">
       <svg viewBox="0 0 24 24"><path d="M5 4h3v16H5zM10 4h3v16h-3zM15.2 5.1l2.9-.8 3.6 15-2.9.8z"/></svg>
     </button>
-    <button class="icon-btn reader-only" id="btn-toc" title="Оглавление (T)">
+    <button class="icon-btn reader-only" id="btn-toc" data-i18n-title="tocBtn">
       <svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></svg>
     </button>
     <div id="bar-title" class="reader-only"><span id="bar-book"></span><span id="bar-chapter"></span></div>
     <div class="spacer home-only"></div>
-    <button class="icon-btn reader-only" id="btn-search" title="Поиск (Ctrl+F)">
+
+    <select id="bar-font" class="bar-select reader-only wide-only" data-i18n-title="font"></select>
+    <div class="btn-group reader-only wide-only">
+      <button class="icon-btn txt" id="btn-zoom-out" data-i18n-title="zoomOut">A−</button>
+      <button class="icon-btn txt" id="btn-zoom-in" data-i18n-title="zoomIn">A+</button>
+    </div>
+    <div class="btn-group reader-only wide-only">
+      <button class="icon-btn" id="btn-narrow" data-i18n-title="narrower">
+        <svg viewBox="0 0 24 24"><path d="M3 12h5M6 9.5 8.5 12 6 14.5M21 12h-5M18 9.5 15.5 12l2.5 2.5M12 5v14"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-wide" data-i18n-title="wider">
+        <svg viewBox="0 0 24 24"><path d="M3.5 12h6M6 9.5 3.5 12 6 14.5M20.5 12h-6M18 9.5l2.5 2.5-2.5 2.5M12 5v14"/></svg>
+      </button>
+    </div>
+
+    <button class="icon-btn reader-only" id="btn-search" data-i18n-title="searchBtn">
       <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
     </button>
-    <button class="icon-btn reader-only" id="btn-auto" title="Автопрокрутка (A)">
+    <button class="icon-btn reader-only" id="btn-bookmark" data-i18n-title="bookmarkBtn">
+      <svg viewBox="0 0 24 24"><path d="M7 4.5h10v15.5l-5-3.8-5 3.8z"/></svg>
+    </button>
+    <button class="icon-btn reader-only" id="btn-auto" data-i18n-title="autoBtn">
       <svg viewBox="0 0 24 24"><path d="M12 4v14M6.5 12.5 12 18l5.5-5.5M6 21h12"/></svg>
     </button>
-    <button class="icon-btn" id="btn-full" title="Полный экран (F11)">
+    <button class="icon-btn" id="btn-full" data-i18n-title="fullBtn">
       <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
     </button>
-    <button class="icon-btn" id="btn-settings" title="Оформление (S)">
+    <button class="icon-btn" id="btn-settings" data-i18n-title="settingsBtn">
       <svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17" r="2"/></svg>
     </button>
-    <button class="icon-btn" id="btn-open" title="Открыть книгу (Ctrl+O)">
+    <button class="icon-btn" id="btn-open" data-i18n-title="openBtn">
       <svg viewBox="0 0 24 24"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></svg>
     </button>
   </header>
@@ -38,8 +57,9 @@
   <main id="home">
     <div class="home-inner">
       <section class="hero">
-        <div class="logo">Svitok</div>
-        <p class="tagline">Книга одной лентой — просто листайте вниз</p>
+        <img class="logo-icon" src="../build/icon.png" alt="">
+        <div class="logo">Lampa</div>
+        <p class="tagline" data-i18n="tagline"></p>
         <div class="hero-actions">
           <button class="primary-btn" id="home-continue" hidden>
             <svg viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z"/></svg>
@@ -47,13 +67,13 @@
           </button>
           <button class="primary-btn" id="home-open">
             <svg viewBox="0 0 24 24"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></svg>
-            Открыть книгу
+            <span data-i18n="openBook"></span>
           </button>
         </div>
-        <p class="hint">или перетащите файл в окно · FB2, FB2.ZIP, EPUB, TXT</p>
+        <p class="hint" data-i18n="dropHint"></p>
       </section>
       <section id="recent-section" hidden>
-        <h2 class="section-title">Недавние</h2>
+        <h2 class="section-title" data-i18n="recent"></h2>
         <div class="grid" id="recent"></div>
       </section>
     </div>
@@ -69,12 +89,12 @@
     <div id="foot-chapter"></div>
     <div class="scrub-wrap">
       <div id="scrub-ticks"></div>
-      <input type="range" id="scrub" min="1" max="1" step="1" value="1" aria-label="Прогресс чтения">
+      <input type="range" id="scrub" min="1" max="1" step="1" value="1" data-i18n-aria="progressAria">
       <div id="scrub-tip" hidden></div>
     </div>
-    <div class="page-box" title="Щёлкните, чтобы перейти к странице (Ctrl+G)">
-      <span class="muted">стр.</span>
-      <input id="page-input" type="text" inputmode="numeric" autocomplete="off" aria-label="Номер страницы">
+    <div class="page-box" data-i18n-title="pageInputTitle">
+      <span class="muted" data-i18n="pageLabel"></span>
+      <input id="page-input" type="text" inputmode="numeric" autocomplete="off" data-i18n-aria="pageLabel">
       <span class="muted" id="page-total"></span>
       <span id="page-pct"></span>
     </div>
@@ -82,115 +102,154 @@
 
   <div id="scrim"></div>
 
-  <aside class="panel left" id="toc-panel" aria-label="Оглавление">
+  <aside class="panel left" id="toc-panel">
     <header>
-      <h3>Оглавление</h3>
-      <button class="icon-btn" data-close title="Закрыть (Esc)"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      <div class="tabs" role="tablist">
+        <button data-tab="toc" class="active" data-i18n="tabToc"></button>
+        <button data-tab="bookmarks"><span data-i18n="tabBookmarks"></span> <span class="count" id="bm-count"></span></button>
+        <button data-tab="notes"><span data-i18n="tabNotes"></span> <span class="count" id="note-count"></span></button>
+      </div>
+      <button class="icon-btn" data-close data-i18n-title="close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </header>
-    <nav class="body" id="toc"></nav>
+    <nav class="body" id="toc" data-tab-body="toc"></nav>
+    <div class="body" id="bookmarks-list" data-tab-body="bookmarks" hidden></div>
+    <div class="body" id="notes-list" data-tab-body="notes" hidden></div>
   </aside>
 
-  <aside class="panel right" id="search-panel" aria-label="Поиск">
+  <aside class="panel right" id="search-panel">
     <header>
-      <h3>Поиск</h3>
-      <button class="icon-btn" id="search-close" title="Закрыть (Esc)"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      <h3 data-i18n="search"></h3>
+      <button class="icon-btn" id="search-close" data-i18n-title="close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </header>
     <div class="search-box">
-      <input id="search-input" type="search" placeholder="Слово или фраза" autocomplete="off" spellcheck="false">
+      <input id="search-input" type="search" autocomplete="off" spellcheck="false" data-i18n-placeholder="searchPlaceholder">
       <div class="search-nav">
         <span id="search-count"></span>
-        <button class="icon-btn" id="search-prev" title="Предыдущее (Shift+Enter)"><svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></button>
-        <button class="icon-btn" id="search-next" title="Следующее (Enter)"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+        <button class="icon-btn" id="search-prev" data-i18n-title="prevMatch"><svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></button>
+        <button class="icon-btn" id="search-next" data-i18n-title="nextMatch"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
       </div>
     </div>
     <div class="body" id="search-results"></div>
   </aside>
 
-  <aside class="panel right" id="settings-panel" aria-label="Оформление">
+  <aside class="panel right" id="settings-panel">
     <header>
-      <h3>Оформление</h3>
-      <button class="icon-btn" data-close title="Закрыть (Esc)"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      <h3 data-i18n="appearance"></h3>
+      <button class="icon-btn" data-close data-i18n-title="close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </header>
     <div class="body">
       <div class="setting">
-        <div class="label">Тема</div>
+        <label class="label" for="lang" data-i18n="language"></label>
+        <select id="lang"></select>
+      </div>
+      <div class="setting">
+        <div class="label" data-i18n="theme"></div>
         <div class="themes" id="themes"></div>
         <div class="custom-colors" id="custom-colors">
-          <label>Фон <input type="color" id="custom-bg"></label>
-          <label>Текст <input type="color" id="custom-fg"></label>
+          <label><span data-i18n="customBg"></span> <input type="color" id="custom-bg"></label>
+          <label><span data-i18n="customFg"></span> <input type="color" id="custom-fg"></label>
         </div>
       </div>
       <div class="setting">
-        <label class="label" for="font">Шрифт</label>
+        <label class="label" for="font" data-i18n="font"></label>
         <select id="font"></select>
       </div>
       <div class="setting">
-        <label class="label" for="font-size">Размер <span id="font-size-val"></span></label>
+        <label class="label" for="font-size"><span data-i18n="size"></span> <span id="font-size-val"></span></label>
         <input type="range" id="font-size" min="12" max="44" step="1">
       </div>
       <div class="setting">
-        <label class="label" for="line-height">Межстрочный интервал <span id="line-height-val"></span></label>
+        <label class="label" for="line-height"><span data-i18n="lineHeight"></span> <span id="line-height-val"></span></label>
         <input type="range" id="line-height" min="1.1" max="2.4" step="0.05">
       </div>
       <div class="setting">
-        <label class="label" for="width">Ширина колонки <span id="width-val"></span></label>
-        <input type="range" id="width" min="480" max="1600" step="20">
+        <label class="label" for="width"><span data-i18n="columnWidth"></span> <span id="width-val"></span></label>
+        <input type="range" id="width" min="480" max="2400" step="20">
       </div>
       <div class="setting">
-        <div class="label">Выравнивание</div>
+        <div class="label" data-i18n="alignment"></div>
         <div class="seg" data-key="justify">
-          <button data-value="true">По ширине</button>
-          <button data-value="false">По левому краю</button>
+          <button data-value="true" data-i18n="justify"></button>
+          <button data-value="false" data-i18n="alignLeft"></button>
         </div>
       </div>
       <div class="setting">
-        <div class="label">Абзацы</div>
+        <div class="label" data-i18n="paragraphs"></div>
         <div class="seg" data-key="indent">
-          <button data-value="true">Красная строка</button>
-          <button data-value="false">Интервал</button>
+          <button data-value="true" data-i18n="indent"></button>
+          <button data-value="false" data-i18n="spacing"></button>
         </div>
       </div>
       <div class="setting">
-        <div class="label">Нижняя панель прогресса</div>
+        <div class="label" data-i18n="footerBar"></div>
         <div class="seg" data-key="footerAlways">
-          <button data-value="true">Всегда видна</button>
-          <button data-value="false">Прятать при чтении</button>
+          <button data-value="true" data-i18n="alwaysVisible"></button>
+          <button data-value="false" data-i18n="hideWhileReading"></button>
         </div>
       </div>
       <div class="setting">
-        <label class="label" for="auto-speed">Скорость автопрокрутки <span id="auto-speed-val"></span></label>
+        <label class="label" for="auto-speed"><span data-i18n="autoSpeed"></span> <span id="auto-speed-val"></span></label>
         <input type="range" id="auto-speed" min="10" max="300" step="5">
       </div>
-      <button class="text-btn" id="reset-settings">Сбросить оформление</button>
+      <button class="text-btn" id="reset-settings" data-i18n="reset"></button>
 
       <div class="setting shortcuts">
-        <div class="label">Клавиши</div>
-        <dl>
-          <dt><kbd>Пробел</kbd> <kbd>PgDn</kbd></dt><dd>страница вниз</dd>
-          <dt><kbd>Shift</kbd>+<kbd>Пробел</kbd></dt><dd>страница вверх</dd>
-          <dt><kbd>Ctrl</kbd>+<kbd>F</kbd></dt><dd>поиск, <kbd>F3</kbd> — следующее</dd>
-          <dt><kbd>Ctrl</kbd>+<kbd>G</kbd></dt><dd>перейти к странице</dd>
-          <dt><kbd>T</kbd></dt><dd>оглавление</dd>
-          <dt><kbd>S</kbd></dt><dd>оформление</dd>
-          <dt><kbd>A</kbd></dt><dd>автопрокрутка, <kbd>[</kbd> <kbd>]</kbd> — скорость</dd>
-          <dt><kbd>Ctrl</kbd>+<kbd>+</kbd> / <kbd>−</kbd></dt><dd>размер шрифта</dd>
-          <dt><kbd>Ctrl</kbd>+<kbd>O</kbd></dt><dd>открыть книгу</dd>
-          <dt><kbd>F11</kbd></dt><dd>полный экран</dd>
-        </dl>
+        <div class="label" data-i18n="keys"></div>
+        <dl id="shortcuts"></dl>
       </div>
     </div>
   </aside>
 
   <div id="note-pop" hidden></div>
-  <button id="back-btn" hidden>← Вернуться</button>
-  <div id="drop-overlay">Отпустите файл, чтобы открыть</div>
+
+  <div id="sel-bar" hidden>
+    <button class="sw" data-color="yellow" data-i18n-title="colorYellow"></button>
+    <button class="sw" data-color="green" data-i18n-title="colorGreen"></button>
+    <button class="sw" data-color="blue" data-i18n-title="colorBlue"></button>
+    <button class="sw" data-color="pink" data-i18n-title="colorPink"></button>
+    <span class="sep"></span>
+    <button class="sel-btn" id="sel-note" data-i18n-title="addNote">
+      <svg viewBox="0 0 24 24"><path d="M5 19h4L19 9l-4-4L5 15zM13 7l4 4"/></svg><span data-i18n="note"></span>
+    </button>
+    <button class="sel-btn" id="sel-copy" data-i18n-title="copy">
+      <svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="12" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg>
+    </button>
+  </div>
+
+  <div id="annot-pop" hidden>
+    <div class="annot-quote" id="annot-quote"></div>
+    <textarea id="annot-text" rows="3" data-i18n-placeholder="notePlaceholder"></textarea>
+    <div class="annot-row">
+      <div class="annot-colors" id="annot-colors">
+        <button class="sw" data-color="yellow" data-i18n-title="colorYellow"></button>
+        <button class="sw" data-color="green" data-i18n-title="colorGreen"></button>
+        <button class="sw" data-color="blue" data-i18n-title="colorBlue"></button>
+        <button class="sw" data-color="pink" data-i18n-title="colorPink"></button>
+      </div>
+      <button class="text-btn" id="annot-delete" data-i18n="delete"></button>
+      <button class="primary-btn" id="annot-save" data-i18n="done"></button>
+    </div>
+  </div>
+
+  <button id="back-btn" hidden data-i18n="back"></button>
+
+  <div id="auto-pill" hidden>
+    <button class="icon-btn" id="auto-stop" data-i18n-title="autoStop"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg></button>
+    <span class="auto-label" data-i18n="autoLabel"></span>
+    <button class="icon-btn txt" id="auto-slower" data-i18n-title="slower">−</button>
+    <span id="auto-speed-label"></span>
+    <button class="icon-btn txt" id="auto-faster" data-i18n-title="faster">+</button>
+  </div>
+
+  <div id="drop-overlay" data-i18n="dropHere"></div>
   <div id="toast" role="status"></div>
   <div id="update-banner" role="status" hidden>
     <span id="update-text"></span>
-    <button class="primary-btn" id="update-restart">Перезапустить</button>
-    <button class="icon-btn" id="update-later" title="Позже — обновится при закрытии"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    <button class="primary-btn" id="update-restart" data-i18n="restart"></button>
+    <button class="icon-btn" id="update-later" data-i18n-title="updateLater"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
   </div>
 
+  <script src="i18n.js"></script>
   <script src="decode.js"></script>
   <script src="parsers.js"></script>
   <script src="app.js"></script>

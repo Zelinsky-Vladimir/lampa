@@ -91,7 +91,7 @@
   function parseFb2(bytes) {
     const { text } = Decode.decodeBytes(bytes, Decode.xmlDeclEncoding(bytes));
     const doc = parseXmlLenient(text);
-    if (!doc) throw new Error('файл FB2 повреждён и не читается');
+    if (!doc) throw new Error(I18n.t('errFb2Broken'));
     const root = doc.documentElement;
     const assets = makeAssets();
 
@@ -117,7 +117,7 @@
       const wrap = el('div', isNotes ? 'fb2-body notes' : 'fb2-body');
       if (isNotes && !kid(body, 'title')) {
         const h = el('h2');
-        h.textContent = 'Примечания';
+        h.textContent = I18n.t('notesHeading');
         wrap.append(h);
       }
       appendFb2(wrap, body, ctx, 0);
@@ -279,10 +279,10 @@
       opfPath = rf && rf.getAttribute('full-path');
     }
     if (!opfPath || !getBytes(opfPath)) opfPath = Object.keys(entries).find((k) => /\.opf$/i.test(k));
-    if (!opfPath) throw new Error('в EPUB нет описания книги (OPF)');
+    if (!opfPath) throw new Error(I18n.t('errNoOpf'));
 
     const opf = parseXmlLenient(getText(opfPath) || '');
-    if (!opf) throw new Error('описание EPUB повреждено');
+    if (!opf) throw new Error(I18n.t('errOpfBroken'));
     const q = (name) => Array.from(opf.getElementsByTagNameNS('*', name));
 
     const manifest = new Map();
@@ -424,7 +424,13 @@
   // ---------- TXT ----------
 
   // (?!\p{L}) вместо \b: в JS \b считает кириллицу «не буквами».
-  const CHAPTER_RE = /^(глава|часть|розділ|частина|книга|том|пролог|эпилог|епілог|предисловие|послесловие|передмова|chapter|part|book|prologue|epilogue)(?!\p{L})/iu;
+  const CHAPTER_RE = new RegExp('^(' + [
+    'глава', 'часть', 'розділ', 'частина', 'книга', 'том', 'пролог', 'эпилог', 'епілог', 'предисловие', 'послесловие', 'передмова',
+    'chapter', 'part', 'book', 'prologue', 'epilogue', 'preface', 'introduction',
+    'chapitre', 'partie', 'livre', 'épilogue', 'préface',
+    'kapitel', 'teil', 'buch', 'prolog', 'epilog', 'vorwort', 'nachwort',
+    'capítulo', 'capitulo', 'parte', 'libro', 'prólogo', 'epílogo', 'prefacio',
+  ].join('|') + ')(?!\\p{L})', 'iu');
 
   function txtKind(line) {
     if (/^[*\s]{3,}$|^[-–—\s]{3,}$/.test(line)) return 'sep';
@@ -502,7 +508,7 @@
         const txt = names.find((n) => /\.txt$/i.test(n));
         if (fb2) book = parseFb2(data.entries[fb2]);
         else if (txt) book = parseTxt(data.entries[txt]);
-        else throw new Error('в архиве нет книги FB2 или TXT');
+        else throw new Error(I18n.t('errNoBookInZip'));
       }
     } else if (data.ext === 'fb2' || looksLikeFb2(data.bytes)) {
       book = parseFb2(data.bytes);

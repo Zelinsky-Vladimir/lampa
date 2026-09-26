@@ -70,7 +70,7 @@ function createWindow() {
     minWidth: 420,
     minHeight: 360,
     show: false,
-    title: 'Svitok',
+    title: 'Lampa',
     backgroundColor: state.bg || '#f4ecd8',
     icon: path.join(__dirname, 'build', 'icon.png'),
     webPreferences: {
@@ -85,6 +85,8 @@ function createWindow() {
   if (state.maximized) win.maximize();
   win.once('ready-to-show', () => win.show());
   win.loadFile(path.join(__dirname, 'src', 'index.html'));
+  // масштаб страницы целиком не нужен: Ctrl+колёсико и жесты меняют только шрифт книги
+  win.webContents.setVisualZoomLevelLimits(1, 1);
 
   // Никаких переходов внутри окна: внешние ссылки открываются в браузере.
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -131,7 +133,7 @@ let updateReady = null;
 function setupAutoUpdate() {
   const supported = app.isPackaged &&
     !process.env.PORTABLE_EXECUTABLE_DIR &&
-    !process.env.SVITOK_SCREENSHOT &&
+    !process.env.LAMPA_SCREENSHOT &&
     (process.platform === 'win32' || (process.platform === 'linux' && process.env.APPIMAGE));
   if (!supported) return;
 
@@ -152,22 +154,23 @@ function setupAutoUpdate() {
 // ---------- IPC ----------
 
 function registerIpc() {
-  ipcMain.handle('dialog:open', async () => {
+  // подписи диалога приходят из окна на выбранном языке интерфейса
+  ipcMain.handle('dialog:open', async (_e, labels = {}) => {
     const r = await dialog.showOpenDialog(win, {
-      title: 'Открыть книгу',
+      title: String(labels.title || 'Open book'),
       properties: ['openFile'],
       filters: [
-        { name: 'Книги', extensions: ['fb2', 'epub', 'txt', 'zip'] },
-        { name: 'Все файлы', extensions: ['*'] },
+        { name: String(labels.books || 'Books'), extensions: ['fb2', 'epub', 'txt', 'zip'] },
+        { name: String(labels.all || 'All files'), extensions: ['*'] },
       ],
     });
     return r.canceled ? null : r.filePaths[0];
   });
 
   ipcMain.handle('book:load', async (_e, p) => {
-    if (!isBookPath(p)) throw new Error('Этот формат не поддерживается');
+    if (!isBookPath(p)) throw new Error('UNSUPPORTED');
     const st = await fsp.stat(p);
-    if (st.size > MAX_BOOK_SIZE) throw new Error('Файл слишком большой');
+    if (st.size > MAX_BOOK_SIZE) throw new Error('TOO_LARGE');
     const buf = await fsp.readFile(p);
     const ext = extOf(p);
     const out = { path: p, name: path.basename(p), size: st.size, ext };
@@ -205,13 +208,13 @@ function registerIpc() {
     if (win) win.setBackgroundColor(color);
   });
 
-  // Для разработки: SVITOK_SCREENSHOT=out.png сохраняет снимок окна после отрисовки и закрывает приложение.
+  // Для разработки: LAMPA_SCREENSHOT=out.png сохраняет снимок окна после отрисовки и закрывает приложение.
   ipcMain.on('dev:rendered', () => {
-    const out = process.env.SVITOK_SCREENSHOT;
+    const out = process.env.LAMPA_SCREENSHOT;
     if (!out || !win) return;
     setTimeout(async () => {
-      if (process.env.SVITOK_EVAL) {
-        await win.webContents.executeJavaScript(process.env.SVITOK_EVAL);
+      if (process.env.LAMPA_EVAL) {
+        await win.webContents.executeJavaScript(process.env.LAMPA_EVAL);
         await new Promise((r) => setTimeout(r, 500));
       }
       const img = await win.webContents.capturePage();
@@ -223,8 +226,21 @@ function registerIpc() {
 
 // ---------- запуск ----------
 
+// Приложение раньше называлось Svitok: при первом запуске под новым именем переносим
+// профиль (библиотеку, закладки, настройки), пока Chromium его ещё не открыл.
+function migrateUserData() {
+  try {
+    const now = app.getPath('userData');
+    const old = path.join(app.getPath('appData'), 'Svitok');
+    if (!fs.existsSync(now) && fs.existsSync(old)) fs.cpSync(old, now, { recursive: true });
+  } catch {
+    // не получилось — начнём с чистого профиля
+  }
+}
+
 // Для разработки: отдельный профиль, чтобы тесты не трогали настоящую библиотеку.
-if (process.env.SVITOK_USER_DATA) app.setPath('userData', path.resolve(process.env.SVITOK_USER_DATA));
+if (process.env.LAMPA_USER_DATA) app.setPath('userData', path.resolve(process.env.LAMPA_USER_DATA));
+else migrateUserData();
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
