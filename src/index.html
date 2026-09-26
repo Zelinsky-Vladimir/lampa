@@ -18,7 +18,9 @@
     </button>
     <div id="bar-title" class="reader-only"><span id="bar-book"></span><span id="bar-chapter"></span></div>
     <div class="spacer home-only"></div>
-    <span id="progress-text" class="reader-only"></span>
+    <button class="icon-btn reader-only" id="btn-search" title="Поиск (Ctrl+F)">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+    </button>
     <button class="icon-btn reader-only" id="btn-auto" title="Автопрокрутка (A)">
       <svg viewBox="0 0 24 24"><path d="M12 4v14M6.5 12.5 12 18l5.5-5.5M6 21h12"/></svg>
     </button>
@@ -38,10 +40,16 @@
       <section class="hero">
         <div class="logo">Svitok</div>
         <p class="tagline">Книга одной лентой — просто листайте вниз</p>
-        <button class="primary-btn" id="home-open">
-          <svg viewBox="0 0 24 24"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></svg>
-          Открыть книгу
-        </button>
+        <div class="hero-actions">
+          <button class="primary-btn" id="home-continue" hidden>
+            <svg viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z"/></svg>
+            <span id="home-continue-text"></span>
+          </button>
+          <button class="primary-btn" id="home-open">
+            <svg viewBox="0 0 24 24"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></svg>
+            Открыть книгу
+          </button>
+        </div>
         <p class="hint">или перетащите файл в окно · FB2, FB2.ZIP, EPUB, TXT</p>
       </section>
       <section id="recent-section" hidden>
@@ -55,6 +63,22 @@
     <article id="book"></article>
   </div>
   <div id="progress" class="reader-only"><div id="progress-fill"></div></div>
+  <div id="mini-page" class="reader-only"></div>
+
+  <footer id="footer" class="reader-only">
+    <div id="foot-chapter"></div>
+    <div class="scrub-wrap">
+      <div id="scrub-ticks"></div>
+      <input type="range" id="scrub" min="1" max="1" step="1" value="1" aria-label="Прогресс чтения">
+      <div id="scrub-tip" hidden></div>
+    </div>
+    <div class="page-box" title="Щёлкните, чтобы перейти к странице (Ctrl+G)">
+      <span class="muted">стр.</span>
+      <input id="page-input" type="text" inputmode="numeric" autocomplete="off" aria-label="Номер страницы">
+      <span class="muted" id="page-total"></span>
+      <span id="page-pct"></span>
+    </div>
+  </footer>
 
   <div id="scrim"></div>
 
@@ -64,6 +88,22 @@
       <button class="icon-btn" data-close title="Закрыть (Esc)"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </header>
     <nav class="body" id="toc"></nav>
+  </aside>
+
+  <aside class="panel right" id="search-panel" aria-label="Поиск">
+    <header>
+      <h3>Поиск</h3>
+      <button class="icon-btn" id="search-close" title="Закрыть (Esc)"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </header>
+    <div class="search-box">
+      <input id="search-input" type="search" placeholder="Слово или фраза" autocomplete="off" spellcheck="false">
+      <div class="search-nav">
+        <span id="search-count"></span>
+        <button class="icon-btn" id="search-prev" title="Предыдущее (Shift+Enter)"><svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></button>
+        <button class="icon-btn" id="search-next" title="Следующее (Enter)"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+      </div>
+    </div>
+    <div class="body" id="search-results"></div>
   </aside>
 
   <aside class="panel right" id="settings-panel" aria-label="Оформление">
@@ -111,6 +151,13 @@
         </div>
       </div>
       <div class="setting">
+        <div class="label">Нижняя панель прогресса</div>
+        <div class="seg" data-key="footerAlways">
+          <button data-value="true">Всегда видна</button>
+          <button data-value="false">Прятать при чтении</button>
+        </div>
+      </div>
+      <div class="setting">
         <label class="label" for="auto-speed">Скорость автопрокрутки <span id="auto-speed-val"></span></label>
         <input type="range" id="auto-speed" min="10" max="300" step="5">
       </div>
@@ -121,6 +168,8 @@
         <dl>
           <dt><kbd>Пробел</kbd> <kbd>PgDn</kbd></dt><dd>страница вниз</dd>
           <dt><kbd>Shift</kbd>+<kbd>Пробел</kbd></dt><dd>страница вверх</dd>
+          <dt><kbd>Ctrl</kbd>+<kbd>F</kbd></dt><dd>поиск, <kbd>F3</kbd> — следующее</dd>
+          <dt><kbd>Ctrl</kbd>+<kbd>G</kbd></dt><dd>перейти к странице</dd>
           <dt><kbd>T</kbd></dt><dd>оглавление</dd>
           <dt><kbd>S</kbd></dt><dd>оформление</dd>
           <dt><kbd>A</kbd></dt><dd>автопрокрутка, <kbd>[</kbd> <kbd>]</kbd> — скорость</dd>

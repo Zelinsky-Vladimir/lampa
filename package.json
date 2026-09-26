@@ -1,7 +1,7 @@
 {
   "name": "svitok-reader",
   "productName": "Svitok",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Кроссплатформенная читалка FB2 / EPUB / TXT с бесконечной прокруткой и темами",
   "main": "main.js",
   "author": "Zelinsky-Vladimir",

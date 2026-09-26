@@ -37,11 +37,16 @@
     justify: true,
     indent: true,
     autoSpeed: 40,
+    footerAlways: true,
   };
 
   const LS_SETTINGS = 'svitok.settings';
   const LS_LIBRARY = 'svitok.library';
   const LIBRARY_LIMIT = 60;
+  // Страница — 1800 знаков, как в печатной книге. Номер не зависит от шрифта и размера окна.
+  const CHARS_PER_PAGE = 1800;
+  const SEARCH_LIMIT = 5000;
+  const SEARCH_LIST_LIMIT = 300;
   // Элементы, по которым запоминается место чтения.
   const BLOCK_SEL = 'p, h1, h2, h3, h4, h5, h6, li, pre, tr, hr, figure, img.block, .img-block, .empty-line, .cover, .book-title, .book-author';
 
@@ -53,8 +58,20 @@
     book: $('#book'),
     barBook: $('#bar-book'),
     barChapter: $('#bar-chapter'),
-    progressText: $('#progress-text'),
     progressFill: $('#progress-fill'),
+    miniPage: $('#mini-page'),
+    footChapter: $('#foot-chapter'),
+    scrub: $('#scrub'),
+    scrubTicks: $('#scrub-ticks'),
+    scrubTip: $('#scrub-tip'),
+    pageInput: $('#page-input'),
+    pageTotal: $('#page-total'),
+    pagePct: $('#page-pct'),
+    searchPanel: $('#search-panel'),
+    searchInput: $('#search-input'),
+    searchCount: $('#search-count'),
+    searchResults: $('#search-results'),
+    homeContinue: $('#home-continue'),
     scrim: $('#scrim'),
     tocPanel: $('#toc-panel'),
     toc: $('#toc'),
@@ -70,7 +87,8 @@
   let library = loadJSON(LS_LIBRARY, []);
   if (!Array.isArray(library)) library = [];
 
-  let current = null; // { key, path, urls, blocks, toc, ready }
+  // { key, path, urls, blocks, starts, index, pages, toc, tocStarts, page, ratio, ready }
+  let current = null;
   let openToken = 0;
   const backStack = [];
 
@@ -151,6 +169,7 @@
     root.style.colorScheme = isDark(bg) ? 'dark' : 'light';
     root.dataset.justify = String(settings.justify);
     root.dataset.indent = String(settings.indent);
+    root.dataset.footer = settings.footerAlways ? 'always' : 'auto';
     api?.setThemeBg(bg);
     syncSettingsUI();
   }
@@ -259,10 +278,93 @@
     ui.scroller.scrollTop += r.top - ui.scroller.getBoundingClientRect().top + (a.f || 0) * r.height;
   }
 
-  function progressRatio() {
+  // ---------- страницы ----------
+
+  // Все текстовые узлы книги подряд с их смещением в символах — основа страниц и поиска.
+  function buildTextIndex() {
+    const texts = [];
+    const cum = [];
+    let total = 0;
+    const walker = document.createTreeWalker(ui.book, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      texts.push(n);
+      cum.push(total);
+      total += n.data.length;
+    }
+    return { texts, cum, total, full: null, lower: null };
+  }
+
+  // Смещение (в символах) начала каждого элемента; элементы должны идти в порядке документа.
+  function charOffsets(elements, index) {
+    const { texts, cum, total } = index;
+    const out = new Array(elements.length);
+    let j = 0;
+    for (let i = 0; i < elements.length; i++) {
+      const b = elements[i];
+      while (j < texts.length && !b.contains(texts[j]) && !(b.compareDocumentPosition(texts[j]) & Node.DOCUMENT_POSITION_FOLLOWING)) j++;
+      out[i] = j < texts.length ? cum[j] : total;
+    }
+    return out;
+  }
+
+  // Последний индекс i, для которого arr[i] <= value (arr отсортирован), или -1.
+  function lastAtOrBefore(arr, value) {
+    let lo = 0;
+    let hi = arr.length - 1;
+    let ans = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (arr[mid] <= value) {
+        ans = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return ans;
+  }
+
+  function blockEnd(i) {
+    const { starts, index } = current;
+    for (let k = i + 1; k < starts.length; k++) if (starts[k] > starts[i]) return starts[k];
+    return index.total;
+  }
+
+  const pageOf = (pos) => clamp(Math.floor(pos / CHARS_PER_PAGE) + 1, 1, current.pages);
+
+  function atBookEnd() {
     const s = ui.scroller;
-    const max = s.scrollHeight - s.clientHeight;
-    return max > 0 ? clamp(s.scrollTop / max, 0, 1) : 0;
+    return s.scrollTop >= s.scrollHeight - s.clientHeight - 2;
+  }
+
+  // Позиция чтения в символах: блок у верхнего края плюс прочитанная доля блока.
+  function currentCharPos() {
+    if (atBookEnd()) return current.index.total;
+    const a = blockAtTop();
+    if (!a) return 0;
+    const start = current.starts[a.i];
+    return start + a.f * (blockEnd(a.i) - start);
+  }
+
+  function anchorForChar(pos) {
+    const i = Math.max(0, lastAtOrBefore(current.starts, pos));
+    const start = current.starts[i];
+    const end = blockEnd(i);
+    return { i, f: end > start ? clamp((pos - start) / (end - start), 0, 1) : 0 };
+  }
+
+  function jumpToPage(n, remember) {
+    if (!readerVisible() || !current.ready) return;
+    const page = clamp(Math.round(n) || 1, 1, current.pages);
+    if (remember) pushBack();
+    // +2 символа, чтобы округление не показало предыдущую страницу
+    scrollToAnchor(anchorForChar((page - 1) * CHARS_PER_PAGE + (page > 1 ? 2 : 0)));
+    updateProgress();
+  }
+
+  function chapterAt(pos) {
+    const k = lastAtOrBefore(current.tocStarts || [], pos);
+    return k >= 0 ? current.toc[k].text : '';
   }
 
   function libraryEntry() {
@@ -273,9 +375,12 @@
     if (!current || !current.ready || !readerVisible()) return;
     const entry = libraryEntry();
     if (!entry) return;
+    updateProgress();
     const a = blockAtTop();
     if (a) entry.pos = a;
-    entry.progress = progressRatio();
+    entry.progress = current.ratio;
+    entry.page = current.page;
+    entry.pages = current.pages;
     saveJSON(LS_LIBRARY, library);
   }
 
@@ -307,19 +412,25 @@
 
   let lastChapter = -2;
   function updateProgress() {
-    if (!readerVisible()) return;
-    const s = ui.scroller;
-    const r = progressRatio();
-    const vh = s.clientHeight || 1;
-    const pages = Math.max(1, Math.ceil(s.scrollHeight / vh));
-    const page = Math.min(pages, Math.floor(s.scrollTop / vh) + 1);
-    ui.progressFill.style.transform = `scaleX(${r})`;
-    ui.progressText.textContent = `${page} / ${pages} · ${Math.round(r * 100)}%`;
+    if (!readerVisible() || !current.ready) return;
+    const pos = currentCharPos();
+    const total = current.index.total;
+    current.ratio = total ? clamp(pos / total, 0, 1) : 0;
+    current.page = atBookEnd() ? current.pages : pageOf(pos);
+
+    ui.progressFill.style.transform = `scaleX(${current.ratio})`;
+    ui.pagePct.textContent = Math.round(current.ratio * 100) + '%';
+    ui.miniPage.textContent = `${current.page} / ${current.pages}`;
+    if (document.activeElement !== ui.pageInput) ui.pageInput.value = current.page;
+    if (!scrubbing) ui.scrub.value = current.page;
 
     const ci = currentTocIndex();
     if (ci !== lastChapter) {
       lastChapter = ci;
-      ui.barChapter.textContent = ci >= 0 ? ' · ' + current.toc[ci].text : '';
+      const text = ci >= 0 ? current.toc[ci].text : '';
+      ui.barChapter.textContent = text ? ' · ' + text : '';
+      ui.footChapter.textContent = text;
+      ui.footChapter.title = text;
     }
   }
 
@@ -337,7 +448,48 @@
 
   let lastScrollTop = 0;
   function setBar(visible) {
-    ui.bar.classList.toggle('hidden', !visible);
+    root.dataset.chrome = visible ? 'shown' : 'hidden';
+  }
+
+  // ---------- ползунок и номер страницы ----------
+
+  let scrubbing = false;
+
+  function setupScrubber() {
+    const { pages, toc, tocStarts } = current;
+    ui.scrub.max = pages;
+    ui.scrub.disabled = pages < 2;
+    ui.pageTotal.textContent = 'из ' + pages;
+    ui.scrubTicks.replaceChildren();
+    if (pages < 2) return;
+    // отметки глав: самый верхний уровень, где заголовков больше одного (один — обычно название книги)
+    const counts = {};
+    for (const t of toc) counts[t.level] = (counts[t.level] || 0) + 1;
+    const levels = Object.keys(counts).map(Number).sort((a, b) => a - b);
+    const tickLevel = levels.find((l) => counts[l] > 1) ?? levels[0];
+    toc.forEach((t, k) => {
+      if (t.level !== tickLevel) return;
+      const tick = el('i');
+      tick.style.left = ((pageOf(tocStarts[k]) - 1) / (pages - 1)) * 100 + '%';
+      ui.scrubTicks.append(tick);
+    });
+  }
+
+  function showScrubTip() {
+    const v = Number(ui.scrub.value);
+    const max = Math.max(1, Number(ui.scrub.max) - 1);
+    const pct = (v - 1) / max;
+    const chapter = chapterAt((v - 1) * CHARS_PER_PAGE + 2);
+    ui.scrubTip.textContent = `стр. ${v}` + (chapter ? ' · ' + chapter : '');
+    ui.scrubTip.style.left = `calc(${pct * 100}% + ${(0.5 - pct) * 16}px)`;
+    ui.scrubTip.hidden = false;
+  }
+
+  function commitPageInput() {
+    const n = parseInt(ui.pageInput.value.replace(/\D/g, ''), 10);
+    ui.pageInput.blur();
+    ui.scroller.focus({ preventScroll: true });
+    if (n) jumpToPage(n, true);
   }
 
   function onScroll() {
@@ -416,14 +568,16 @@
       if (!text) return;
       if (!h.id) h.id = 'toc-' + n;
       const level = Number(h.tagName[1]) - minLevel;
-      const b = el('button', level ? 'toc-item sub' : 'toc-item', text.length > 90 ? text.slice(0, 88) + '…' : text);
+      const b = el('button', level ? 'toc-item sub' : 'toc-item');
+      const page = el('span', 'toc-page');
+      b.append(el('span', 'toc-text', text.length > 90 ? text.slice(0, 88) + '…' : text), page);
       b.style.setProperty('--lvl', Math.min(level, 3));
       b.addEventListener('click', () => {
         closePanels();
         jumpTo(h, false);
       });
       ui.toc.append(b);
-      toc.push({ el: h, btn: b, text });
+      toc.push({ el: h, btn: b, text, level, pageEl: page });
     });
     if (!toc.length) ui.toc.append(el('div', 'toc-empty', 'В этой книге нет оглавления'));
     return toc;
@@ -452,6 +606,8 @@
     savePosition();
     stopAuto();
     closePanels();
+    closeSearch();
+    resetSearch();
     closeNote();
     backStack.length = 0;
     ui.backBtn.hidden = true;
@@ -479,14 +635,24 @@
     if (token !== openToken) return;
 
     current.blocks = Array.from(ui.book.querySelectorAll(BLOCK_SEL));
+    current.index = buildTextIndex();
+    current.starts = charOffsets(current.blocks, current.index);
+    current.pages = Math.max(1, Math.ceil(current.index.total / CHARS_PER_PAGE));
     current.toc = buildToc();
+    current.tocStarts = charOffsets(current.toc.map((t) => t.el), current.index);
+    current.toc.forEach((t, k) => {
+      t.pageEl.textContent = pageOf(current.tocStarts[k]);
+    });
+    setupScrubber();
+
     ui.scroller.scrollTop = 0;
     if (entry.pos) scrollToAnchor(entry.pos);
     lastScrollTop = ui.scroller.scrollTop;
     current.ready = true;
     setBar(true);
     updateProgress();
-    ui.toast.classList.remove('show');
+    if (entry.pos && current.page > 1) toast(`Продолжаем со стр. ${current.page} из ${current.pages}`, 2200);
+    else ui.toast.classList.remove('show');
     ui.scroller.focus({ preventScroll: true });
 
     if (!entry.thumb && book.coverUrl) {
@@ -511,6 +677,7 @@
     savePosition();
     stopAuto();
     closePanels();
+    closeSearch();
     closeNote();
     ui.backBtn.hidden = true;
     ui.scroller.hidden = true;
@@ -521,9 +688,22 @@
     renderHome();
   }
 
+  function readLabel(entry) {
+    if (!entry.progress && !entry.page) return 'не начата';
+    const pct = Math.round((entry.progress || 0) * 100) + '%';
+    return entry.page ? `стр. ${entry.page} из ${entry.pages} · ${pct}` : `прочитано ${pct}`;
+  }
+
   function renderHome() {
     ui.recent.replaceChildren();
     $('#recent-section').hidden = !library.length;
+
+    const last = library[0];
+    ui.homeContinue.hidden = !last;
+    if (last) {
+      $('#home-continue-text').textContent = `Продолжить «${last.title}»` + (last.page > 1 ? ` · стр. ${last.page}` : '');
+      ui.homeContinue.title = last.path;
+    }
     for (const entry of library) {
       const card = el('div', 'card');
       card.tabIndex = 0;
@@ -544,7 +724,7 @@
       const fill = el('i');
       fill.style.setProperty('--p', entry.progress || 0);
       bar.append(fill);
-      const pct = entry.progress ? `прочитано ${Math.round(entry.progress * 100)}%` : 'не начата';
+      const pct = readLabel(entry);
 
       const remove = el('button', 'remove', '×');
       remove.title = 'Убрать из списка';
@@ -571,6 +751,7 @@
   function openPanel(panel) {
     const wasOpen = panel.classList.contains('open');
     closePanels();
+    closeSearch();
     if (wasOpen) return;
     stopAuto();
     panel.classList.add('open');
@@ -594,11 +775,13 @@
 
   // ---------- ссылки и сноски ----------
 
+  function pushBack() {
+    backStack.push(ui.scroller.scrollTop);
+    ui.backBtn.hidden = false;
+  }
+
   function jumpTo(target, remember) {
-    if (remember) {
-      backStack.push(ui.scroller.scrollTop);
-      ui.backBtn.hidden = false;
-    }
+    if (remember) pushBack();
     ui.scroller.scrollTop += target.getBoundingClientRect().top - ui.scroller.getBoundingClientRect().top - 24;
   }
 
@@ -669,6 +852,182 @@
     if (insidePopup || !isNoteLink(a, target) || !showNote(a, target)) jumpTo(target, true);
   }
 
+  // ---------- поиск ----------
+
+  const search = { query: '', matches: [], cur: -1, timer: 0, jumped: false, items: [] };
+  const hasHighlights = !!(window.CSS && CSS.highlights && window.Highlight);
+
+  // Нижний регистр и ё→е без изменения длины строки, чтобы смещения совпадали с текстом.
+  function normalizeText(s) {
+    let lower = s.toLowerCase();
+    if (lower.length !== s.length) lower = Array.from(s, (c) => (c.toLowerCase().length === c.length ? c.toLowerCase() : c)).join('');
+    return lower.replace(/ё/g, 'е').replace(/\s/g, ' ');
+  }
+
+  function searchHaystack() {
+    const index = current.index;
+    if (index.lower == null) {
+      index.full = index.texts.map((t) => t.data).join('');
+      index.lower = normalizeText(index.full);
+    }
+    return index.lower;
+  }
+
+  function rangeFor(start, end) {
+    const { texts, cum } = current.index;
+    const a = Math.max(0, lastAtOrBefore(cum, start));
+    const b = Math.max(0, lastAtOrBefore(cum, end - 1));
+    const r = document.createRange();
+    r.setStart(texts[a], start - cum[a]);
+    r.setEnd(texts[b], end - 1 - cum[b] + 1);
+    return r;
+  }
+
+  function clearHighlights() {
+    if (!hasHighlights) return;
+    CSS.highlights.delete('search-hit');
+    CSS.highlights.delete('search-current');
+  }
+
+  function resetSearch() {
+    clearTimeout(search.timer);
+    Object.assign(search, { query: '', matches: [], cur: -1, jumped: false, items: [] });
+    ui.searchInput.value = '';
+    ui.searchCount.textContent = '';
+    ui.searchResults.replaceChildren();
+    clearHighlights();
+  }
+
+  function updateSearchCount() {
+    const n = search.matches.length;
+    if (!search.query) ui.searchCount.textContent = '';
+    else if (!n) ui.searchCount.textContent = 'Ничего не найдено';
+    else if (search.cur < 0) ui.searchCount.textContent = `Найдено: ${n}${n >= SEARCH_LIMIT ? '+' : ''}`;
+    else ui.searchCount.textContent = `${search.cur + 1} из ${n}${n >= SEARCH_LIMIT ? '+' : ''}`;
+  }
+
+  function runSearch() {
+    clearTimeout(search.timer);
+    search.timer = 0;
+    const query = normalizeText(ui.searchInput.value).replace(/ +/g, ' ').trim();
+    if (!current || !current.ready || query === search.query) return;
+    search.query = query;
+    search.matches = [];
+    search.cur = -1;
+    search.jumped = false;
+    search.items = [];
+    ui.searchResults.replaceChildren();
+    clearHighlights();
+    if (query.length < 2) {
+      if (query) search.query = '';
+      updateSearchCount();
+      return;
+    }
+
+    const hay = searchHaystack();
+    for (let i = hay.indexOf(query); i !== -1 && search.matches.length < SEARCH_LIMIT; i = hay.indexOf(query, i + query.length)) {
+      search.matches.push({ start: i, end: i + query.length });
+    }
+
+    if (hasHighlights && search.matches.length) {
+      const hl = new Highlight();
+      for (const m of search.matches) hl.add(rangeFor(m.start, m.end));
+      CSS.highlights.set('search-hit', hl);
+    }
+
+    const full = current.index.full;
+    const frag = document.createDocumentFragment();
+    search.matches.slice(0, SEARCH_LIST_LIMIT).forEach((m, k) => {
+      const item = el('button', 'search-item');
+      const chapter = chapterAt(m.start);
+      item.append(el('div', 'meta', `стр. ${pageOf(m.start)}` + (chapter ? ' · ' + chapter : '')));
+      const snip = el('div', 'snip');
+      const from = Math.max(0, m.start - 50);
+      const to = Math.min(full.length, m.end + 70);
+      const clean = (s) => s.replace(/\s+/g, ' ');
+      const mark = el('mark', null, full.slice(m.start, m.end));
+      snip.append((from > 0 ? '…' : '') + clean(full.slice(from, m.start)).trimStart(), mark, clean(full.slice(m.end, to)).trimEnd() + (to < full.length ? '…' : ''));
+      item.append(snip);
+      item.addEventListener('click', () => gotoMatch(k));
+      frag.append(item);
+      search.items.push(item);
+    });
+    if (search.matches.length > SEARCH_LIST_LIMIT) {
+      frag.append(el('div', 'search-more', `Показаны первые ${SEARCH_LIST_LIMIT}. Уточните запрос или листайте стрелками.`));
+    }
+    ui.searchResults.append(frag);
+    updateSearchCount();
+  }
+
+  function gotoMatch(k) {
+    const m = search.matches[k];
+    if (!m) return;
+    if (search.items[search.cur]) search.items[search.cur].classList.remove('active');
+    search.cur = k;
+    const range = rangeFor(m.start, m.end);
+    if (hasHighlights) CSS.highlights.set('search-current', new Highlight(range));
+    if (!search.jumped) {
+      pushBack();
+      search.jumped = true;
+    }
+    const s = ui.scroller;
+    const sr = s.getBoundingClientRect();
+    const r = range.getBoundingClientRect();
+    if (r.top < sr.top + 70 || r.bottom > sr.bottom - 90) s.scrollTop += r.top - sr.top - s.clientHeight * 0.35;
+    const item = search.items[k];
+    if (item) {
+      item.classList.add('active');
+      item.scrollIntoView({ block: 'nearest' });
+    }
+    updateSearchCount();
+  }
+
+  function stepMatch(dir) {
+    if (search.timer || normalizeText(ui.searchInput.value).replace(/ +/g, ' ').trim() !== search.query) runSearch();
+    const n = search.matches.length;
+    if (!n) return;
+    if (search.cur < 0) {
+      // первое совпадение после текущего места чтения
+      const pos = currentCharPos();
+      const k = search.matches.findIndex((m) => m.start >= pos);
+      gotoMatch(dir > 0 ? (k < 0 ? 0 : k) : ((k < 0 ? n : k) - 1 + n) % n);
+    } else {
+      gotoMatch((search.cur + dir + n) % n);
+    }
+  }
+
+  const searchOpen = () => ui.searchPanel.classList.contains('open');
+
+  function openSearch() {
+    if (!readerVisible()) return;
+    closePanels();
+    stopAuto();
+    const anchor = blockAtTop();
+    ui.searchPanel.classList.add('open');
+    root.dataset.search = 'open';
+    scrollToAnchor(anchor);
+    setBar(true);
+    // подсветка возвращается, если поиск открыли повторно
+    if (search.query) {
+      const q = search.query;
+      search.query = '';
+      ui.searchInput.value = ui.searchInput.value || q;
+      runSearch();
+    }
+    ui.searchInput.focus();
+    ui.searchInput.select();
+  }
+
+  function closeSearch() {
+    if (!searchOpen()) return;
+    const anchor = readerVisible() ? blockAtTop() : null;
+    ui.searchPanel.classList.remove('open');
+    delete root.dataset.search;
+    if (anchor) scrollToAnchor(anchor);
+    clearHighlights();
+    ui.scroller.focus({ preventScroll: true });
+  }
+
   // ---------- автопрокрутка ----------
 
   const auto = { on: false, last: 0, acc: 0 };
@@ -727,14 +1086,36 @@
     toast(`Размер шрифта: ${settings.fontSize} px`, 1200);
   }
 
+  function focusPageInput() {
+    if (!readerVisible()) return;
+    setBar(true);
+    ui.pageInput.focus();
+  }
+
   function onKeyDown(e) {
-    if (e.target.closest('input, select, textarea')) {
-      if (e.key === 'Escape') e.target.blur();
+    const ctrl = e.ctrlKey || e.metaKey;
+    // Эти работают и из поля поиска.
+    if (ctrl && e.code === 'KeyF') {
+      e.preventDefault();
+      openSearch();
       return;
     }
-    const ctrl = e.ctrlKey || e.metaKey;
+    if (e.key === 'F3') {
+      e.preventDefault();
+      if (!searchOpen()) openSearch();
+      stepMatch(e.shiftKey ? -1 : 1);
+      return;
+    }
+    if (e.target.closest('input, select, textarea')) {
+      if (e.key === 'Escape') {
+        if (e.target === ui.searchInput) closeSearch();
+        else e.target.blur();
+      }
+      return;
+    }
     if (ctrl) {
       if (e.code === 'KeyO') openDialog();
+      else if (e.code === 'KeyG') focusPageInput();
       else if (e.code === 'Equal' || e.code === 'NumpadAdd') changeFont(1);
       else if (e.code === 'Minus' || e.code === 'NumpadSubtract') changeFont(-1);
       else if (e.code === 'Digit0' || e.code === 'Numpad0') changeFont(0);
@@ -750,6 +1131,7 @@
     if (e.key === 'Escape') {
       if (!ui.notePop.hidden) closeNote();
       else if (anyPanelOpen()) closePanels();
+      else if (searchOpen()) closeSearch();
       else if (auto.on) stopAuto();
       return;
     }
@@ -813,7 +1195,50 @@
     $('#btn-toc').addEventListener('click', () => openPanel(ui.tocPanel));
     $('#btn-settings').addEventListener('click', () => openPanel(ui.settingsPanel));
     $('#btn-full').addEventListener('click', () => api.toggleFullscreen());
+    $('#btn-search').addEventListener('click', () => (searchOpen() ? closeSearch() : openSearch()));
+    ui.homeContinue.addEventListener('click', () => library[0] && openPath(library[0].path));
     ui.btnAuto.addEventListener('click', () => (auto.on ? stopAuto() : startAuto()));
+
+    // поиск
+    $('#search-close').addEventListener('click', closeSearch);
+    $('#search-next').addEventListener('click', () => stepMatch(1));
+    $('#search-prev').addEventListener('click', () => stepMatch(-1));
+    ui.searchInput.addEventListener('input', () => {
+      clearTimeout(search.timer);
+      search.timer = setTimeout(runSearch, 250);
+    });
+    ui.searchInput.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      stepMatch(e.shiftKey ? -1 : 1);
+    });
+
+    // ползунок прогресса и номер страницы
+    ui.scrub.addEventListener('pointerdown', () => {
+      scrubbing = true;
+      pushBack();
+      showScrubTip();
+    });
+    ui.scrub.addEventListener('input', () => {
+      jumpToPage(Number(ui.scrub.value), false);
+      if (scrubbing) showScrubTip();
+    });
+    window.addEventListener('pointerup', () => {
+      if (!scrubbing) return;
+      scrubbing = false;
+      ui.scrubTip.hidden = true;
+      ui.scroller.focus({ preventScroll: true });
+    });
+    ui.pageInput.addEventListener('focus', () => ui.pageInput.select());
+    ui.pageInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        commitPageInput();
+      }
+    });
+    ui.pageInput.addEventListener('blur', () => {
+      if (current && current.page) ui.pageInput.value = current.page;
+    });
     ui.scrim.addEventListener('click', closePanels);
     document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', closePanels));
     ui.backBtn.addEventListener('click', goBack);
@@ -831,7 +1256,7 @@
       if (!ui.notePop.hidden && !ui.notePop.contains(e.target) && !e.target.closest('a')) closeNote();
     });
     document.addEventListener('mousemove', (e) => {
-      if (e.clientY < 56) setBar(true);
+      if (e.clientY < 56 || e.clientY > window.innerHeight - 56) setBar(true);
     });
     document.addEventListener('keydown', onKeyDown);
     window.addEventListener('beforeunload', savePosition);

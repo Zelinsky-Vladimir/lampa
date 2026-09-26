@@ -53,7 +53,7 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
   border-bottom: 1px solid var(--faint);
   transition: transform 0.25s ease, opacity 0.25s ease;
 }
-#bar.hidden { transform: translateY(-100%); opacity: 0; }
+:root[data-chrome="hidden"] #bar { transform: translateY(-100%); opacity: 0; }
 
 .icon-btn {
   display: inline-grid;
@@ -85,20 +85,15 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 #bar-book { color: var(--fg); font-weight: 600; }
 .spacer { flex: 1; }
 
-#progress-text {
-  padding: 0 8px;
-  font-size: 12px;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
+/* Тонкая полоска и мини-счётчик видны, только когда нижняя панель спрятана. */
 #progress {
   position: fixed;
   inset: auto 0 0 0;
   height: 3px;
   z-index: 15;
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s;
 }
 #progress-fill {
   height: 100%;
@@ -107,6 +102,94 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
   transform: scaleX(0);
   transform-origin: left;
 }
+#mini-page {
+  position: fixed;
+  right: 14px;
+  bottom: 9px;
+  z-index: 15;
+  font-size: 11.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+:root[data-chrome="hidden"][data-footer="auto"] #progress,
+:root[data-chrome="hidden"][data-footer="auto"] #mini-page { opacity: 1; }
+
+/* ---------- нижняя панель прогресса ---------- */
+
+#footer {
+  position: fixed;
+  inset: auto 0 0 0;
+  height: 46px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 16px;
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--faint);
+  font-size: 13px;
+  transition: transform 0.25s ease, opacity 0.25s ease;
+}
+:root[data-chrome="hidden"][data-footer="auto"] #footer { transform: translateY(100%); opacity: 0; }
+
+#foot-chapter {
+  flex: 0 1 220px;
+  min-width: 0;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 720px) { #foot-chapter { display: none; } }
+
+.scrub-wrap { position: relative; flex: 1; min-width: 120px; display: flex; align-items: center; height: 100%; }
+#scrub { position: relative; z-index: 1; width: 100%; cursor: pointer; }
+#scrub-ticks { position: absolute; inset: 0 8px; pointer-events: none; }
+#scrub-ticks i {
+  position: absolute;
+  top: calc(50% + 6px);
+  width: 1px;
+  height: 5px;
+  background: var(--muted);
+  opacity: 0.55;
+}
+#scrub-tip {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  z-index: 2;
+  max-width: 280px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.page-box { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.page-box .muted { color: var(--muted); }
+#page-input {
+  width: 58px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: var(--faint);
+  color: var(--fg);
+  font: 600 13px var(--ui);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+#page-input:hover { border-color: var(--border); }
+#page-input:focus { outline: none; border-color: var(--accent); background: var(--bg); }
+#page-pct { min-width: 38px; text-align: right; color: var(--muted); }
 
 /* ---------- лента книги ---------- */
 
@@ -245,6 +328,11 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
   transition: filter 0.15s, transform 0.15s;
 }
 .primary-btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
+.primary-btn svg { flex: none; }
+.hero-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+#home-continue { max-width: min(460px, 90vw); }
+#home-continue span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#home-continue + #home-open { background: var(--panel-2); color: var(--fg); }
 .hint { margin-top: 14px; color: var(--muted); font-size: 13px; }
 
 .section-title {
@@ -342,7 +430,9 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .panel .body { flex: 1; overflow-y: auto; padding: 6px 18px 28px; }
 
 .toc-item {
-  display: block;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
   width: 100%;
   padding: 7px 10px 7px calc(10px + var(--lvl, 0) * 16px);
   border: none;
@@ -356,7 +446,51 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .toc-item.sub { font-size: 13.5px; color: var(--muted); }
 .toc-item:hover { background: var(--faint); color: var(--fg); }
 .toc-item.current { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); font-weight: 600; }
+.toc-item .toc-text { flex: 1; min-width: 0; }
+.toc-item .toc-page { flex: none; font-size: 12px; color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
 .toc-empty { color: var(--muted); font-size: 14px; padding: 8px 10px; }
+
+/* ---------- поиск ---------- */
+
+#search-panel { box-shadow: -8px 0 30px rgb(0 0 0 / 0.14); }
+/* на широком окне текст сдвигается, чтобы панель поиска его не закрывала */
+@media (min-width: 900px) {
+  :root[data-search="open"] #scroller { right: 360px; }
+  :root[data-search="open"] #footer { right: 360px; }
+}
+.search-box { padding: 4px 18px 10px; border-bottom: 1px solid var(--faint); }
+#search-input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px var(--ui);
+}
+#search-input:focus { outline: none; border-color: var(--accent); }
+.search-nav { display: flex; align-items: center; gap: 2px; margin-top: 6px; }
+#search-count { flex: 1; font-size: 12.5px; color: var(--muted); }
+.search-item {
+  display: block;
+  width: 100%;
+  margin: 2px 0;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.search-item:hover { background: var(--faint); }
+.search-item.active { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.search-item .meta { font-size: 11.5px; color: var(--muted); margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-item .snip { font-family: var(--font); font-size: 14px; line-height: 1.4; }
+.search-item mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: inherit; border-radius: 2px; }
+.search-more { padding: 10px; font-size: 12.5px; color: var(--muted); }
+
+::highlight(search-hit) { background-color: color-mix(in srgb, var(--accent) 26%, transparent); }
+::highlight(search-current) { background-color: var(--accent); color: var(--bg); }
 
 .setting { margin: 20px 0; }
 .setting .label { display: flex; justify-content: space-between; margin-bottom: 9px; font-size: 13px; color: var(--muted); }
