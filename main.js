@@ -232,7 +232,9 @@ function migrateUserData() {
   try {
     const now = app.getPath('userData');
     const old = path.join(app.getPath('appData'), 'Svitok');
-    if (!fs.existsSync(now) && fs.existsSync(old)) fs.cpSync(old, now, { recursive: true });
+    // Electron создаёт пустую папку профиля ещё до этого кода, поэтому смотрим не на папку, а на данные в ней.
+    const hasData = (dir) => fs.existsSync(path.join(dir, 'Local Storage'));
+    if (!hasData(now) && hasData(old)) fs.cpSync(old, now, { recursive: true });
   } catch {
     // не получилось — начнём с чистого профиля
   }
