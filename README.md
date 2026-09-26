@@ -43,7 +43,8 @@ All versions and change notes are on the [Releases](https://github.com/Zelinsky-
 - **Progress bar** with chapter marks, bookmarks and notes; drag it to jump anywhere and see the page and chapter as you go.
 - **Search** across the whole book, with every match listed by page and chapter and highlighted in the text.
 - **Bookmarks, highlights and notes.** Select text to highlight it in one of four colours or attach a note; all of them are listed in the side panel and can be copied out as Markdown.
-- **Themes:** Light, Sepia, Olive, Mint, Graphite, Night, OLED black, or your own colours.
+- **Themes:** Light, Sepia, Olive, Mint, Graphite, Night, OLED black, or your own: pick the background and text colours separately, with a contrast hint.
+- **In-app brightness** from 30% to 100%, one click away in the top bar (☀), independent of your monitor.
 - **21 fonts,** including 14 built-in reading fonts with full Cyrillic support (Literata, PT Serif, Merriweather, Lora, EB Garamond, Inter and more) that look the same on every system.
 - **Zoom that uses the space.** `Ctrl` `+` / `−` (or `Ctrl` + mouse wheel) scales the font and the column together, so text fills a wide monitor instead of sitting in a narrow strip. The column width can also be changed on its own.
 - **Auto-scroll** with a speed control right on screen.

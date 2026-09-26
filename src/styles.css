@@ -515,9 +515,43 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .theme-swatch.active { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
 .theme-swatch .aa { font: 600 19px Georgia, serif; }
 .theme-swatch .nm { font-size: 10.5px; opacity: 0.85; }
-.custom-colors { display: flex; gap: 16px; margin-top: 12px; font-size: 13px; color: var(--muted); }
-.custom-colors label { display: flex; align-items: center; gap: 8px; }
-.custom-colors input { width: 42px; height: 28px; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: none; cursor: pointer; }
+/* цвета фона и текста, яркость */
+.color-controls { margin-top: 14px; }
+.color-controls .cc-label { display: flex; justify-content: space-between; margin: 14px 0 8px; font-size: 13px; color: var(--muted); }
+.color-controls .cc-label:first-child { margin-top: 0; }
+.color-controls .cc-label span:last-child { color: var(--fg); font-variant-numeric: tabular-nums; }
+.cc-row { display: flex; flex-wrap: wrap; gap: 7px; }
+.cc-sw {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--fg) 25%, transparent);
+  border-radius: 50%;
+  background: var(--c);
+  cursor: pointer;
+  transition: transform 0.12s;
+}
+.cc-sw:hover { transform: scale(1.1); }
+.cc-sw.active { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent); }
+.cc-pick { display: inline-grid; place-items: center; overflow: hidden; background: conic-gradient(#f55, #fd5, #5d5, #5dd, #55f, #d5d, #f55); }
+.cc-pick input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.cc-contrast { margin-top: 12px; font-size: 12px; color: var(--muted); }
+.cc-contrast.warn { color: #c0392b; }
+input.cc-bright { width: 100%; }
+
+#display-pop {
+  position: fixed;
+  z-index: 41;
+  width: min(320px, calc(100vw - 24px));
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+#btn-display.active { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+#dim { position: fixed; inset: 0; z-index: 1000; background: #000; opacity: var(--dim, 0); pointer-events: none; }
 
 select {
   width: 100%;

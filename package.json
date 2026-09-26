@@ -1,7 +1,7 @@
 {
   "name": "lampa-reader",
   "productName": "Lampa",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Lampa — a cross-platform FB2 / EPUB / TXT reader with infinite scroll, themes, bookmarks and notes",
   "main": "main.js",
   "author": "Zelinsky-Vladimir",

@@ -5,6 +5,11 @@
 
   const STRINGS = {
     en: {
+      displayBtn: 'Brightness and colours',
+      brightness: 'Brightness',
+      pickColor: 'Any colour',
+      contrast: 'Contrast {r}:1',
+      lowContrast: 'hard to read',
       tagline: 'The whole book on one page — just scroll down',
       openBook: 'Open book',
       dropHint: 'or drop a file into the window · FB2, FB2.ZIP, EPUB, TXT',
@@ -151,6 +156,11 @@
     },
 
     ru: {
+      displayBtn: 'Яркость и цвета',
+      brightness: 'Яркость',
+      pickColor: 'Любой цвет',
+      contrast: 'Контраст {r}:1',
+      lowContrast: 'плохо читается',
       tagline: 'Книга одной лентой — просто листайте вниз',
       openBook: 'Открыть книгу',
       dropHint: 'или перетащите файл в окно · FB2, FB2.ZIP, EPUB, TXT',
@@ -297,6 +307,11 @@
     },
 
     fr: {
+      displayBtn: 'Luminosité et couleurs',
+      brightness: 'Luminosité',
+      pickColor: 'Autre couleur',
+      contrast: 'Contraste {r}:1',
+      lowContrast: 'difficile à lire',
       tagline: 'Tout le livre sur une seule page — faites simplement défiler',
       openBook: 'Ouvrir un livre',
       dropHint: 'ou déposez un fichier dans la fenêtre · FB2, FB2.ZIP, EPUB, TXT',
@@ -443,6 +458,11 @@
     },
 
     de: {
+      displayBtn: 'Helligkeit und Farben',
+      brightness: 'Helligkeit',
+      pickColor: 'Beliebige Farbe',
+      contrast: 'Kontrast {r}:1',
+      lowContrast: 'schwer lesbar',
       tagline: 'Das ganze Buch auf einer Seite — einfach nach unten scrollen',
       openBook: 'Buch öffnen',
       dropHint: 'oder Datei ins Fenster ziehen · FB2, FB2.ZIP, EPUB, TXT',
@@ -589,6 +609,11 @@
     },
 
     es: {
+      displayBtn: 'Brillo y colores',
+      brightness: 'Brillo',
+      pickColor: 'Otro color',
+      contrast: 'Contraste {r}:1',
+      lowContrast: 'difícil de leer',
       tagline: 'Todo el libro en una sola página — solo desplázate hacia abajo',
       openBook: 'Abrir libro',
       dropHint: 'o arrastra un archivo a la ventana · FB2, FB2.ZIP, EPUB, TXT',

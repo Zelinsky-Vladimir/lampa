@@ -46,6 +46,10 @@
 
   const NOTE_COLORS = ['yellow', 'green', 'blue', 'pink'];
 
+  // Готовые цвета фона и текста; любой другой — через палитру.
+  const BG_SWATCHES = ['#ffffff', '#fbfaf7', '#f4ecd8', '#efe0c4', '#e6dcc6', '#c9cbb4', '#dde8df', '#dde6ee', '#d9d9d9', '#2c2e33', '#1c2633', '#16181c', '#000000'];
+  const FG_SWATCHES = ['#000000', '#22211e', '#3d3a35', '#5b4636', '#1f3d47', '#27392f', '#2b3a55', '#e9e4d8', '#d4d0c8', '#aaa598', '#8e8a80', '#c9b58f'];
+
   // [клавиши, описание]; клавиша-строка из словаря помечена префиксом «@»
   const SHORTCUTS = [
     [['@keySpace', 'PgDn'], 'kPageDown'],
@@ -76,6 +80,7 @@
     indent: true,
     autoSpeed: 40,
     footerAlways: true,
+    brightness: 1,
   };
 
   const LS = { settings: 'lampa.settings', library: 'lampa.library', marks: 'lampa.marks' };
@@ -277,6 +282,7 @@
       b.querySelector('.nm').textContent = t(th.name);
     }
     buildShortcuts();
+    buildColorControls();
     syncSettingsUI();
     renderHome();
     if (current && current.ready) {
@@ -313,6 +319,7 @@
     root.dataset.justify = String(settings.justify);
     root.dataset.indent = String(settings.indent);
     root.dataset.footer = settings.footerAlways ? 'always' : 'auto';
+    root.style.setProperty('--dim', String(1 - settings.brightness));
     api.setThemeBg(bg);
     syncSettingsUI();
   }
@@ -368,8 +375,6 @@
       });
     }
 
-    $('#custom-bg').addEventListener('input', (e) => updateSettings({ theme: 'custom', customBg: e.target.value }));
-    $('#custom-fg').addEventListener('input', (e) => updateSettings({ theme: 'custom', customFg: e.target.value }));
     $('#reset-settings').addEventListener('click', () => updateSettings({ ...DEFAULTS, lang: settings.lang }));
   }
 
@@ -382,9 +387,7 @@
     }
     const font = FONTS.find((f) => f.id === settings.font) || FONTS[0];
     $('#lang').value = settings.lang;
-    $('#custom-colors').hidden = settings.theme !== 'custom';
-    $('#custom-bg').value = settings.customBg;
-    $('#custom-fg').value = settings.customFg;
+    syncColorControls();
     $('#font').value = settings.font;
     ui.barFont.value = settings.font;
     ui.barFont.style.fontFamily = font.stack;
@@ -400,6 +403,112 @@
     for (const seg of document.querySelectorAll('.seg')) {
       for (const b of seg.children) b.classList.toggle('active', b.dataset.value === String(settings[seg.dataset.key]));
     }
+  }
+
+  // ---------- цвета фона и текста, яркость ----------
+
+  // Одни и те же элементы стоят в быстром окошке «☀» и в панели оформления.
+  const colorBoxes = () => [$('#quick-colors'), $('#settings-colors')];
+
+  function buildColorControls() {
+    for (const box of colorBoxes()) {
+      box.replaceChildren();
+      const bLabel = el('div', 'cc-label');
+      bLabel.append(el('span', null, t('brightness')), el('span', 'cc-bright-val'));
+      const range = el('input', 'cc-bright');
+      Object.assign(range, { type: 'range', min: '0.3', max: '1', step: '0.05' });
+      range.addEventListener('input', () => updateSettings({ brightness: Number(range.value) }));
+      box.append(bLabel, range);
+
+      for (const [kind, list, label] of [['bg', BG_SWATCHES, 'customBg'], ['fg', FG_SWATCHES, 'customFg']]) {
+        const row = el('div', 'cc-row');
+        row.dataset.kind = kind;
+        for (const c of list) {
+          const b = el('button', 'cc-sw');
+          b.dataset.color = c;
+          b.title = c;
+          b.style.setProperty('--c', c);
+          b.addEventListener('click', () => setColor(kind, c));
+          row.append(b);
+        }
+        const pick = el('label', 'cc-sw cc-pick');
+        pick.title = t('pickColor');
+        const input = el('input');
+        input.type = 'color';
+        input.addEventListener('input', () => setColor(kind, input.value));
+        pick.append(input);
+        row.append(pick);
+        box.append(el('div', 'cc-label', t(label)), row);
+      }
+      box.append(el('div', 'cc-contrast'));
+    }
+    syncColorControls();
+  }
+
+  // Цвет выбирается поверх текущей темы: второй цвет берётся из неё, результат — тема «Своя».
+  function setColor(kind, color) {
+    const cur = themeColors(settings.theme);
+    updateSettings({
+      theme: 'custom',
+      customBg: kind === 'bg' ? color : cur.bg,
+      customFg: kind === 'fg' ? color : cur.fg,
+    });
+  }
+
+  function luminance(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
+      const c = v / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+  }
+
+  const contrastRatio = (a, b) => {
+    const [l1, l2] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (l1 + 0.05) / (l2 + 0.05);
+  };
+
+  function syncColorControls() {
+    const { bg, fg } = themeColors(settings.theme);
+    const ratio = contrastRatio(bg, fg);
+    for (const box of colorBoxes()) {
+      const range = box.querySelector('.cc-bright');
+      if (!range) continue;
+      range.value = settings.brightness;
+      box.querySelector('.cc-bright-val').textContent = Math.round(settings.brightness * 100) + '%';
+      for (const row of box.querySelectorAll('.cc-row')) {
+        const value = row.dataset.kind === 'bg' ? bg : fg;
+        for (const b of row.querySelectorAll('button.cc-sw')) b.classList.toggle('active', b.dataset.color.toLowerCase() === value.toLowerCase());
+        row.querySelector('input[type=color]').value = value;
+      }
+      const note = box.querySelector('.cc-contrast');
+      note.textContent = t('contrast', { r: ratio.toFixed(1) }) + (ratio < 3 ? ' — ' + t('lowContrast') : '');
+      note.classList.toggle('warn', ratio < 3);
+    }
+  }
+
+  const displayOpen = () => !$('#display-pop').hidden;
+
+  function toggleDisplayPop() {
+    const pop = $('#display-pop');
+    if (displayOpen()) {
+      closeDisplayPop();
+      return;
+    }
+    closePanels();
+    closeSearch();
+    setBar(true);
+    pop.hidden = false;
+    $('#btn-display').classList.add('active');
+    const r = $('#btn-display').getBoundingClientRect();
+    pop.style.top = r.bottom + 8 + 'px';
+    pop.style.left = clamp(r.right - pop.offsetWidth, 12, window.innerWidth - pop.offsetWidth - 12) + 'px';
+  }
+
+  function closeDisplayPop() {
+    $('#display-pop').hidden = true;
+    $('#btn-display').classList.remove('active');
   }
 
   // ---------- место чтения ----------
@@ -622,7 +731,7 @@
   let editorOpenedAt = 0;
   function onScroll() {
     const st = ui.scroller.scrollTop;
-    if (!anyPanelOpen()) {
+    if (!anyPanelOpen() && !displayOpen()) {
       if (st > lastScrollTop + 6 && st > 120) setBar(false);
       else if (st < lastScrollTop - 6) setBar(true);
     }
@@ -959,6 +1068,7 @@
     const wasOpen = panel.classList.contains('open');
     closePanels();
     closeSearch();
+    closeDisplayPop();
     if (wasOpen && !tab) return;
     stopAuto();
     panel.classList.add('open');
@@ -1673,7 +1783,8 @@
       return;
     }
     if (e.key === 'Escape') {
-      if (!ui.notePop.hidden) closeNote();
+      if (displayOpen()) closeDisplayPop();
+      else if (!ui.notePop.hidden) closeNote();
       else if (!ui.selBar.hidden) hideSelBar();
       else if (anyPanelOpen()) closePanels();
       else if (searchOpen()) closeSearch();
@@ -1753,6 +1864,7 @@
     $('#btn-settings').addEventListener('click', () => openPanel(ui.settingsPanel));
     $('#btn-full').addEventListener('click', () => api.toggleFullscreen());
     $('#btn-search').addEventListener('click', () => (searchOpen() ? closeSearch() : openSearch()));
+    $('#btn-display').addEventListener('click', toggleDisplayPop);
     $('#btn-zoom-in').addEventListener('click', () => zoom(1));
     $('#btn-zoom-out').addEventListener('click', () => zoom(-1));
     $('#btn-wide').addEventListener('click', () => changeWidth(1));
@@ -1876,6 +1988,7 @@
     document.addEventListener('mousedown', (e) => {
       if (!ui.notePop.hidden && !ui.notePop.contains(e.target) && !e.target.closest('a')) closeNote();
       if (!ui.annotPop.hidden && !ui.annotPop.contains(e.target)) closeNoteEditor();
+      if (displayOpen() && !$('#display-pop').contains(e.target) && !e.target.closest('#btn-display')) closeDisplayPop();
     });
     document.addEventListener('mousemove', (e) => {
       if (e.clientY < 56 || e.clientY > window.innerHeight - 56) setBar(true);
