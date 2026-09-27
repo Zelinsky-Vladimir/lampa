@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, dialog, ipcMain, shell, Menu, screen } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell, Menu, screen, net, session } = require('electron');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
@@ -151,6 +151,43 @@ function setupAutoUpdate() {
   setInterval(check, 4 * 60 * 60 * 1000);
 }
 
+// ---------- перевод ----------
+
+// Бесплатный открытый адрес Google Translate (тот же, что у браузерных расширений): без ключа,
+// но неофициальный — при большом числе запросов Google может временно ограничить.
+const MAX_TRANSLATE = 1500;
+
+function browserUserAgent() {
+  return session.defaultSession.getUserAgent().replace(/ (Electron|Lampa|lampa-reader)\/\S+/g, '');
+}
+
+async function fetchJson(url) {
+  const r = await net.fetch(url, { headers: { 'User-Agent': browserUserAgent() } });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const text = await r.text();
+  if (!/^\s*[[{]/.test(text)) throw new Error('not json');
+  return JSON.parse(text);
+}
+
+async function translate(text, to) {
+  const q = encodeURIComponent(text);
+  try {
+    const j = await fetchJson(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${to}&hl=${to}&dt=t&dt=bd&dj=1&q=${q}`);
+    return {
+      text: (j.sentences || []).map((s) => s.trans || '').join('').trim(),
+      src: j.src || (j.ld_result && j.ld_result.srclangs && j.ld_result.srclangs[0]) || '',
+      dict: (j.dict || []).map((d) => ({ pos: d.pos || '', terms: (d.terms || []).slice(0, 8) })),
+    };
+  } catch {
+    // запасной адрес: только перевод, без словаря
+    const j = await fetchJson(`https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=auto&tl=${to}&q=${q}`);
+    const first = Array.isArray(j) ? j[0] : null;
+    if (Array.isArray(first)) return { text: String(first[0] || '').trim(), src: String(first[1] || ''), dict: [] };
+    if (typeof first === 'string') return { text: first.trim(), src: '', dict: [] };
+    throw new Error('TRANSLATE_FAILED');
+  }
+}
+
 // ---------- IPC ----------
 
 function registerIpc() {
@@ -192,6 +229,17 @@ function registerIpc() {
   ipcMain.on('app:install-update', () => {
     // тихая установка и сразу запуск новой версии
     if (updateReady) autoUpdater.quitAndInstall(true, true);
+  });
+
+  ipcMain.handle('translate', async (_e, req) => {
+    const text = req && typeof req.text === 'string' ? req.text.trim() : '';
+    const to = req && typeof req.to === 'string' ? req.to : '';
+    if (!text || text.length > MAX_TRANSLATE || !/^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(to)) throw new Error('BAD_REQUEST');
+    try {
+      return await translate(text, to);
+    } catch {
+      throw new Error('TRANSLATE_FAILED');
+    }
   });
 
   ipcMain.on('app:open-external', (_e, url) => {

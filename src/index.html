@@ -161,6 +161,11 @@
         <select id="lang"></select>
       </div>
       <div class="setting">
+        <label class="label" for="translate-to" data-i18n="translateTo"></label>
+        <select id="translate-to"></select>
+        <p class="setting-hint" data-i18n="translatePrivacy"></p>
+      </div>
+      <div class="setting">
         <div class="label" data-i18n="theme"></div>
         <div class="themes" id="themes"></div>
         <div class="color-controls" id="settings-colors"></div>
@@ -217,12 +222,30 @@
 
   <div id="note-pop" hidden></div>
 
+  <div id="tr-pop" hidden>
+    <div class="tr-head"><span id="tr-langs"></span><span class="tr-by" data-i18n="poweredBy"></span></div>
+    <div id="tr-main"></div>
+    <div class="tr-actions">
+      <button class="text-btn" id="tr-copy" data-i18n="copy"></button>
+      <button class="text-btn" id="tr-save" data-i18n="saveAsNote"></button>
+    </div>
+    <div id="tr-dict"></div>
+    <div id="tr-context" hidden>
+      <div class="tr-label" data-i18n="inSentence"></div>
+      <div id="tr-orig"></div>
+      <div id="tr-sentence"></div>
+    </div>
+  </div>
+
   <div id="sel-bar" hidden>
     <button class="sw" data-color="yellow" data-i18n-title="colorYellow"></button>
     <button class="sw" data-color="green" data-i18n-title="colorGreen"></button>
     <button class="sw" data-color="blue" data-i18n-title="colorBlue"></button>
     <button class="sw" data-color="pink" data-i18n-title="colorPink"></button>
     <span class="sep"></span>
+    <button class="sel-btn" id="sel-translate" data-i18n-title="translateTitle">
+      <svg viewBox="0 0 24 24"><path d="M4 5h9M8.5 3v2M6 5c.7 3.2 2.8 5.8 6 7.2M11 5c-.8 3.6-3.2 6.4-7 8"/><path d="m12.5 21 4-10 4 10M14 17.5h5"/></svg><span data-i18n="translate"></span>
+    </button>
     <button class="sel-btn" id="sel-note" data-i18n-title="addNote">
       <svg viewBox="0 0 24 24"><path d="M5 19h4L19 9l-4-4L5 15zM13 7l4 4"/></svg><span data-i18n="note"></span>
     </button>

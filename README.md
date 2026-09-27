@@ -48,10 +48,11 @@ All versions and change notes are on the [Releases](https://github.com/Zelinsky-
 - **21 fonts,** including 14 built-in reading fonts with full Cyrillic support (Literata, PT Serif, Merriweather, Lora, EB Garamond, Inter and more) that look the same on every system.
 - **Zoom that uses the space.** `Ctrl` `+` / `−` (or `Ctrl` + mouse wheel) scales the font and the column together, so text fills a wide monitor instead of sitting in a narrow strip. The column width can also be changed on its own.
 - **Auto-scroll** with a speed control right on screen.
+- **Translate any selection** with Google Translate: the word or phrase, dictionary variants for single words, and the whole surrounding sentence, so you can see which meaning is meant here. Save it as a note in one click.
 - **Footnotes** pop up in place, so you don't lose your spot.
 - **Any encoding.** Old Russian and Ukrainian books in windows-1251, KOI8 or CP866 open without garbled text.
 - **Interface in five languages:** English, Русский, Français, Deutsch, Español.
-- **Private and offline.** Books never leave your computer. The only network request is the update check against GitHub Releases.
+- **Private.** Books never leave your computer. Lampa goes online only to check for updates on GitHub and, when you press Translate, to send the selected text and its sentence to Google Translate.
 
 ## Screenshots
 

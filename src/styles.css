@@ -919,3 +919,34 @@ kbd {
 #scrub-ticks i.nt.pink { background: rgb(var(--c-pink)); }
 
 .logo-icon { width: 92px; height: 92px; margin-bottom: 10px; filter: drop-shadow(0 8px 18px rgb(0 0 0 / 0.25)); }
+
+/* ---------- перевод ---------- */
+
+#tr-pop {
+  position: fixed;
+  z-index: 43;
+  width: min(440px, calc(100vw - 32px));
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 12px 16px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.tr-head { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 11.5px; color: var(--muted); letter-spacing: 0.04em; }
+#tr-main { font-family: var(--font); font-size: 17px; line-height: 1.45; }
+#tr-main.loading { color: var(--muted); font-style: italic; }
+#tr-dict { margin-top: 8px; font-size: 13px; line-height: 1.5; }
+#tr-dict:empty { display: none; }
+.tr-dict-row { color: var(--fg); }
+.tr-pos { margin-right: 6px; color: var(--muted); font-style: italic; }
+#tr-context { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+.tr-label { margin-bottom: 5px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+#tr-orig { font-family: var(--font); font-size: 14px; font-style: italic; line-height: 1.45; color: var(--muted); }
+#tr-orig mark { background: color-mix(in srgb, var(--accent) 25%, transparent); color: var(--fg); border-radius: 2px; }
+#tr-sentence { margin-top: 6px; font-family: var(--font); font-size: 15px; line-height: 1.45; }
+.tr-actions { display: flex; gap: 8px; margin-top: 10px; }
+.tr-actions .text-btn { width: auto; }
+.setting-hint { margin: 6px 0 0; font-size: 12px; line-height: 1.4; color: var(--muted); }
+::highlight(tr-current) { background-color: color-mix(in srgb, var(--accent) 28%, transparent); }

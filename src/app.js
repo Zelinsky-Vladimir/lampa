@@ -81,6 +81,7 @@
     autoSpeed: 40,
     footerAlways: true,
     brightness: 1,
+    translateTo: 'auto',
   };
 
   const LS = { settings: 'lampa.settings', library: 'lampa.library', marks: 'lampa.marks' };
@@ -131,6 +132,7 @@
     selBar: $('#sel-bar'),
     annotPop: $('#annot-pop'),
     annotText: $('#annot-text'),
+    trPop: $('#tr-pop'),
     backBtn: $('#back-btn'),
     autoPill: $('#auto-pill'),
     autoSpeedLabel: $('#auto-speed-label'),
@@ -276,6 +278,7 @@
     langSel.options[0].textContent = t('langAuto');
     fillFontSelect($('#font'));
     fillFontSelect(ui.barFont);
+    fillTranslateSelect();
     for (const b of document.querySelectorAll('.theme-swatch')) {
       const th = THEMES.find((x) => x.id === b.dataset.theme);
       b.title = t(th.name);
@@ -349,6 +352,8 @@
       langSel.append(o);
     }
     langSel.addEventListener('change', () => updateSettings({ lang: langSel.value }));
+    const trSel = $('#translate-to');
+    trSel.addEventListener('change', () => updateSettings({ translateTo: trSel.value }));
 
     const themes = $('#themes');
     for (const th of THEMES) {
@@ -748,6 +753,7 @@
     lastScrollTop = st;
     if (!ui.notePop.hidden) closeNote();
     if (!ui.selBar.hidden) hideSelBar();
+    if (!ui.trPop.hidden && performance.now() - trOpenedAt > 400) closeTranslate();
     if (!ui.annotPop.hidden && performance.now() - editorOpenedAt > 400) closeNoteEditor();
     scheduleProgress();
     scheduleSave();
@@ -920,6 +926,7 @@
     resetSearch();
     closeNote();
     closeNoteEditor();
+    closeTranslate();
     hideSelBar();
     clearNoteHighlights();
     backStack.length = 0;
@@ -996,6 +1003,7 @@
     closeSearch();
     closeNote();
     closeNoteEditor();
+    closeTranslate();
     hideSelBar();
     ui.backBtn.hidden = true;
     ui.scroller.hidden = true;
@@ -1660,6 +1668,145 @@
     refreshMarks();
   }
 
+  // ---------- перевод выделенного текста ----------
+
+  const TRANSLATE_LANGS = ['ru', 'uk', 'en', 'de', 'fr', 'es', 'it', 'pl', 'pt', 'tr', 'zh-CN', 'ja', 'ko', 'ar'];
+  let trState = null; // { start, end, translation }
+  let trOpenedAt = 0;
+
+  function langName(code) {
+    try {
+      const n = new Intl.DisplayNames([I18n.lang], { type: 'language' }).of(code);
+      return n.charAt(0).toUpperCase() + n.slice(1);
+    } catch {
+      return code;
+    }
+  }
+
+  function fillTranslateSelect() {
+    const sel = $('#translate-to');
+    sel.replaceChildren();
+    const auto = el('option', null, t('langInterface'));
+    auto.value = 'auto';
+    sel.append(auto);
+    for (const code of TRANSLATE_LANGS) {
+      const o = el('option', null, langName(code));
+      o.value = code;
+      sel.append(o);
+    }
+    sel.value = settings.translateTo;
+  }
+
+  const translateTarget = () => (settings.translateTo === 'auto' ? I18n.lang : settings.translateTo);
+
+  // Предложение вокруг выделения — по нему видно, какое значение слова подразумевается.
+  function sentenceAround(start, end) {
+    const full = fullText();
+    const bi = Math.max(0, lastAtOrBefore(current.starts, start));
+    const pStart = current.starts[bi];
+    const para = full.slice(pStart, Math.max(blockEnd(bi), end));
+    let s = start - pStart;
+    let e = end - pStart;
+    while (s > 0 && !/[.!?…]/.test(para[s - 1])) s--;
+    while (e < para.length && !/[.!?…]/.test(para[e])) e++;
+    while (e < para.length && /[.!?…"»”’)\]]/.test(para[e])) e++;
+    s = Math.max(s, start - pStart - 300);
+    e = Math.min(e, end - pStart + 300);
+    return oneLine(para.slice(s, e));
+  }
+
+  // Если книга уже на языке перевода (русская книга при русском интерфейсе), переводим на английский.
+  async function translateText(text) {
+    let to = translateTarget();
+    let res = await api.translate(text, to);
+    if (res.src && res.src.split('-')[0] === to.split('-')[0] && to !== 'en') {
+      to = 'en';
+      res = await api.translate(text, to);
+    }
+    return { ...res, to };
+  }
+
+  function placeTranslate() {
+    if (!trState) return;
+    ui.trPop.scrollTop = 0;
+    placePopup(ui.trPop, rangeFor(trState.start, trState.end).getBoundingClientRect());
+  }
+
+  async function translateSelection() {
+    const r = selectionCharRange();
+    if (!r) return;
+    const text = oneLine(fullText().slice(r.start, r.end)).slice(0, 1500);
+    const sentence = sentenceAround(r.start, r.end);
+    const withContext = sentence.length > text.length + 3 && sentence.length <= 1200;
+    hideSelBar();
+    window.getSelection().removeAllRanges();
+    closeTranslate();
+
+    const state = { start: r.start, end: r.end, translation: '' };
+    trState = state;
+    trOpenedAt = performance.now();
+    if (hasHighlights) {
+      const hl = new Highlight(rangeFor(r.start, r.end));
+      hl.priority = 3;
+      CSS.highlights.set('tr-current', hl);
+    }
+
+    const main = $('#tr-main');
+    main.textContent = t('translating');
+    main.classList.add('loading');
+    $('#tr-langs').textContent = '';
+    $('#tr-dict').replaceChildren();
+    $('#tr-context').hidden = !withContext;
+    if (withContext) {
+      const orig = $('#tr-orig');
+      const i = sentence.indexOf(text);
+      if (i >= 0) orig.replaceChildren(sentence.slice(0, i), el('mark', null, text), sentence.slice(i + text.length));
+      else orig.textContent = sentence;
+      $('#tr-sentence').textContent = '…';
+    }
+    ui.trPop.hidden = false;
+    placeTranslate();
+
+    const mainReq = translateText(text);
+    const ctxReq = withContext ? translateText(sentence) : null;
+    try {
+      const res = await mainReq;
+      if (trState !== state) return;
+      main.classList.remove('loading');
+      main.textContent = res.text || '—';
+      state.translation = res.text;
+      $('#tr-langs').textContent = `${(res.src || '?').toUpperCase()} → ${res.to.toUpperCase()}`;
+      for (const d of res.dict.slice(0, 4)) {
+        const row = el('div', 'tr-dict-row');
+        if (d.pos) row.append(el('span', 'tr-pos', d.pos));
+        row.append(el('span', null, d.terms.slice(0, 6).join(', ')));
+        $('#tr-dict').append(row);
+      }
+    } catch {
+      if (trState !== state) return;
+      main.classList.remove('loading');
+      main.textContent = t('translateFailed');
+    }
+    placeTranslate();
+    if (!ctxReq) return;
+    try {
+      const res = await ctxReq;
+      if (trState === state) {
+        $('#tr-sentence').textContent = res.text || '—';
+        state.sentence = res.text || '';
+      }
+    } catch {
+      if (trState === state) $('#tr-sentence').textContent = '—';
+    }
+    placeTranslate();
+  }
+
+  function closeTranslate() {
+    trState = null;
+    ui.trPop.hidden = true;
+    if (hasHighlights) CSS.highlights.delete('tr-current');
+  }
+
   // ---------- автопрокрутка ----------
 
   const auto = { on: false, last: 0, acc: 0 };
@@ -1796,6 +1943,7 @@
     }
     if (e.key === 'Escape') {
       if (displayOpen()) closeDisplayPop();
+      else if (!ui.trPop.hidden) closeTranslate();
       else if (!ui.notePop.hidden) closeNote();
       else if (!ui.selBar.hidden) hideSelBar();
       else if (anyPanelOpen()) closePanels();
@@ -1956,6 +2104,20 @@
       window.getSelection().removeAllRanges();
       openNoteEditor(note, true);
     });
+    $('#sel-translate').addEventListener('click', translateSelection);
+    $('#tr-copy').addEventListener('click', () => {
+      if (trState && trState.translation) navigator.clipboard.writeText(trState.translation).then(() => toast(t('copied'), 1200));
+    });
+    $('#tr-save').addEventListener('click', () => {
+      if (!trState || !trState.translation) return;
+      const { start, end, translation, sentence } = trState;
+      closeTranslate();
+      // перевод предложения сохраняем тоже: по нему видно значение слова в этом месте
+      addNote({ start, end }, 'blue', sentence ? `${translation}
+
+${sentence}` : translation);
+      toast(t('noteSaved'), 1400);
+    });
     $('#sel-copy').addEventListener('click', () => {
       const text = window.getSelection().toString();
       if (text) navigator.clipboard.writeText(text).then(() => toast(t('copied'), 1200));
@@ -2009,6 +2171,7 @@
       if (!ui.notePop.hidden && !ui.notePop.contains(e.target) && !e.target.closest('a')) closeNote();
       if (!ui.annotPop.hidden && !ui.annotPop.contains(e.target)) closeNoteEditor();
       if (displayOpen() && !$('#display-pop').contains(e.target) && !e.target.closest('#btn-display')) closeDisplayPop();
+      if (!ui.trPop.hidden && !ui.trPop.contains(e.target) && !ui.selBar.contains(e.target)) closeTranslate();
     });
     document.addEventListener('mousemove', (e) => {
       if (e.clientY < 56 || e.clientY > window.innerHeight - 56) setBar(true);
