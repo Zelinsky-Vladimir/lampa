@@ -16,4 +16,5 @@ contextBridge.exposeInMainWorld('api', {
   onUpdateReady: (cb) => ipcRenderer.on('update-ready', (_e, version) => cb(version)),
   installUpdate: () => ipcRenderer.send('app:install-update'),
   translate: (text, to) => ipcRenderer.invoke('translate', { text, to }),
+  capture: (rect) => ipcRenderer.invoke('capture', rect),
 });

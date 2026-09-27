@@ -85,7 +85,8 @@
     brightness: 1,
     translateTo: 'auto',
     view: 'scroll',
-    pageAnim: 'slide',
+    pageAnim: 'curl',
+    curlDefault: true,
     pageCols: 1,
   };
 
@@ -174,6 +175,7 @@
   // Кто пользовался приложением до появления переводов, читал его по-русски.
   if (savedSettings && !savedSettings.lang) settings.lang = 'ru';
   if (!FONTS.some((f) => f.id === settings.font)) settings.font = DEFAULTS.font;
+  if (savedSettings && !savedSettings.curlDefault) Object.assign(settings, { pageAnim: 'curl', curlDefault: true });
 
   let library = loadStored('library', []);
   if (!Array.isArray(library)) library = [];
@@ -284,6 +286,7 @@
     fillFontSelect($('#font'));
     fillFontSelect(ui.barFont);
     fillTranslateSelect();
+    fillAnimSelect();
     for (const b of document.querySelectorAll('.theme-swatch')) {
       const th = THEMES.find((x) => x.id === b.dataset.theme);
       b.title = t(th.name);
@@ -328,8 +331,10 @@
     root.dataset.indent = String(settings.indent);
     root.dataset.footer = settings.footerAlways ? 'always' : 'auto';
     root.style.setProperty('--dim', String(1 - settings.brightness));
+    const viewChanged = root.dataset.view !== settings.view;
     root.dataset.view = settings.view;
     layoutPages();
+    if (viewChanged) refreshPageNumbers();
     api.setThemeBg(bg);
     syncSettingsUI();
   }
@@ -359,6 +364,8 @@
       langSel.append(o);
     }
     langSel.addEventListener('change', () => updateSettings({ lang: langSel.value }));
+    const animSel = $('#page-anim');
+    animSel.addEventListener('change', () => updateSettings({ pageAnim: animSel.value }));
     const trSel = $('#translate-to');
     trSel.addEventListener('change', () => updateSettings({ translateTo: trSel.value }));
 
@@ -418,6 +425,7 @@
     $('#auto-speed-val').textContent = t('pxs', { n: settings.autoSpeed });
     ui.autoSpeedLabel.textContent = t('pxs', { n: settings.autoSpeed });
     $('#btn-view').classList.toggle('active', paged());
+    $('#page-anim').value = settings.pageAnim;
     for (const seg of document.querySelectorAll('.seg')) {
       for (const b of seg.children) b.classList.toggle('active', b.dataset.value === String(settings[seg.dataset.key]));
     }
@@ -573,7 +581,8 @@
   // а перелистывание — сдвиг содержимого на ширину страницы.
   const paged = () => settings.view === 'pages';
   const PAGE_GAP = 80;
-  const pg = { step: 1, count: 1, index: 0, h: 600, turning: false, anchor: null };
+  // step/count — экраны (разворот из двух страниц — один экран), colStep/pagesTotal — отдельные страницы.
+  const pg = { step: 1, count: 1, index: 0, h: 600, turning: false, anchor: null, cols: 1, colStep: 1, pagesTotal: 1, key: '' };
 
   function layoutPages() {
     if (!paged()) return;
@@ -595,7 +604,204 @@
     pg.h = h * cols;
     pg.count = Math.max(1, Math.ceil((ui.book.scrollWidth + PAGE_GAP) / pg.step - 0.01));
     pg.index = clamp(Math.round(ui.book.scrollLeft / pg.step), 0, pg.count - 1);
+    pg.cols = cols;
+    pg.colStep = (w - (cols - 1) * PAGE_GAP) / cols + PAGE_GAP;
+    pg.pagesTotal = Math.max(1, Math.ceil((ui.book.scrollWidth + PAGE_GAP) / pg.colStep - 0.01));
+    // раскладка изменилась (окно, шрифт, ширина) — пересчитываем номера страниц в оглавлении, закладках, на ползунке
+    const key = [w, h, cols, ui.book.scrollWidth].join('|');
+    if (key !== pg.key) {
+      pg.key = key;
+      if (current && current.ready) refreshPageNumbers();
+    }
   }
+
+  // Номер страницы (с 1) для прямоугольника в координатах окна.
+  const colOfRect = (r) => Math.max(0, Math.floor((r.left - pageLeft() + ui.book.scrollLeft + 2) / pg.colStep));
+
+  function rectOfPos(pos) {
+    const total = current.index.total;
+    const p = clamp(Math.floor(pos), 0, Math.max(0, total - 1));
+    const r = total ? rangeFor(p, p + 1).getClientRects()[0] : null;
+    if (r) return r;
+    const b = current.blocks[anchorForChar(p).i];
+    return b ? b.getClientRects()[0] || b.getBoundingClientRect() : null;
+  }
+
+  // Номер страницы для позиции в тексте: в ленте — по 1800 знаков, в режиме страниц — экранный.
+  function displayPage(pos) {
+    if (!paged()) return pageOf(pos);
+    const r = rectOfPos(pos);
+    return r ? colOfRect(r) + 1 : 1;
+  }
+
+  const displayTotal = () => (paged() ? pg.pagesTotal : current.pages);
+  // экран, на котором лежит страница n
+  const screenOfPage = (n) => clamp(Math.floor((n - 1) / pg.cols), 0, pg.count - 1);
+
+  function refreshPageNumbers() {
+    if (!current || !current.ready) return;
+    current.toc.forEach((x, k) => {
+      x.pageEl.textContent = paged() ? colOfRect(x.el.getClientRects()[0] || x.el.getBoundingClientRect()) + 1 : pageOf(current.tocStarts[k]);
+    });
+    setupScrubber();
+    renderMarkLists();
+    updateProgress();
+  }
+
+  // ---------- анимация «загиб страницы» ----------
+
+  // Снимок текущей страницы рисуется поверх книги, под ним сразу открывается следующая,
+  // а снимок «загибается» от угла: часть страницы переворачивается вдоль линии сгиба,
+  // на обороте просвечивает текст, у сгиба тень.
+  const curlCanvas = $('#curl');
+  const CURL_MS = 520;
+
+  async function captureBook() {
+    const r = ui.book.getBoundingClientRect();
+    try {
+      const buf = await api.capture({ x: r.left, y: r.top, width: r.width, height: r.height });
+      if (!buf) return null;
+      const img = await createImageBitmap(new Blob([buf], { type: 'image/jpeg' }));
+      return { img, rect: { x: r.left, y: r.top, w: r.width, h: r.height } };
+    } catch {
+      return null;
+    }
+  }
+
+  // Часть многоугольника по одну сторону прямой (M, n): corner = сторона, куда смотрит n.
+  function clipHalf(poly, M, n, corner) {
+    const side = (q) => ((q[0] - M.x) * n.x + (q[1] - M.y) * n.y) * (corner ? 1 : -1);
+    const out = [];
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i];
+      const b = poly[(i + 1) % poly.length];
+      const sa = side(a);
+      const sb = side(b);
+      if (sa >= 0) out.push(a);
+      if ((sa >= 0) !== (sb >= 0)) {
+        const k = sa / (sa - sb);
+        out.push([a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k]);
+      }
+    }
+    return out;
+  }
+
+  function tracePoly(ctx, poly) {
+    ctx.beginPath();
+    poly.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.closePath();
+  }
+
+  function drawCurl(snap, C0, P, fade) {
+    const dpr = window.devicePixelRatio || 1;
+    const ctx = curlCanvas.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, curlCanvas.width, curlCanvas.height);
+    ctx.setTransform(dpr, 0, 0, dpr, snap.rect.x * dpr, snap.rect.y * dpr);
+    const W = snap.rect.w;
+    const H = snap.rect.h;
+    const len = Math.hypot(C0.x - P.x, C0.y - P.y);
+    if (len < 1) {
+      ctx.drawImage(snap.img, 0, 0, W, H);
+      return;
+    }
+    const n = { x: (C0.x - P.x) / len, y: (C0.y - P.y) / len };
+    const M = { x: (C0.x + P.x) / 2, y: (C0.y + P.y) / 2 };
+    const page = [[0, 0], [W, 0], [W, H], [0, H]];
+    const flat = clipHalf(page, M, n, false);
+    const lifted = clipHalf(page, M, n, true);
+
+    // 1. часть страницы, которая ещё лежит
+    if (flat.length) {
+      ctx.save();
+      tracePoly(ctx, flat);
+      ctx.clip();
+      ctx.drawImage(snap.img, 0, 0, W, H);
+      ctx.restore();
+    }
+    if (!lifted.length) return;
+
+    // 2. тень от сгиба на открывшейся следующей странице
+    ctx.save();
+    tracePoly(ctx, lifted);
+    ctx.clip();
+    const sh = ctx.createLinearGradient(M.x, M.y, M.x + n.x * 60, M.y + n.y * 60);
+    sh.addColorStop(0, `rgba(0,0,0,${0.32 * fade})`);
+    sh.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = sh;
+    ctx.fillRect(-W, -H, W * 3, H * 3);
+    ctx.restore();
+
+    // 3. оборот страницы: поднятая часть, отражённая относительно линии сгиба
+    const d = M.x * n.x + M.y * n.y;
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.transform(1 - 2 * n.x * n.x, -2 * n.x * n.y, -2 * n.x * n.y, 1 - 2 * n.y * n.y, 2 * d * n.x, 2 * d * n.y);
+    tracePoly(ctx, lifted);
+    ctx.shadowColor = 'rgba(0,0,0,0.35)';
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = themeColors(settings.theme).bg;
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.clip();
+    // текст с лицевой стороны слегка просвечивает (он зеркальный — как на настоящей бумаге)
+    ctx.globalAlpha = 0.13 * fade;
+    ctx.drawImage(snap.img, 0, 0, W, H);
+    ctx.globalAlpha = fade;
+    // объём: блик у сгиба и затенение к краю
+    const far = len / 2;
+    const g = ctx.createLinearGradient(M.x, M.y, M.x + n.x * far, M.y + n.y * far);
+    g.addColorStop(0, 'rgba(0,0,0,0.22)');
+    g.addColorStop(0.1, 'rgba(255,255,255,0.20)');
+    g.addColorStop(0.55, 'rgba(255,255,255,0.04)');
+    g.addColorStop(1, 'rgba(0,0,0,0.10)');
+    ctx.fillStyle = g;
+    ctx.fillRect(-W * 2, -H * 2, W * 5, H * 5);
+    if (settings.brightness < 1) {
+      ctx.fillStyle = `rgba(0,0,0,${1 - settings.brightness})`;
+      ctx.fillRect(-W * 2, -H * 2, W * 5, H * 5);
+    }
+    ctx.restore();
+  }
+
+  function startCurl(snap, dir, done) {
+    const dpr = window.devicePixelRatio || 1;
+    curlCanvas.width = Math.round(window.innerWidth * dpr);
+    curlCanvas.height = Math.round(window.innerHeight * dpr);
+    curlCanvas.hidden = false;
+    const W = snap.rect.w;
+    const H = snap.rect.h;
+    // вперёд — угол справа снизу уходит влево, назад — угол слева снизу уходит вправо
+    const C0 = dir > 0 ? { x: W, y: H } : { x: 0, y: H };
+    drawCurl(snap, C0, C0, 1);
+    const t0 = performance.now();
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      curlCanvas.hidden = true;
+      snap.img.close();
+      done();
+    };
+    // страховка: если кадры анимации не идут (окно свёрнуто или в фоне), снимок всё равно убираем
+    setTimeout(finish, CURL_MS + 300);
+    const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+    const frame = (now) => {
+      const t = Math.min(1, (now - t0) / CURL_MS);
+      const e = ease(t);
+      const P = {
+        x: dir > 0 ? W - 2 * W * e : 2 * W * e,
+        y: H - H * 0.18 * Math.sin(Math.PI * e),
+      };
+      if (finished) return;
+      drawCurl(snap, C0, P, e > 0.85 ? (1 - e) / 0.15 : 1);
+      if (t < 1) requestAnimationFrame(frame);
+      else finish();
+    };
+    requestAnimationFrame(frame);
+  }
+
+  const nextFrame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
   const pageLeft = () => ui.book.getBoundingClientRect().left;
 
@@ -615,6 +821,23 @@
     const apply = (smooth) => b.scrollTo({ left: n * pg.step, behavior: smooth ? 'smooth' : 'instant' });
     pg.index = n;
     const anim = dir && b.animate ? settings.pageAnim : 'none';
+    if (anim === 'curl') {
+      pg.turning = true;
+      afterTurn(dir);
+      // снимок делаем, когда подсказки и выделение уже убраны с экрана
+      nextFrame().then(captureBook).then((snap) => {
+        if (!snap) {
+          apply(true);
+          pg.turning = false;
+          return;
+        }
+        startCurl(snap, dir, () => {
+          pg.turning = false;
+        });
+        apply(false);
+      });
+      return;
+    }
     if (anim === 'fade' || anim === 'flip') {
       const s = dir > 0 ? 1 : -1;
       const out = anim === 'fade'
@@ -661,7 +884,9 @@
 
   // В режиме страниц: первый блок, заканчивающийся на текущей странице или позже.
   function blockAtPageStart(blocks) {
-    const left = pageLeft() + 1;
+    // Левый край той страницы, на которую перелистываем, а не того, что сейчас видно:
+    // во время анимации текст ещё едет, и по экрану место определялось бы неверно.
+    const left = pageLeft() + pg.index * pg.step - ui.book.scrollLeft + 1;
     const lastRight = (b) => {
       const rs = b.getClientRects();
       return rs.length ? rs[rs.length - 1].right : b.getBoundingClientRect().right;
@@ -797,6 +1022,11 @@
 
   // +2 символа, чтобы округление не показало предыдущую страницу
   const jumpToPage = (n, remember) => {
+    if (paged()) {
+      if (remember) pushBack();
+      showPage(screenOfPage(Math.round(n) || 1), 0);
+      return;
+    }
     const page = clamp(Math.round(n) || 1, 1, current.pages);
     jumpToChar((page - 1) * CHARS_PER_PAGE + (page > 1 ? 2 : 0), remember);
   };
@@ -816,8 +1046,8 @@
     const a = blockAtTop();
     if (a) entry.pos = a;
     entry.progress = current.ratio;
-    entry.page = current.page;
-    entry.pages = current.pages;
+    entry.page = current.shownPage || current.page;
+    entry.pages = displayTotal();
     saveLibrary();
   }
 
@@ -858,10 +1088,14 @@
 
     ui.progressFill.style.transform = `scaleX(${current.ratio})`;
     ui.pagePct.textContent = Math.round(current.ratio * 100) + '%';
-    ui.miniPage.textContent = `${current.page} / ${current.pages}`;
-    if (document.activeElement !== ui.pageInput) ui.pageInput.value = current.page;
-    if (!scrubbing) ui.scrub.value = current.page;
-    ui.btnBookmark.classList.toggle('active', bookmarksOnPage(current.page).length > 0);
+    const first = paged() ? pg.index * pg.cols + 1 : current.page;
+    const last = paged() ? Math.min(first + pg.cols - 1, pg.pagesTotal) : first;
+    const label = last > first ? `${first}–${last}` : String(first);
+    current.shownPage = first;
+    ui.miniPage.textContent = `${label} / ${displayTotal()}`;
+    if (document.activeElement !== ui.pageInput) ui.pageInput.value = label;
+    if (!scrubbing) ui.scrub.value = paged() ? pg.index + 1 : current.page;
+    ui.btnBookmark.classList.toggle('active', bookmarksHere().length > 0);
 
     const ci = currentTocIndex();
     if (ci !== lastChapter) {
@@ -918,20 +1152,22 @@
   let scrubbing = false;
 
   function setupScrubber() {
-    const { pages } = current;
-    ui.scrub.max = pages;
-    ui.scrub.disabled = pages < 2;
-    ui.pageTotal.textContent = t('ofTotal', { total: pages });
+    const steps = paged() ? pg.count : current.pages;
+    ui.scrub.max = steps;
+    ui.scrub.disabled = steps < 2;
+    ui.pageTotal.textContent = t('ofTotal', { total: displayTotal() });
     renderTicks();
   }
 
-  const tickLeft = (pos) => ((pageOf(pos) - 1) / Math.max(1, current.pages - 1)) * 100 + '%';
+  const tickLeft = (pos) => (paged()
+    ? (screenOfPage(displayPage(pos)) / Math.max(1, pg.count - 1)) * 100 + '%'
+    : ((pageOf(pos) - 1) / Math.max(1, current.pages - 1)) * 100 + '%');
 
   // Отметки на ползунке: главы, закладки и заметки.
   function renderTicks() {
     ui.scrubTicks.replaceChildren();
-    const { pages, toc, tocStarts } = current;
-    if (pages < 2) return;
+    const { toc, tocStarts } = current;
+    if ((paged() ? pg.count : current.pages) < 2) return;
     // главы: самый верхний уровень, где заголовков больше одного (один — обычно название книги)
     const counts = {};
     for (const x of toc) counts[x.level] = (counts[x.level] || 0) + 1;
@@ -961,14 +1197,22 @@
     const v = Number(ui.scrub.value);
     const max = Math.max(1, Number(ui.scrub.max) - 1);
     const pct = (v - 1) / max;
-    const chapter = chapterAt((v - 1) * CHARS_PER_PAGE + 2);
-    ui.scrubTip.textContent = t('pageShort', { n: v }) + (chapter ? ' · ' + chapter : '');
+    let chapter;
+    let n = v;
+    if (paged()) {
+      n = (v - 1) * pg.cols + 1;
+      const k = current.toc.reduce((acc, x, i) => (Number(x.pageEl.textContent) <= n + pg.cols - 1 ? i : acc), -1);
+      chapter = k >= 0 ? current.toc[k].text : '';
+    } else {
+      chapter = chapterAt((v - 1) * CHARS_PER_PAGE + 2);
+    }
+    ui.scrubTip.textContent = t('pageShort', { n }) + (chapter ? ' · ' + chapter : '');
     ui.scrubTip.style.left = `calc(${pct * 100}% + ${(0.5 - pct) * 16}px)`;
     ui.scrubTip.hidden = false;
   }
 
   function commitPageInput() {
-    const n = parseInt(ui.pageInput.value.replace(/\D/g, ''), 10);
+    const n = parseInt((ui.pageInput.value.match(/\d+/) || [''])[0], 10);
     ui.pageInput.blur();
     ui.scroller.focus({ preventScroll: true });
     if (n) jumpToPage(n, true);
@@ -1118,6 +1362,7 @@
       x.pageEl.textContent = pageOf(current.tocStarts[k]);
     });
     validateNotes();
+    pg.key = '';
     setupScrubber();
     applyNoteHighlights();
     renderMarkLists();
@@ -1131,7 +1376,8 @@
     current.ready = true;
     setBar(true);
     updateProgress();
-    if (entry.pos && current.page > 1) toast(t('continuing', { n: current.page, total: current.pages }), 2200);
+    if (paged()) refreshPageNumbers();
+    if (entry.pos && current.shownPage > 1) toast(t('continuing', { n: current.shownPage, total: displayTotal() }), 2200);
     else ui.toast.classList.remove('show');
     ui.scroller.focus({ preventScroll: true });
 
@@ -1435,7 +1681,7 @@
     search.matches.slice(0, SEARCH_LIST_LIMIT).forEach((m, k) => {
       const item = el('button', 'search-item');
       const chapter = chapterAt(m.start);
-      item.append(el('div', 'meta', t('pageShort', { n: pageOf(m.start) }) + (chapter ? ' · ' + chapter : '')));
+      item.append(el('div', 'meta', t('pageShort', { n: displayPage(m.start) }) + (chapter ? ' · ' + chapter : '')));
       const from = Math.max(0, m.start - 50);
       const to = Math.min(full.length, m.end + 70);
       const clean = (s) => s.replace(/\s+/g, ' ');
@@ -1553,13 +1799,19 @@
     return s.length > len ? s.slice(0, len).trimEnd() + '…' : s;
   }
 
-  const bookmarksOnPage = (page) => (current && current.ready ? bookMarks().bookmarks.filter((b) => pageOf(b.pos) === page) : []);
+  // Закладки на том, что сейчас на экране: в ленте — на текущей странице, в режиме страниц — на текущем экране.
+  function bookmarksHere() {
+    if (!current || !current.ready) return [];
+    const list = bookMarks().bookmarks;
+    if (!paged()) return list.filter((b) => pageOf(b.pos) === current.page);
+    return list.filter((b) => screenOfPage(displayPage(b.pos)) === pg.index);
+  }
 
   function toggleBookmark() {
     if (!readerVisible() || !current.ready) return;
     updateProgress();
     const bm = bookMarks();
-    const here = bookmarksOnPage(current.page);
+    const here = bookmarksHere();
     if (here.length) {
       bm.bookmarks = bm.bookmarks.filter((b) => !here.includes(b));
       toast(t('bookmarkRemoved'), 1400);
@@ -1567,7 +1819,7 @@
       const pos = Math.floor(currentCharPos());
       bm.bookmarks.push({ id: uid(), pos, created: Date.now() });
       bm.bookmarks.sort((a, b) => a.pos - b.pos);
-      toast(t('bookmarkAdded', { n: pageOf(pos) }), 1400);
+      toast(t('bookmarkAdded', { n: displayPage(pos) }), 1400);
     }
     saveMarks();
     refreshMarks();
@@ -1624,7 +1876,7 @@
 
   function markMeta(pos) {
     const chapter = chapterAt(pos);
-    return t('pageShort', { n: pageOf(pos) }) + (chapter ? ' · ' + chapter : '');
+    return t('pageShort', { n: displayPage(pos) }) + (chapter ? ' · ' + chapter : '');
   }
 
   function renderMarkLists() {
@@ -2066,6 +2318,17 @@
     if (!auto.on) toast(t('autoSpeedToast', { n: settings.autoSpeed }), 1400);
   }
 
+  function fillAnimSelect() {
+    const sel = $('#page-anim');
+    sel.replaceChildren();
+    for (const [id, key] of [['curl', 'animCurl'], ['slide', 'animSlide'], ['fade', 'animFade'], ['flip', 'animFlip'], ['none', 'animNone']]) {
+      const o = el('option', null, t(key));
+      o.value = id;
+      sel.append(o);
+    }
+    sel.value = settings.pageAnim;
+  }
+
   function toggleView() {
     updateSettings({ view: paged() ? 'scroll' : 'pages' });
   }
@@ -2284,7 +2547,8 @@
       showScrubTip();
     });
     ui.scrub.addEventListener('input', () => {
-      jumpToPage(Number(ui.scrub.value), false);
+      if (paged()) showPage(Number(ui.scrub.value) - 1, 0);
+      else jumpToPage(Number(ui.scrub.value), false);
       if (scrubbing) showScrubTip();
     });
     window.addEventListener('pointerup', () => {
@@ -2403,7 +2667,9 @@ ${sentence}` : translation);
     });
     ui.book.addEventListener('scrollend', () => {
       if (!paged()) return;
-      pg.index = clamp(Math.round(ui.book.scrollLeft / pg.step), 0, pg.count - 1);
+      const idx = clamp(Math.round(ui.book.scrollLeft / pg.step), 0, pg.count - 1);
+      if (Math.abs(ui.book.scrollLeft - idx * pg.step) > 2) ui.book.scrollTo({ left: idx * pg.step, behavior: 'instant' });
+      pg.index = idx;
       pg.anchor = blockAtTop();
       scheduleProgress();
       scheduleSave();

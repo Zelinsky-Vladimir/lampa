@@ -995,3 +995,6 @@ kbd {
 :root[data-view="pages"] .book-head { margin-bottom: 0; }
 :root[data-view="pages"] #book .book-head .cover { max-height: calc(var(--page-h) * 0.5); margin-bottom: 1.2em; }
 :root[data-view="pages"] .book-end { margin-top: 2em; }
+
+/* снимок страницы для анимации «загиб»: поверх затемнения, т. к. снимок его уже содержит */
+#curl { position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; z-index: 1001; pointer-events: none; }

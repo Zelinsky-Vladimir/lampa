@@ -79,6 +79,8 @@ function createWindow() {
       sandbox: true,
       nodeIntegration: false,
       spellcheck: false,
+      // для скриншотов в тестах: окно может быть в фоне, а анимации должны идти
+      backgroundThrottling: !process.env.LAMPA_SCREENSHOT,
     },
   });
 
@@ -231,6 +233,19 @@ function registerIpc() {
     if (updateReady) autoUpdater.quitAndInstall(true, true);
   });
 
+  // Снимок области окна для анимации перелистывания.
+  ipcMain.handle('capture', async (_e, r) => {
+    if (!win || !r) return null;
+    const rect = {
+      x: Math.max(0, Math.round(r.x)),
+      y: Math.max(0, Math.round(r.y)),
+      width: Math.max(1, Math.round(r.width)),
+      height: Math.max(1, Math.round(r.height)),
+    };
+    const img = await win.webContents.capturePage(rect);
+    return img.isEmpty() ? null : img.toJPEG(92);
+  });
+
   ipcMain.handle('translate', async (_e, req) => {
     const text = req && typeof req.text === 'string' ? req.text.trim() : '';
     const to = req && typeof req.to === 'string' ? req.to : '';
@@ -263,7 +278,7 @@ function registerIpc() {
     setTimeout(async () => {
       if (process.env.LAMPA_EVAL) {
         await win.webContents.executeJavaScript(process.env.LAMPA_EVAL);
-        await new Promise((r) => setTimeout(r, 500));
+        await new Promise((r) => setTimeout(r, Number(process.env.LAMPA_SHOT_DELAY || 500)));
       }
       const img = await win.webContents.capturePage();
       fs.writeFileSync(out, img.toPNG());

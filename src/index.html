@@ -212,12 +212,7 @@
       </div>
       <div class="setting pages-only">
         <div class="label" data-i18n="pageAnim"></div>
-        <div class="seg" data-key="pageAnim">
-          <button data-value="slide" data-i18n="animSlide"></button>
-          <button data-value="fade" data-i18n="animFade"></button>
-          <button data-value="flip" data-i18n="animFlip"></button>
-          <button data-value="none" data-i18n="animNone"></button>
-        </div>
+        <select id="page-anim"></select>
       </div>
       <div class="setting pages-only">
         <div class="label" data-i18n="pagesPerScreen"></div>
@@ -311,6 +306,7 @@
   </div>
   <!-- затемнение поверх всего окна: «яркость» внутри приложения -->
   <div id="dim"></div>
+  <canvas id="curl" hidden></canvas>
 
   <div id="toast" role="status"></div>
   <div id="update-banner" role="status" hidden>

@@ -5,6 +5,7 @@
 
   const STRINGS = {
     en: {
+      animCurl: 'Page curl',
       readingMode: 'Reading mode',
       modeScroll: 'Scroll',
       modePages: 'Pages',
@@ -178,6 +179,7 @@
     },
 
     ru: {
+      animCurl: 'Загиб страницы',
       readingMode: 'Режим чтения',
       modeScroll: 'Лента',
       modePages: 'Страницы',
@@ -351,6 +353,7 @@
     },
 
     fr: {
+      animCurl: 'Page cornée',
       readingMode: 'Mode de lecture',
       modeScroll: 'Défilement',
       modePages: 'Pages',
@@ -524,6 +527,7 @@
     },
 
     de: {
+      animCurl: 'Seite biegen',
       readingMode: 'Lesemodus',
       modeScroll: 'Scrollen',
       modePages: 'Seiten',
@@ -697,6 +701,7 @@
     },
 
     es: {
+      animCurl: 'Doblar página',
       readingMode: 'Modo de lectura',
       modeScroll: 'Desplazamiento',
       modePages: 'Páginas',
