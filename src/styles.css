@@ -963,3 +963,35 @@ kbd {
 .tr-actions .text-btn { width: auto; }
 .setting-hint { margin: 6px 0 0; font-size: 12px; line-height: 1.4; color: var(--muted); }
 ::highlight(tr-current) { background-color: color-mix(in srgb, var(--accent) 28%, transparent); }
+
+/* ---------- режим страниц ---------- */
+
+:root:not([data-view="pages"]) .pages-only { display: none; }
+#btn-view.active { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+
+:root[data-view="pages"] #scroller { overflow: hidden; }
+:root[data-view="pages"] #book {
+  box-sizing: content-box;
+  max-width: none;
+  width: var(--page-w);
+  height: var(--page-h);
+  margin: var(--page-top) auto 0;
+  padding: 0;
+  column-count: var(--page-cols);
+  column-gap: var(--page-gap);
+  column-fill: auto;
+  overflow: hidden;
+}
+/* как в бумажной книге: главы с новой страницы, картинки не режутся */
+:root[data-view="pages"] #book .book-head { break-after: column; }
+:root[data-view="pages"] #book .fb2-body > section + section,
+:root[data-view="pages"] #book .epub-doc + .epub-doc,
+:root[data-view="pages"] #book .notes,
+:root[data-view="pages"] #book .txt-body > h2:not(:first-child) { break-before: column; }
+:root[data-view="pages"] #book h1, :root[data-view="pages"] #book h2, :root[data-view="pages"] #book h3 { break-after: avoid; margin-top: 0.6em; }
+:root[data-view="pages"] #book figure, :root[data-view="pages"] #book img { break-inside: avoid; }
+:root[data-view="pages"] #book img { max-height: calc(var(--page-h) - 2em); }
+:root[data-view="pages"] #book figure.image img, :root[data-view="pages"] #book .img-block img, :root[data-view="pages"] #book img.block { max-height: calc(var(--page-h) - 2em); }
+:root[data-view="pages"] .book-head { margin-bottom: 0; }
+:root[data-view="pages"] #book .book-head .cover { max-height: calc(var(--page-h) * 0.5); margin-bottom: 1.2em; }
+:root[data-view="pages"] .book-end { margin-top: 2em; }

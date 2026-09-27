@@ -38,7 +38,7 @@ All versions and change notes are on the [Releases](https://github.com/Zelinsky-
 
 ## Features
 
-- **One continuous page.** No page turning: the book flows top to bottom, and Lampa remembers exactly where you stopped.
+- **Scroll or pages.** Read the book as one continuous page, or switch to pages (`P`) and turn them with the arrow keys, the mouse wheel or a click on the page edge. Page turns can slide, fade, flip, or have no animation, and a wide screen can show two pages side by side. Lampa remembers exactly where you stopped in either mode.
 - **Real page numbers.** A page is 1,800 characters, like a printed book, so "page 124" stays the same when you change the font or resize the window. Jump to any page by typing its number.
 - **Progress bar** with chapter marks, bookmarks and notes; drag it to jump anywhere and see the page and chapter as you go.
 - **Search** across the whole book, with every match listed by page and chapter and highlighted in the text.
@@ -117,6 +117,8 @@ The installed Windows app and the Linux AppImage check [Releases](https://github
 | Keys | Action |
 | --- | --- |
 | `Space` / `PgDn`, `Shift+Space` / `PgUp` | Page down / up |
+| `←` / `→`, click on the page edge | Previous / next page (pages mode) |
+| `P` | Switch between scroll and pages |
 | `↑` `↓`, `Home` / `End` | Scroll a few lines; go to the start / end |
 | `Ctrl+F`, `Enter` / `F3` | Search; next match (`Shift` for previous) |
 | `Ctrl+G` | Go to page |

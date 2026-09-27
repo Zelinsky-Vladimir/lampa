@@ -60,6 +60,8 @@
     [['B'], 'kBookmark'],
     [['@keySelect'], 'kSelect'],
     [['S'], 'kSettings'],
+    [['P'], 'kMode'],
+    [['←', '→'], 'kTurn'],
     [['A'], 'kAuto'],
     [['Ctrl +', 'Ctrl −', 'Ctrl+@keyWheel'], 'kZoom'],
     [['Ctrl+Shift+←', 'Ctrl+Shift+→'], 'kWidth'],
@@ -82,6 +84,9 @@
     footerAlways: true,
     brightness: 1,
     translateTo: 'auto',
+    view: 'scroll',
+    pageAnim: 'slide',
+    pageCols: 1,
   };
 
   const LS = { settings: 'lampa.settings', library: 'lampa.library', marks: 'lampa.marks' };
@@ -323,6 +328,8 @@
     root.dataset.indent = String(settings.indent);
     root.dataset.footer = settings.footerAlways ? 'always' : 'auto';
     root.style.setProperty('--dim', String(1 - settings.brightness));
+    root.dataset.view = settings.view;
+    layoutPages();
     api.setThemeBg(bg);
     syncSettingsUI();
   }
@@ -379,7 +386,9 @@
     for (const seg of document.querySelectorAll('.seg')) {
       seg.addEventListener('click', (e) => {
         const b = e.target.closest('button');
-        if (b) updateSettings({ [seg.dataset.key]: b.dataset.value === 'true' });
+        if (!b) return;
+        const v = b.dataset.value;
+        updateSettings({ [seg.dataset.key]: v === 'true' ? true : v === 'false' ? false : /^\d+$/.test(v) ? Number(v) : v });
       });
     }
 
@@ -408,6 +417,7 @@
     $('#auto-speed').value = settings.autoSpeed;
     $('#auto-speed-val').textContent = t('pxs', { n: settings.autoSpeed });
     ui.autoSpeedLabel.textContent = t('pxs', { n: settings.autoSpeed });
+    $('#btn-view').classList.toggle('active', paged());
     for (const seg of document.querySelectorAll('.seg')) {
       for (const b of seg.children) b.classList.toggle('active', b.dataset.value === String(settings[seg.dataset.key]));
     }
@@ -527,6 +537,7 @@
   function blockAtTop() {
     const blocks = current && current.blocks;
     if (!blocks || !blocks.length) return null;
+    if (paged()) return blockAtPageStart(blocks);
     const top = ui.scroller.getBoundingClientRect().top;
     let lo = 0;
     let hi = blocks.length - 1;
@@ -548,8 +559,149 @@
     const blocks = current && current.blocks;
     if (!blocks || !blocks.length || !a) return;
     const b = blocks[clamp(a.i | 0, 0, blocks.length - 1)];
+    if (paged()) {
+      showAnchorPage(b, a.f || 0);
+      return;
+    }
     const r = b.getBoundingClientRect();
     ui.scroller.scrollTop += r.top - ui.scroller.getBoundingClientRect().top + (a.f || 0) * r.height;
+  }
+
+  // ---------- постраничный режим ----------
+
+  // Книга раскладывается в CSS-колонки высотой в экран. Видна одна колонка (или разворот из двух),
+  // а перелистывание — сдвиг содержимого на ширину страницы.
+  const paged = () => settings.view === 'pages';
+  const PAGE_GAP = 80;
+  const pg = { step: 1, count: 1, index: 0, h: 600, turning: false, anchor: null };
+
+  function layoutPages() {
+    if (!paged()) return;
+    const sw = ui.scroller.clientWidth || window.innerWidth;
+    const top = 48 + 28;
+    const bottom = 46 + 26;
+    const h = Math.max(240, window.innerHeight - top - bottom);
+    const cols = settings.pageCols === 2 && sw >= 900 ? 2 : 1;
+    const avail = sw - 80;
+    const colW = Math.max(280, Math.min(settings.width, cols === 2 ? (avail - PAGE_GAP) / 2 : avail));
+    const w = Math.round(cols * colW + (cols - 1) * PAGE_GAP);
+    root.style.setProperty('--page-w', w + 'px');
+    root.style.setProperty('--page-h', h + 'px');
+    root.style.setProperty('--page-top', top + 'px');
+    root.style.setProperty('--page-cols', String(cols));
+    root.style.setProperty('--page-gap', PAGE_GAP + 'px');
+    ui.scroller.scrollTop = 0;
+    pg.step = w + PAGE_GAP;
+    pg.h = h * cols;
+    pg.count = Math.max(1, Math.ceil((ui.book.scrollWidth + PAGE_GAP) / pg.step - 0.01));
+    pg.index = clamp(Math.round(ui.book.scrollLeft / pg.step), 0, pg.count - 1);
+  }
+
+  const pageLeft = () => ui.book.getBoundingClientRect().left;
+
+  // Номер экранной страницы, на которой лежит прямоугольник (координаты окна).
+  const pageOfRect = (r) => Math.floor((r.left - pageLeft() + ui.book.scrollLeft + 2) / pg.step);
+
+  function afterTurn(dir) {
+    closeNote();
+    hideSelBar();
+    if (!ui.trPop.hidden) closeTranslate();
+    if (dir > 0 && !chromeHover && !anyPanelOpen() && !displayOpen()) setBar(false);
+  }
+
+  function showPage(n, dir) {
+    n = clamp(n, 0, pg.count - 1);
+    const b = ui.book;
+    const apply = (smooth) => b.scrollTo({ left: n * pg.step, behavior: smooth ? 'smooth' : 'instant' });
+    pg.index = n;
+    const anim = dir && b.animate ? settings.pageAnim : 'none';
+    if (anim === 'fade' || anim === 'flip') {
+      const s = dir > 0 ? 1 : -1;
+      const out = anim === 'fade'
+        ? [{ opacity: 1 }, { opacity: 0 }]
+        : [{ transform: 'none', opacity: 1 }, { transform: `perspective(1800px) rotateY(${-14 * s}deg) translateX(${-30 * s}px)`, opacity: 0 }];
+      const back = anim === 'fade'
+        ? [{ opacity: 0 }, { opacity: 1 }]
+        : [{ transform: `perspective(1800px) rotateY(${14 * s}deg) translateX(${30 * s}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }];
+      pg.turning = true;
+      b.animate(out, { duration: anim === 'fade' ? 110 : 170, easing: 'ease-in' }).finished.then(() => {
+        apply(false);
+        pg.turning = false;
+        b.animate(back, { duration: anim === 'fade' ? 170 : 230, easing: 'ease-out' });
+      });
+    } else {
+      apply(anim === 'slide');
+    }
+    afterTurn(dir);
+  }
+
+  function pageTurn(dir) {
+    if (pg.turning || !readerVisible()) return;
+    const n = pg.index + dir;
+    if (n < 0 || n >= pg.count) return;
+    showPage(n, dir);
+  }
+
+  // Перелистывание колёсиком: одна «прокрутка» — одна страница.
+  let pageWheelAcc = 0;
+  let lastWheelTurn = 0;
+  function pageWheel(e) {
+    e.preventDefault();
+    const d = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+    if (performance.now() - lastWheelTurn < 350) {
+      pageWheelAcc = 0;
+      return;
+    }
+    pageWheelAcc += d;
+    if (Math.abs(pageWheelAcc) < 40) return;
+    pageTurn(pageWheelAcc > 0 ? 1 : -1);
+    pageWheelAcc = 0;
+    lastWheelTurn = performance.now();
+  }
+
+  // В режиме страниц: первый блок, заканчивающийся на текущей странице или позже.
+  function blockAtPageStart(blocks) {
+    const left = pageLeft() + 1;
+    const lastRight = (b) => {
+      const rs = b.getClientRects();
+      return rs.length ? rs[rs.length - 1].right : b.getBoundingClientRect().right;
+    };
+    let lo = 0;
+    let hi = blocks.length - 1;
+    let ans = hi;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (lastRight(blocks[mid]) > left) {
+        ans = mid;
+        hi = mid - 1;
+      } else {
+        lo = mid + 1;
+      }
+    }
+    let total = 0;
+    let before = 0;
+    for (const r of blocks[ans].getClientRects()) {
+      total += r.height;
+      if (r.right <= left) before += r.height;
+    }
+    return { i: ans, f: total ? before / total : 0 };
+  }
+
+  function showAnchorPage(b, f) {
+    layoutPages();
+    const rs = [...b.getClientRects()];
+    if (!rs.length) return;
+    const want = f * rs.reduce((s, r) => s + r.height, 0);
+    let acc = 0;
+    let target = rs[rs.length - 1];
+    for (const r of rs) {
+      if (acc + r.height > want + 0.5) {
+        target = r;
+        break;
+      }
+      acc += r.height;
+    }
+    showPage(pageOfRect(target), 0);
   }
 
   // ---------- страницы ----------
@@ -615,6 +767,7 @@
   const pageOf = (pos) => clamp(Math.floor(pos / CHARS_PER_PAGE) + 1, 1, current.pages);
 
   function atBookEnd() {
+    if (paged()) return pg.index >= pg.count - 1;
     const s = ui.scroller;
     return s.scrollTop >= s.scrollHeight - s.clientHeight - 2;
   }
@@ -678,6 +831,7 @@
   function currentTocIndex() {
     const toc = current && current.toc;
     if (!toc || !toc.length) return -1;
+    if (paged()) return lastAtOrBefore(current.tocStarts || [], currentCharPos() + 1);
     const line = ui.scroller.getBoundingClientRect().top + ui.scroller.clientHeight * 0.25;
     let lo = 0;
     let hi = toc.length - 1;
@@ -968,8 +1122,11 @@
     applyNoteHighlights();
     renderMarkLists();
 
+    ui.book.scrollLeft = 0;
+    layoutPages();
     ui.scroller.scrollTop = 0;
     if (entry.pos) scrollToAnchor(entry.pos);
+    pg.anchor = entry.pos || null;
     lastScrollTop = ui.scroller.scrollTop;
     current.ready = true;
     setBar(true);
@@ -1111,17 +1268,21 @@
   // ---------- ссылки и сноски книги ----------
 
   function pushBack() {
-    backStack.push(ui.scroller.scrollTop);
+    backStack.push(blockAtTop());
     ui.backBtn.hidden = false;
   }
 
   function jumpTo(target, remember) {
     if (remember) pushBack();
+    if (paged()) {
+      showPage(pageOfRect(target.getClientRects()[0] || target.getBoundingClientRect()), 0);
+      return;
+    }
     ui.scroller.scrollTop += target.getBoundingClientRect().top - ui.scroller.getBoundingClientRect().top - 24;
   }
 
   function goBack() {
-    if (backStack.length) ui.scroller.scrollTop = backStack.pop();
+    if (backStack.length) scrollToAnchor(backStack.pop());
     ui.backBtn.hidden = !backStack.length;
   }
 
@@ -1295,6 +1456,11 @@
   }
 
   function scrollRangeIntoView(range) {
+    if (paged()) {
+      const r = range.getClientRects()[0];
+      if (r && pageOfRect(r) !== pg.index) showPage(pageOfRect(r), 0);
+      return;
+    }
     const s = ui.scroller;
     const sr = s.getBoundingClientRect();
     const r = range.getBoundingClientRect();
@@ -1865,6 +2031,19 @@
     if (!auto.on) return;
     const dt = Math.min(100, now - auto.last);
     auto.last = now;
+    if (paged()) {
+      auto.acc += dt;
+      if (auto.acc >= (pg.h / settings.autoSpeed) * 1000) {
+        auto.acc = 0;
+        if (pg.index >= pg.count - 1) {
+          stopAuto();
+          return;
+        }
+        pageTurn(1);
+      }
+      requestAnimationFrame(autoTick);
+      return;
+    }
     auto.acc += (settings.autoSpeed * dt) / 1000;
     const whole = Math.floor(auto.acc);
     if (whole > 0) {
@@ -1885,6 +2064,10 @@
     updateSettings({ autoSpeed: next === v ? clamp(v + dir * 5, 10, 300) : next });
     // когда прокрутка идёт, скорость и так видна на плашке
     if (!auto.on) toast(t('autoSpeedToast', { n: settings.autoSpeed }), 1400);
+  }
+
+  function toggleView() {
+    updateSettings({ view: paged() ? 'scroll' : 'pages' });
   }
 
   // ---------- масштаб и ширина колонки ----------
@@ -1923,6 +2106,10 @@
   // ---------- клавиатура ----------
 
   function pageScroll(dir) {
+    if (paged()) {
+      pageTurn(dir);
+      return;
+    }
     const s = ui.scroller;
     const line = settings.fontSize * settings.lineHeight;
     s.scrollBy({ top: dir * (s.clientHeight - line * 2), behavior: 'smooth' });
@@ -1996,10 +2183,13 @@
       case 'Space': pageScroll(e.shiftKey ? -1 : 1); break;
       case 'PageDown': pageScroll(1); break;
       case 'PageUp': pageScroll(-1); break;
-      case 'ArrowDown': s.scrollBy({ top: step, behavior: 'smooth' }); break;
-      case 'ArrowUp': s.scrollBy({ top: -step, behavior: 'smooth' }); break;
-      case 'Home': s.scrollTop = 0; break;
-      case 'End': s.scrollTop = s.scrollHeight; break;
+      case 'ArrowDown': if (paged()) pageTurn(1); else s.scrollBy({ top: step, behavior: 'smooth' }); break;
+      case 'ArrowUp': if (paged()) pageTurn(-1); else s.scrollBy({ top: -step, behavior: 'smooth' }); break;
+      case 'ArrowRight': if (!paged()) return; pageTurn(1); break;
+      case 'ArrowLeft': if (!paged()) return; pageTurn(-1); break;
+      case 'Home': if (paged()) showPage(0, 0); else s.scrollTop = 0; break;
+      case 'End': if (paged()) showPage(pg.count - 1, 0); else s.scrollTop = s.scrollHeight; break;
+      case 'KeyP': toggleView(); break;
       case 'KeyT': openPanel(ui.tocPanel); break;
       case 'KeyB': toggleBookmark(); break;
       case 'KeyA': (auto.on ? stopAuto : startAuto)(); break;
@@ -2013,7 +2203,10 @@
   // Ctrl+колёсико — тот же масштаб, что Ctrl +/−.
   let wheelAcc = 0;
   function onWheel(e) {
-    if (!e.ctrlKey) return;
+    if (!e.ctrlKey) {
+      if (paged() && readerVisible() && ui.scroller.contains(e.target)) pageWheel(e);
+      return;
+    }
     e.preventDefault();
     wheelAcc += e.deltaY;
     if (Math.abs(wheelAcc) < 80) return;
@@ -2195,8 +2388,27 @@ ${sentence}` : translation);
       }
       if (!window.getSelection().isCollapsed || !current || !current.ready) return;
       const note = noteAtPoint(e.clientX, e.clientY);
-      if (note) openNoteEditor(note, false);
+      if (note) {
+        e.stopPropagation();
+        openNoteEditor(note, false);
+      }
     });
+    ui.scroller.addEventListener('click', (e) => {
+      if (!paged() || e.defaultPrevented || e.target.closest('a') || !window.getSelection().isCollapsed) return;
+      const r = ui.scroller.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width;
+      if (x < 0.3) pageTurn(-1);
+      else if (x > 0.7) pageTurn(1);
+      else setBar(root.dataset.chrome === 'hidden');
+    });
+    ui.book.addEventListener('scrollend', () => {
+      if (!paged()) return;
+      pg.index = clamp(Math.round(ui.book.scrollLeft / pg.step), 0, pg.count - 1);
+      pg.anchor = blockAtTop();
+      scheduleProgress();
+      scheduleSave();
+    });
+    $('#btn-view').addEventListener('click', toggleView);
     ui.notePop.addEventListener('click', (e) => {
       const a = e.target.closest('a');
       if (a) handleLink(e, a);
@@ -2215,7 +2427,14 @@ ${sentence}` : translation);
       closeNoteEditor();
       savePosition();
     });
-    window.addEventListener('resize', scheduleProgress);
+    window.addEventListener('resize', () => {
+      if (paged() && current && current.ready) {
+        const a = pg.anchor || blockAtTop();
+        layoutPages();
+        scrollToAnchor(a);
+      }
+      scheduleProgress();
+    });
     setupDragDrop();
 
     api.onUpdateReady((version) => {
