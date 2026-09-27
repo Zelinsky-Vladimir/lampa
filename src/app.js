@@ -395,6 +395,10 @@
         const b = e.target.closest('button');
         if (!b) return;
         const v = b.dataset.value;
+        if (seg.dataset.key === 'view') {
+          if (v !== settings.view) toggleView();
+          return;
+        }
         updateSettings({ [seg.dataset.key]: v === 'true' ? true : v === 'false' ? false : /^\d+$/.test(v) ? Number(v) : v });
       });
     }
@@ -542,11 +546,14 @@
   const readerVisible = () => !!current && !ui.scroller.hidden;
 
   // Первый блок, видимый у верхнего края, и доля, на которую он уже прокручен.
+  // Линия чтения в ленте: чуть ниже верхней панели, чтобы место не пряталось под ней.
+  const READ_LINE = 56;
+
   function blockAtTop() {
     const blocks = current && current.blocks;
     if (!blocks || !blocks.length) return null;
     if (paged()) return blockAtPageStart(blocks);
-    const top = ui.scroller.getBoundingClientRect().top;
+    const top = ui.scroller.getBoundingClientRect().top + READ_LINE;
     let lo = 0;
     let hi = blocks.length - 1;
     let ans = hi;
@@ -572,7 +579,7 @@
       return;
     }
     const r = b.getBoundingClientRect();
-    ui.scroller.scrollTop += r.top - ui.scroller.getBoundingClientRect().top + (a.f || 0) * r.height;
+    ui.scroller.scrollTop += r.top - ui.scroller.getBoundingClientRect().top - READ_LINE + (a.f || 0) * r.height;
   }
 
   // ---------- постраничный режим ----------
@@ -587,8 +594,8 @@
   function layoutPages() {
     if (!paged()) return;
     const sw = ui.scroller.clientWidth || window.innerWidth;
-    const top = 48 + 28;
-    const bottom = 46 + 26;
+    const top = 48 + 10;
+    const bottom = 46 + 12;
     const h = Math.max(240, window.innerHeight - top - bottom);
     const cols = settings.pageCols === 2 && sw >= 900 ? 2 : 1;
     const avail = sw - 80;
@@ -654,7 +661,7 @@
   // а снимок «загибается» от угла: часть страницы переворачивается вдоль линии сгиба,
   // на обороте просвечивает текст, у сгиба тень.
   const curlCanvas = $('#curl');
-  const CURL_MS = 520;
+  const CURL_MS = 680;
 
   async function captureBook() {
     const r = ui.book.getBoundingClientRect();
@@ -725,8 +732,8 @@
     ctx.save();
     tracePoly(ctx, lifted);
     ctx.clip();
-    const sh = ctx.createLinearGradient(M.x, M.y, M.x + n.x * 60, M.y + n.y * 60);
-    sh.addColorStop(0, `rgba(0,0,0,${0.32 * fade})`);
+    const sh = ctx.createLinearGradient(M.x, M.y, M.x + n.x * 80, M.y + n.y * 80);
+    sh.addColorStop(0, `rgba(0,0,0,${0.2 * fade})`);
     sh.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = sh;
     ctx.fillRect(-W, -H, W * 3, H * 3);
@@ -738,23 +745,23 @@
     ctx.globalAlpha = fade;
     ctx.transform(1 - 2 * n.x * n.x, -2 * n.x * n.y, -2 * n.x * n.y, 1 - 2 * n.y * n.y, 2 * d * n.x, 2 * d * n.y);
     tracePoly(ctx, lifted);
-    ctx.shadowColor = 'rgba(0,0,0,0.35)';
-    ctx.shadowBlur = 18;
+    ctx.shadowColor = 'rgba(0,0,0,0.2)';
+    ctx.shadowBlur = 26;
     ctx.fillStyle = themeColors(settings.theme).bg;
     ctx.fill();
     ctx.shadowColor = 'transparent';
     ctx.clip();
     // текст с лицевой стороны слегка просвечивает (он зеркальный — как на настоящей бумаге)
-    ctx.globalAlpha = 0.13 * fade;
+    ctx.globalAlpha = 0.09 * fade;
     ctx.drawImage(snap.img, 0, 0, W, H);
     ctx.globalAlpha = fade;
     // объём: блик у сгиба и затенение к краю
     const far = len / 2;
     const g = ctx.createLinearGradient(M.x, M.y, M.x + n.x * far, M.y + n.y * far);
-    g.addColorStop(0, 'rgba(0,0,0,0.22)');
-    g.addColorStop(0.1, 'rgba(255,255,255,0.20)');
-    g.addColorStop(0.55, 'rgba(255,255,255,0.04)');
-    g.addColorStop(1, 'rgba(0,0,0,0.10)');
+    g.addColorStop(0, 'rgba(0,0,0,0.12)');
+    g.addColorStop(0.12, 'rgba(255,255,255,0.16)');
+    g.addColorStop(0.6, 'rgba(255,255,255,0.03)');
+    g.addColorStop(1, 'rgba(0,0,0,0.06)');
     ctx.fillStyle = g;
     ctx.fillRect(-W * 2, -H * 2, W * 5, H * 5);
     if (settings.brightness < 1) {
@@ -785,16 +792,16 @@
     };
     // страховка: если кадры анимации не идут (окно свёрнуто или в фоне), снимок всё равно убираем
     setTimeout(finish, CURL_MS + 300);
-    const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+    const ease = (x) => -(Math.cos(Math.PI * x) - 1) / 2;
     const frame = (now) => {
       const t = Math.min(1, (now - t0) / CURL_MS);
       const e = ease(t);
       const P = {
         x: dir > 0 ? W - 2 * W * e : 2 * W * e,
-        y: H - H * 0.18 * Math.sin(Math.PI * e),
+        y: H - H * 0.12 * Math.sin(Math.PI * e),
       };
       if (finished) return;
-      drawCurl(snap, C0, P, e > 0.85 ? (1 - e) / 0.15 : 1);
+      drawCurl(snap, C0, P, e > 0.7 ? Math.cos(((e - 0.7) / 0.3) * Math.PI / 2) : 1);
       if (t < 1) requestAnimationFrame(frame);
       else finish();
     };
@@ -1328,6 +1335,7 @@
     hideSelBar();
     clearNoteHighlights();
     backStack.length = 0;
+    viewMemo = null;
     ui.backBtn.hidden = true;
     if (current) current.urls.forEach((u) => URL.revokeObjectURL(u));
 
@@ -2329,8 +2337,27 @@
     sel.value = settings.pageAnim;
   }
 
+  // Если между переключениями режима вы не листали, возвращаемся точно туда, где были в прошлом режиме,
+  // а не к началу страницы: границы страниц фиксированы, и иначе место постепенно «уплывает».
+  let viewMemo = null; // { mode, marker, anchor }
+
   function toggleView() {
-    updateSettings({ view: paged() ? 'scroll' : 'pages' });
+    const next = paged() ? 'scroll' : 'pages';
+    if (!readerVisible() || !current.ready) {
+      updateSettings({ view: next });
+      return;
+    }
+    const marker = () => (paged() ? pg.index : Math.round(ui.scroller.scrollTop));
+    const untouched = viewMemo && viewMemo.mode === settings.view && Math.abs(viewMemo.marker - marker()) <= (paged() ? 0 : 3);
+    const restore = untouched ? viewMemo.anchor : null;
+    const leaving = blockAtTop();
+    updateSettings({ view: next });
+    if (restore) {
+      quietScroll();
+      scrollToAnchor(restore);
+      updateProgress();
+    }
+    viewMemo = { mode: next, marker: marker(), anchor: leaving };
   }
 
   // ---------- масштаб и ширина колонки ----------
