@@ -1715,11 +1715,12 @@
     return oneLine(para.slice(s, e));
   }
 
-  // Если книга уже на языке перевода (русская книга при русском интерфейсе), переводим на английский.
+  // Язык по умолчанию — язык интерфейса; если книга уже на нём (русская книга при русском интерфейсе),
+  // переводим на английский. Явно выбранный язык соблюдаем всегда.
   async function translateText(text) {
     let to = translateTarget();
     let res = await api.translate(text, to);
-    if (res.src && res.src.split('-')[0] === to.split('-')[0] && to !== 'en') {
+    if (settings.translateTo === 'auto' && res.src && res.src.split('-')[0] === to.split('-')[0] && to !== 'en') {
       to = 'en';
       res = await api.translate(text, to);
     }
@@ -1732,50 +1733,72 @@
     placePopup(ui.trPop, rangeFor(trState.start, trState.end).getBoundingClientRect());
   }
 
+  function fillTrTo(value) {
+    const sel = $('#tr-to');
+    if (!sel.options.length) {
+      for (const code of TRANSLATE_LANGS) {
+        const o = el('option', null, langName(code));
+        o.value = code;
+        sel.append(o);
+      }
+    }
+    sel.value = value;
+  }
+
   async function translateSelection() {
     const r = selectionCharRange();
     if (!r) return;
     const text = oneLine(fullText().slice(r.start, r.end)).slice(0, 1500);
     const sentence = sentenceAround(r.start, r.end);
-    const withContext = sentence.length > text.length + 3 && sentence.length <= 1200;
     hideSelBar();
     window.getSelection().removeAllRanges();
     closeTranslate();
 
-    const state = { start: r.start, end: r.end, translation: '' };
-    trState = state;
-    trOpenedAt = performance.now();
+    trState = {
+      start: r.start,
+      end: r.end,
+      text,
+      context: sentence.length > text.length + 3 && sentence.length <= 1200 ? sentence : '',
+      translation: '',
+      sentence: '',
+    };
     if (hasHighlights) {
       const hl = new Highlight(rangeFor(r.start, r.end));
       hl.priority = 3;
       CSS.highlights.set('tr-current', hl);
     }
+    runTranslation(trState);
+  }
 
+  async function runTranslation(state) {
+    trOpenedAt = performance.now();
     const main = $('#tr-main');
     main.textContent = t('translating');
     main.classList.add('loading');
-    $('#tr-langs').textContent = '';
+    $('#tr-src').textContent = '';
+    fillTrTo(translateTarget());
     $('#tr-dict').replaceChildren();
-    $('#tr-context').hidden = !withContext;
-    if (withContext) {
+    $('#tr-context').hidden = !state.context;
+    if (state.context) {
       const orig = $('#tr-orig');
-      const i = sentence.indexOf(text);
-      if (i >= 0) orig.replaceChildren(sentence.slice(0, i), el('mark', null, text), sentence.slice(i + text.length));
-      else orig.textContent = sentence;
+      const i = state.context.indexOf(state.text);
+      if (i >= 0) orig.replaceChildren(state.context.slice(0, i), el('mark', null, state.text), state.context.slice(i + state.text.length));
+      else orig.textContent = state.context;
       $('#tr-sentence').textContent = '…';
     }
     ui.trPop.hidden = false;
     placeTranslate();
 
-    const mainReq = translateText(text);
-    const ctxReq = withContext ? translateText(sentence) : null;
+    const mainReq = translateText(state.text);
+    const ctxReq = state.context ? translateText(state.context) : null;
     try {
       const res = await mainReq;
       if (trState !== state) return;
       main.classList.remove('loading');
       main.textContent = res.text || '—';
       state.translation = res.text;
-      $('#tr-langs').textContent = `${(res.src || '?').toUpperCase()} → ${res.to.toUpperCase()}`;
+      $('#tr-src').textContent = (res.src || '?').toUpperCase() + ' →';
+      fillTrTo(res.to);
       for (const d of res.dict.slice(0, 4)) {
         const row = el('div', 'tr-dict-row');
         if (d.pos) row.append(el('span', 'tr-pos', d.pos));
@@ -1799,6 +1822,16 @@
       if (trState === state) $('#tr-sentence').textContent = '—';
     }
     placeTranslate();
+  }
+
+  // Язык меняется прямо в окошке перевода: запоминаем выбор и сразу переводим заново.
+  function changeTranslateLang(code) {
+    const state = trState;
+    if (!state) return;
+    trOpenedAt = performance.now();
+    updateSettings({ translateTo: code });
+    Object.assign(state, { translation: '', sentence: '' });
+    runTranslation(state);
   }
 
   function closeTranslate() {
@@ -2105,6 +2138,7 @@
       openNoteEditor(note, true);
     });
     $('#sel-translate').addEventListener('click', translateSelection);
+    $('#tr-to').addEventListener('change', (e) => changeTranslateLang(e.target.value));
     $('#tr-copy').addEventListener('click', () => {
       if (trState && trState.translation) navigator.clipboard.writeText(trState.translation).then(() => toast(t('copied'), 1200));
     });
