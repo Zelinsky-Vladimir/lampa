@@ -663,17 +663,33 @@
   const curlCanvas = $('#curl');
   const CURL_MS = 680;
 
-  async function captureBook() {
-    const r = ui.book.getBoundingClientRect();
+  // Лист — весь экран от верхнего края до нижнего. Верхняя панель прячется мгновенно, чтобы не попасть
+  // в снимок (если мышь над ней — остаётся поверх листа); закреплённая нижняя панель остаётся на месте.
+  async function captureSheet() {
+    const keepBar = chromeHover && root.dataset.chrome !== 'hidden';
+    if (!keepBar) {
+      root.classList.add('chrome-instant');
+      setBar(false);
+    }
+    await nextFrame();
+    const footer = $('#footer').getBoundingClientRect();
+    const top = keepBar ? ui.bar.getBoundingClientRect().bottom : 0;
+    const bottom = footer.top < window.innerHeight - 2 ? footer.top : window.innerHeight;
+    const rect = { x: 0, y: top, w: window.innerWidth, h: bottom - top };
     try {
-      const buf = await api.capture({ x: r.left, y: r.top, width: r.width, height: r.height });
+      const buf = await api.capture({ x: rect.x, y: rect.y, width: rect.w, height: rect.h });
       if (!buf) return null;
       const img = await createImageBitmap(new Blob([buf], { type: 'image/jpeg' }));
-      return { img, rect: { x: r.left, y: r.top, w: r.width, h: r.height } };
+      return { img, rect };
     } catch {
       return null;
+    } finally {
+      root.classList.remove('chrome-instant');
     }
   }
+
+  // Снимок уже затемнён «яркостью», а холст лежит под затемнением — возвращаем исходную яркость, чтобы не было двойного.
+  const snapFilter = () => (settings.brightness < 1 ? `brightness(${1 / settings.brightness})` : 'none');
 
   // Часть многоугольника по одну сторону прямой (M, n): corner = сторона, куда смотрит n.
   function clipHalf(poly, M, n, corner) {
@@ -709,7 +725,9 @@
     const H = snap.rect.h;
     const len = Math.hypot(C0.x - P.x, C0.y - P.y);
     if (len < 1) {
+      ctx.filter = snapFilter();
       ctx.drawImage(snap.img, 0, 0, W, H);
+      ctx.filter = 'none';
       return;
     }
     const n = { x: (C0.x - P.x) / len, y: (C0.y - P.y) / len };
@@ -723,7 +741,9 @@
       ctx.save();
       tracePoly(ctx, flat);
       ctx.clip();
+      ctx.filter = snapFilter();
       ctx.drawImage(snap.img, 0, 0, W, H);
+      ctx.filter = 'none';
       ctx.restore();
     }
     if (!lifted.length) return;
@@ -753,7 +773,9 @@
     ctx.clip();
     // текст с лицевой стороны слегка просвечивает (он зеркальный — как на настоящей бумаге)
     ctx.globalAlpha = 0.09 * fade;
+    ctx.filter = snapFilter();
     ctx.drawImage(snap.img, 0, 0, W, H);
+    ctx.filter = 'none';
     ctx.globalAlpha = fade;
     // объём: блик у сгиба и затенение к краю
     const far = len / 2;
@@ -764,10 +786,6 @@
     g.addColorStop(1, 'rgba(0,0,0,0.06)');
     ctx.fillStyle = g;
     ctx.fillRect(-W * 2, -H * 2, W * 5, H * 5);
-    if (settings.brightness < 1) {
-      ctx.fillStyle = `rgba(0,0,0,${1 - settings.brightness})`;
-      ctx.fillRect(-W * 2, -H * 2, W * 5, H * 5);
-    }
     ctx.restore();
   }
 
@@ -832,7 +850,7 @@
       pg.turning = true;
       afterTurn(dir);
       // снимок делаем, когда подсказки и выделение уже убраны с экрана
-      nextFrame().then(captureBook).then((snap) => {
+      nextFrame().then(captureSheet).then((snap) => {
         if (!snap) {
           apply(true);
           pg.turning = false;
