@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('api', {
   platform: process.platform,
   openDialog: (labels) => ipcRenderer.invoke('dialog:open', labels),
   loadBook: (p) => ipcRenderer.invoke('book:load', p),
+  adoptBooks: (paths) => ipcRenderer.invoke('books:adopt', paths),
+  forgetBook: (p) => ipcRenderer.invoke('books:forget', p),
   takeInitialPath: () => ipcRenderer.invoke('app:take-initial-path'),
   onOpenPath: (cb) => ipcRenderer.on('open-path', (_e, p) => cb(p)),
   pathForFile: (file) => webUtils.getPathForFile(file),

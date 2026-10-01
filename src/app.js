@@ -93,7 +93,7 @@
   const LS = { settings: 'lampa.settings', library: 'lampa.library', marks: 'lampa.marks' };
   // Прежнее название приложения — данные переезжают при первом запуске.
   const LS_OLD = { settings: 'svitok.settings', library: 'svitok.library', marks: 'svitok.marks' };
-  const LIBRARY_LIMIT = 60;
+  const LIBRARY_LIMIT = 200;
   // Страница — 1800 знаков, как в печатной книге. Номер не зависит от шрифта и размера окна.
   const CHARS_PER_PAGE = 1800;
   const SEARCH_LIMIT = 5000;
@@ -1322,6 +1322,17 @@
     return toc;
   }
 
+  // Библиотека открывает свою копию книги; если копии нет — исходный файл, если он ещё на месте.
+  async function loadBookFile(p) {
+    try {
+      return await api.loadBook(p);
+    } catch (e) {
+      const entry = library.find((x) => x.path === p && x.source && x.source !== p);
+      if (!entry) throw e;
+      return api.loadBook(entry.source);
+    }
+  }
+
   async function openPath(p) {
     if (!p) return;
     const token = ++openToken;
@@ -1330,7 +1341,7 @@
     let data;
     let book;
     try {
-      data = await api.loadBook(p);
+      data = await loadBookFile(p);
       book = Parsers.parseBook(data);
     } catch (e) {
       if (token === openToken) toast(t('openFailed', { e: errorText(e) }), 5000);
@@ -1358,12 +1369,13 @@
     if (current) current.urls.forEach((u) => URL.revokeObjectURL(u));
 
     const key = `${data.size}|${book.title}|${book.author}`;
-    current = { key, path: p, urls: book.urls, blocks: [], toc: [], ready: false };
+    current = { key, path: data.path, urls: book.urls, blocks: [], toc: [], ready: false };
 
     let entry = library.find((e) => e.key === key);
     if (entry) library.splice(library.indexOf(entry), 1);
     else entry = { key, progress: 0, pos: null };
-    Object.assign(entry, { path: p, title: book.title, author: book.author, openedAt: Date.now() });
+    if (entry.path && entry.path !== data.path && !library.some((x) => x.path === entry.path)) api.forgetBook(entry.path);
+    Object.assign(entry, { path: data.path, source: data.source || entry.source, title: book.title, author: book.author, openedAt: Date.now() });
     library.unshift(entry);
     library.length = Math.min(library.length, LIBRARY_LIMIT);
     saveLibrary();
@@ -1457,14 +1469,14 @@
     ui.homeContinue.hidden = !last;
     if (last) {
       $('#home-continue-text').textContent = t('continueBook', { title: last.title }) + (last.page > 1 ? ' · ' + t('pageShort', { n: last.page }) : '');
-      ui.homeContinue.title = last.path;
+      ui.homeContinue.title = last.source || last.path;
     }
 
     for (const entry of library) {
       const card = el('div', 'card');
       card.tabIndex = 0;
       card.setAttribute('role', 'button');
-      card.title = entry.path;
+      card.title = entry.source || entry.path;
 
       let thumb;
       if (entry.thumb) {
@@ -1487,6 +1499,8 @@
         e.stopPropagation();
         library = library.filter((x) => x !== entry);
         saveLibrary();
+        // копию удаляем вместе с карточкой; оригинал пользователя не трогаем
+        if (!library.some((x) => x.path === entry.path)) api.forgetBook(entry.path);
         renderHome();
       });
 
@@ -2763,6 +2777,24 @@ ${sentence}` : translation);
     });
   }
 
+  // Книги, открытые до появления копирования, копируем в библиотеку, пока исходные файлы на месте.
+  async function adoptOldBooks() {
+    const old = library.filter((e) => e.path && !e.source).map((e) => e.path);
+    if (!old.length) return;
+    let done;
+    try {
+      done = await api.adoptBooks(old);
+    } catch {
+      return;
+    }
+    if (!done.length) return;
+    for (const { from, to } of done) {
+      for (const e of library) if (e.path === from) Object.assign(e, { path: to, source: from });
+    }
+    saveLibrary();
+    if (root.dataset.mode === 'home') renderHome();
+  }
+
   async function init() {
     I18n.setLang(settings.lang);
     buildSettingsUI();
@@ -2773,6 +2805,7 @@ ${sentence}` : translation);
     if (!localStorage.getItem(LS.settings)) saveSettings();
     if (!localStorage.getItem(LS.library)) saveLibrary();
     if (!localStorage.getItem(LS.marks)) saveMarks();
+    adoptOldBooks();
     api.onOpenPath(openPath);
     const initial = await api.takeInitialPath();
     if (initial) openPath(initial);

@@ -4,6 +4,7 @@ const { app, BrowserWindow, dialog, ipcMain, shell, Menu, screen, net, session }
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { unzipSync } = require('fflate');
 const { autoUpdater } = require('electron-updater');
 
@@ -17,6 +18,32 @@ let state = {};
 
 const extOf = (p) => path.extname(p).slice(1).toLowerCase();
 const isBookPath = (p) => typeof p === 'string' && BOOK_EXTS.has(extOf(p));
+
+// Копии открытых книг: Books/<хэш содержимого>/<исходное имя файла>.
+// Библиотека открывает копию, поэтому оригинал можно удалить или перенести.
+const booksDir = () => path.join(app.getPath('userData'), 'Books');
+
+function storedBookDir(p) {
+  if (typeof p !== 'string') return null;
+  const dir = path.dirname(path.resolve(p));
+  return path.dirname(dir) === booksDir() && /^[0-9a-f]{16}$/.test(path.basename(dir)) ? dir : null;
+}
+
+async function storeBook(p, buf) {
+  if (storedBookDir(p)) return p;
+  const hash = crypto.createHash('sha256').update(buf).digest('hex').slice(0, 16);
+  const dir = path.join(booksDir(), hash);
+  const target = path.join(dir, path.basename(p));
+  try {
+    const st = await fsp.stat(target);
+    if (st.size === buf.length) return target;
+  } catch {}
+  await fsp.mkdir(dir, { recursive: true });
+  const tmp = target + '.part';
+  await fsp.writeFile(tmp, buf);
+  await fsp.rename(tmp, target);
+  return target;
+}
 
 // Ищем путь к книге среди аргументов командной строки («Открыть с помощью», перетаскивание на ярлык).
 function bookFromArgv(argv, cwd = process.cwd()) {
@@ -216,7 +243,34 @@ function registerIpc() {
     // Архивы распаковываем здесь, чтобы окну не нужен был доступ к Node.
     if (ext === 'epub' || ext === 'zip') out.entries = unzipSync(new Uint8Array(buf));
     else out.bytes = buf;
+    // не удалось скопировать — читаем оригинал, как раньше
+    try {
+      const stored = await storeBook(p, buf);
+      if (stored !== p) Object.assign(out, { path: stored, source: p });
+    } catch (e) {
+      console.error('book copy failed:', e.message);
+    }
     return out;
+  });
+
+  // Копируем в библиотеку книги, открытые до того, как появилось копирование.
+  ipcMain.handle('books:adopt', async (_e, paths) => {
+    const done = [];
+    for (const p of Array.isArray(paths) ? paths : []) {
+      if (!isBookPath(p) || storedBookDir(p)) continue;
+      try {
+        const st = await fsp.stat(p);
+        if (st.size > MAX_BOOK_SIZE) continue;
+        done.push({ from: p, to: await storeBook(p, await fsp.readFile(p)) });
+      } catch {}
+    }
+    return done;
+  });
+
+  // Удаляем копию книги — только внутри папки библиотеки.
+  ipcMain.handle('books:forget', async (_e, p) => {
+    const dir = storedBookDir(p);
+    if (dir) await fsp.rm(dir, { recursive: true, force: true });
   });
 
   ipcMain.handle('app:take-initial-path', () => {

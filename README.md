@@ -39,6 +39,7 @@ All versions and change notes are on the [Releases](https://github.com/Zelinsky-
 ## Features
 
 - **Scroll or pages.** Read the book as one continuous page, or switch to pages (`P`) and turn them with the arrow keys, the mouse wheel or a click on the page edge. Pages turn with a paper-like curl by default, or slide, fade, flip, or have no animation, and a wide screen can show two pages side by side. In pages mode page numbers follow the pages on screen. Lampa remembers exactly where you stopped in either mode.
+- **Your own library.** Every book you open is copied into Lampa's library, so it stays there even if you delete or move the original file. Removing a book from the library deletes only that copy.
 - **Real page numbers.** A page is 1,800 characters, like a printed book, so "page 124" stays the same when you change the font or resize the window. Jump to any page by typing its number.
 - **Progress bar** with chapter marks, bookmarks and notes; drag it to jump anywhere and see the page and chapter as you go.
 - **Search** across the whole book, with every match listed by page and chapter and highlighted in the text.
