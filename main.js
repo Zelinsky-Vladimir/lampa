@@ -333,14 +333,22 @@ const readerRating = (avg, n, src) =>
     ? { avg: Math.round(Number(avg) * 100) / 100, n: Number(n), src, rank: Number(n) * (src === 'Open Library' && Number(n) >= 20 ? 1000 : 1) }
     : null;
 
+// Apple иногда отдаёт названия с HTML-сущностями: «Питер &amp; Майкл».
+const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+const unescapeHtml = (s) =>
+  String(s || '').replace(/&(#x[0-9a-f]+|#\d+|\w+);/gi, (m, e) => {
+    if (e[0] === '#') return String.fromCodePoint(e[1].toLowerCase() === 'x' ? parseInt(e.slice(2), 16) : Number(e.slice(1)));
+    return ENTITIES[e.toLowerCase()] ?? m;
+  });
+
 // Apple Books: хорошо находит русские книги и даёт обложки в любом размере.
 async function searchApple(q) {
   const j = await getBooksJson(`https://itunes.apple.com/search?media=ebook&entity=ebook&country=us&limit=20&term=${encodeURIComponent(q)}`);
   return (j.results || [])
     .filter((x) => x.trackName)
     .map((x) => ({
-      title: String(x.trackName),
-      author: String(x.artistName || ''),
+      title: unescapeHtml(x.trackName),
+      author: unescapeHtml(x.artistName),
       year: String(x.releaseDate || '').slice(0, 4),
       cover: x.artworkUrl100 ? String(x.artworkUrl100).replace(/\/\d+x\d+bb\.(jpg|png)$/, '/600x900bb.jpg') : null,
       genre: classifyGenre(x.genres, true),

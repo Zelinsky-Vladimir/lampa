@@ -538,6 +538,10 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .card .mark-read svg, .card .quick-add svg { flex: none; width: 14px; height: 14px; stroke-width: 2.2; }
 .card .mark-read span, .card .quick-add span { overflow: hidden; text-overflow: ellipsis; }
 .card .quick-add { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); color: var(--accent); }
+/* кнопка на всю ширину и прижата к низу карточки: в одном ряду кнопки на одной линии */
+#shelf-view .card { display: flex; flex-direction: column; }
+.card .mark-read, .card .quick-add { justify-content: center; width: 100%; margin-top: auto; padding: 5px 10px; }
+.card:has(> .quick-add, > .mark-read) > :nth-last-child(2) { margin-bottom: 8px; }
 .card .have { margin-top: 8px; font-size: 12px; color: var(--accent); }
 #shelf-view.searching .shelf-empty { margin: 4px 0 0; text-align: left; font-size: 13.5px; }
 #shelf-online .dlg-foot { margin-top: 24px; }
