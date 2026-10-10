@@ -108,7 +108,10 @@
       <!-- прочитанные и «хочу прочитать»: список ведётся вручную -->
       <section id="shelf-view" hidden>
         <div class="shelf-tools">
-          <input id="shelf-filter" type="search" autocomplete="off" spellcheck="false" data-i18n-placeholder="shelfFilter">
+          <div class="search-field">
+            <input id="shelf-filter" type="search" autocomplete="off" spellcheck="false" data-i18n-placeholder="shelfFilter">
+            <div class="search-progress"></div>
+          </div>
           <select id="shelf-sort"></select>
           <select id="shelf-genre" hidden></select>
           <button class="primary-btn" id="shelf-add">

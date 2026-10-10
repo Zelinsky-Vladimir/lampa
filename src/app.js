@@ -2865,7 +2865,8 @@
 
   // ---------- поиск в интернете прямо из поля над списком ----------
 
-  let online = { q: '', results: null, error: '' };
+  // results — для запроса resultsQ; loading — ждём паузы в наборе или ответа каталогов
+  let online = { results: null, resultsQ: '', error: '', loading: false };
   let onlineToken = 0;
   let onlineTimer = 0;
 
@@ -2874,42 +2875,54 @@
     const q = $('#shelf-filter').value.trim();
     if (q.length < 2) {
       onlineToken++;
-      online = { q: '', results: null, error: '' };
+      online = { results: null, resultsQ: '', error: '', loading: false };
       renderOnline();
       return;
     }
-    if (q === online.q && online.results) return;
+    if (q === online.resultsQ && !online.loading) return;
+    // индикатор сразу, ещё до паузы в наборе: видно, что поиск будет
+    Object.assign(online, { loading: true, error: '' });
+    renderOnline();
     onlineTimer = setTimeout(() => runOnline(q), now ? 0 : 450);
   }
 
   function runOnline(q) {
     const token = ++onlineToken;
-    online = { q, results: null, error: '' };
-    renderOnline();
     api.shelfSearch(q).then(
       (results) => {
         if (token !== onlineToken) return;
-        online.results = results;
+        Object.assign(online, { results, resultsQ: q, loading: false });
         renderOnline();
       },
       (e) => {
         if (token !== onlineToken) return;
-        online.error = errorText(e);
+        Object.assign(online, { results: null, resultsQ: '', error: errorText(e), loading: false });
         renderOnline();
       },
     );
+  }
+
+  function skeletonCard() {
+    const card = el('div', 'card skeleton');
+    card.append(el('div', 'thumb'), el('div', 'sk-line'), el('div', 'sk-line short'));
+    return card;
   }
 
   function renderOnline() {
     const box = $('#shelf-online');
     const q = $('#shelf-filter').value.trim();
     box.hidden = homeTab === 'library' || q.length < 2;
+    $('#shelf-view').classList.toggle('loading', !box.hidden && online.loading);
     if (box.hidden) return;
     const status = $('#shelf-online-status');
-    if (online.error) status.textContent = t('shelfSearchFailed', { e: online.error });
-    else if (!online.results) status.textContent = t('shelfSearching');
-    else status.textContent = online.results.length ? '' : t('shelfNoResults');
-    $('#shelf-online-grid').replaceChildren(...(online.results || []).map(onlineCard));
+    if (online.loading) status.replaceChildren(el('span', 'spinner'), t('shelfSearching'));
+    else if (online.error) status.textContent = t('shelfSearchFailed', { e: online.error });
+    else status.textContent = online.results && !online.results.length ? t('shelfNoResults') : '';
+    const grid = $('#shelf-online-grid');
+    // пока ищем: прежние результаты бледнеют, а если их нет — серые заглушки
+    grid.classList.toggle('stale', online.loading && !!online.results);
+    if (online.loading && !online.results) grid.replaceChildren(...Array.from({ length: 6 }, skeletonCard));
+    else grid.replaceChildren(...(online.results || []).map(onlineCard));
   }
 
   function onlineCard(r) {
@@ -3067,7 +3080,7 @@
       return;
     }
     if (!pickCoverOnly) lastBookQuery = q;
-    status.textContent = t('shelfSearching');
+    status.replaceChildren(el('span', 'spinner'), t('shelfSearching'));
     api.shelfSearch(q).then(
       (results) => {
         if (token !== bookSearchToken) return;
