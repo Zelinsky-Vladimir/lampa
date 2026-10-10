@@ -9,6 +9,7 @@
   --panel-2: color-mix(in srgb, var(--bg) 87%, var(--fg));
   --border: color-mix(in srgb, var(--fg) 16%, var(--bg));
   --shadow: 0 12px 40px rgb(0 0 0 / 0.22);
+  --star: #f2b01e;
 
   --font: Georgia, 'Times New Roman', serif;
   --fs: 20px;
@@ -199,8 +200,10 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
   overflow-y: auto;
   outline: none;
 }
-#scroller::-webkit-scrollbar, #home::-webkit-scrollbar, .panel .body::-webkit-scrollbar, #note-pop::-webkit-scrollbar { width: 10px; }
-#scroller::-webkit-scrollbar-thumb, #home::-webkit-scrollbar-thumb, .panel .body::-webkit-scrollbar-thumb, #note-pop::-webkit-scrollbar-thumb {
+#scroller::-webkit-scrollbar, #home::-webkit-scrollbar, .panel .body::-webkit-scrollbar, #note-pop::-webkit-scrollbar,
+#book-results::-webkit-scrollbar, #dlg-edit::-webkit-scrollbar { width: 10px; }
+#scroller::-webkit-scrollbar-thumb, #home::-webkit-scrollbar-thumb, .panel .body::-webkit-scrollbar-thumb, #note-pop::-webkit-scrollbar-thumb,
+#book-results::-webkit-scrollbar-thumb, #dlg-edit::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 10px;
   border: 3px solid transparent;
@@ -346,7 +349,7 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 28px 22px; }
 
 .card { position: relative; cursor: pointer; outline: none; }
-.card .thumb {
+.card .thumb, #ed-cover .thumb {
   display: block;
   width: 100%;
   aspect-ratio: 2 / 3;
@@ -357,7 +360,7 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
   transition: transform 0.18s, box-shadow 0.18s;
 }
 .card:hover .thumb, .card:focus-visible .thumb { transform: translateY(-3px); box-shadow: 0 10px 24px rgb(0 0 0 / 0.24); }
-.card .thumb.ph {
+.card .thumb.ph, #ed-cover .thumb.ph, .rthumb.ph {
   display: grid;
   place-items: center;
   font: 600 52px Georgia, serif;
@@ -395,6 +398,179 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
   transition: opacity 0.15s;
 }
 .card:hover .remove, .card:focus-within .remove { opacity: 1; }
+
+/* ---------- мои книги ---------- */
+
+.home-tabs {
+  display: flex;
+  gap: 3px;
+  width: max-content;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--panel-2);
+  overflow-x: auto;
+}
+.home-tabs button {
+  padding: 7px 16px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13.5px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.home-tabs button:hover { color: var(--fg); }
+.home-tabs button.active { background: var(--bg); color: var(--fg); box-shadow: 0 1px 3px rgb(0 0 0 / 0.14); }
+.home-tabs .count { margin-left: 6px; font-size: 12px; opacity: 0.65; font-variant-numeric: tabular-nums; }
+.home-tabs .count:empty { display: none; }
+
+#shelf-view { padding-top: 32px; }
+.shelf-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+#shelf-filter, #book-q, .fld input, .fld textarea {
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px var(--ui);
+}
+#shelf-filter:focus, #book-q:focus, .fld input:focus, .fld textarea:focus { outline: none; border-color: var(--accent); }
+#shelf-filter { flex: 1 1 220px; min-width: 0; }
+#shelf-sort { flex: 0 1 240px; width: auto; padding: 9px 10px; border-radius: 9px; }
+#shelf-add { padding: 9px 18px; }
+.shelf-stats { min-height: 1.3em; margin: 16px 0 18px; font-size: 13px; color: var(--muted); }
+.shelf-empty { max-width: 440px; margin: 40px auto; text-align: center; font-size: 14.5px; line-height: 1.5; color: var(--muted); }
+
+.card .rate { display: flex; align-items: baseline; gap: 3px; margin-top: 7px; font-size: 13.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.card .rate svg { width: 15px; height: 15px; align-self: center; fill: var(--star); stroke: none; }
+.card .rate .of { font-size: 11.5px; font-weight: 400; color: var(--muted); }
+.card .rate.none { font-size: 12px; font-weight: 400; color: var(--muted); }
+.card .mark-read {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  margin-top: 8px;
+  padding: 4px 10px 4px 7px;
+  white-space: nowrap;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.card .mark-read:hover { border-color: var(--accent); color: var(--accent); }
+.card .mark-read svg { flex: none; width: 14px; height: 14px; stroke-width: 2.2; }
+.card .mark-read span { overflow: hidden; text-overflow: ellipsis; }
+
+/* окно добавления и правки книги */
+#book-dlg {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 0.32);
+}
+.dlg-box {
+  display: flex;
+  flex-direction: column;
+  width: min(640px, 100%);
+  max-height: min(720px, calc(100vh - 32px));
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.dlg-box > header { display: flex; align-items: center; justify-content: space-between; padding: 14px 12px 6px 20px; }
+.dlg-box h3 { margin: 0; font-size: 16px; font-weight: 600; }
+#dlg-search { display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 6px 20px 16px; }
+#book-status { padding: 10px 2px 0; font-size: 13px; line-height: 1.45; color: var(--muted); }
+#book-status:empty { display: none; }
+#book-results { flex: 1; min-height: 140px; margin: 8px -8px 0; overflow-y: auto; }
+.book-result {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.book-result:hover, .book-result:focus-visible { background: var(--faint); outline: none; }
+.rthumb {
+  flex: none;
+  width: 40px;
+  height: 60px;
+  border-radius: 4px;
+  object-fit: cover;
+  background: var(--panel-2);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.16);
+}
+.rthumb.ph { font-size: 20px; }
+.rinfo { min-width: 0; }
+.rinfo .rt { font-size: 14px; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.rinfo .ra { margin-top: 2px; font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rinfo .rhave { margin-top: 3px; font-size: 11.5px; color: var(--accent); }
+.dlg-foot { margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--faint); font-size: 13px; color: var(--muted); }
+.link-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+#dlg-edit { display: flex; gap: 22px; padding: 8px 20px 20px; overflow-y: auto; }
+.ed-side { display: flex; flex: none; flex-direction: column; align-items: center; gap: 10px; width: 128px; }
+#ed-cover { width: 100%; }
+#ed-cover .thumb.ph { font-size: 46px; }
+.ed-main { display: flex; flex: 1; flex-direction: column; gap: 12px; min-width: 0; }
+.fld { display: flex; flex-direction: column; gap: 5px; min-width: 0; font-size: 12.5px; color: var(--muted); }
+.fld textarea { resize: vertical; }
+.fld-row { display: flex; gap: 12px; }
+.fld-row .fld { flex: 1; }
+.fld-row .fld-year { flex: none; width: 90px; }
+.fld-label { display: flex; justify-content: space-between; }
+.fld-label b { font-weight: 600; color: var(--fg); font-variant-numeric: tabular-nums; }
+#dlg-edit.want .read-fld { display: none; }
+
+#ed-stars { display: flex; flex-wrap: wrap; gap: 1px; }
+.star {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: color-mix(in srgb, var(--fg) 20%, var(--bg));
+  cursor: pointer;
+}
+.star svg { width: 25px; height: 25px; fill: currentColor; stroke: none; transition: transform 0.1s; }
+.star:hover svg { transform: scale(1.15); }
+.star.on { color: var(--star); }
+#ed-stars.hover .star.on { color: color-mix(in srgb, var(--star) 70%, var(--bg)); }
+
+.ed-actions { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
+.ed-actions .text-btn { width: auto; }
+#ed-delete.confirm { border-color: #c0392b; background: #c0392b; color: #fff; }
+@media (max-width: 560px) {
+  #dlg-edit { flex-direction: column; }
+  .ed-side { align-self: center; width: 110px; }
+}
 
 /* ---------- боковые панели ---------- */
 

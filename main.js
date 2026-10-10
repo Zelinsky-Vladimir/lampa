@@ -1,10 +1,11 @@
 'use strict';
 
-const { app, BrowserWindow, dialog, ipcMain, shell, Menu, screen, net, session } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell, Menu, screen, net, session, protocol, nativeImage } = require('electron');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { pathToFileURL } = require('node:url');
 const { unzipSync } = require('fflate');
 const { autoUpdater } = require('electron-updater');
 
@@ -217,6 +218,172 @@ async function translate(text, to) {
   }
 }
 
+// ---------- мои книги: «Прочитано» и «Хочу прочитать» ----------
+
+// Список хранится в shelf.json, обложки — в Covers/ рядом; окно видит их по адресу lampa-cover://c/<файл>.
+const shelfFile = () => path.join(app.getPath('userData'), 'shelf.json');
+const coversDir = () => path.join(app.getPath('userData'), 'Covers');
+const COVER_NAME = /^[0-9a-f]{16}\.jpg$/;
+// картинки скачиваем только с сайтов, которые отдают обложки в поиске
+const COVER_HOSTS = /(^|\.)(mzstatic\.com|openlibrary\.org|archive\.org)$/;
+const booksUserAgent = () => `Lampa/${app.getVersion()} (+https://github.com/Zelinsky-Vladimir/lampa)`;
+
+protocol.registerSchemesAsPrivileged([{ scheme: 'lampa-cover', privileges: { standard: true, secure: true } }]);
+
+async function readShelf() {
+  const file = shelfFile();
+  for (const f of [file, file + '.bak']) {
+    try {
+      const d = JSON.parse(await fsp.readFile(f, 'utf8'));
+      if (d && Array.isArray(d.books)) return d.books;
+    } catch (e) {
+      // списка ещё нет — это не ошибка
+      if (e.code === 'ENOENT' && f === file) return [];
+    }
+  }
+  throw new Error('SHELF_UNREADABLE');
+}
+
+// Записи идут по очереди; прошлая версия остаётся в shelf.json.bak.
+let shelfWrite = Promise.resolve();
+function writeShelf(books) {
+  const job = shelfWrite.then(async () => {
+    const file = shelfFile();
+    await fsp.writeFile(file + '.tmp', JSON.stringify({ version: 1, books }, null, 1));
+    await fsp.copyFile(file, file + '.bak').catch(() => {});
+    await fsp.rename(file + '.tmp', file);
+  });
+  shelfWrite = job.catch(() => {});
+  return job;
+}
+
+// Обложки удалённых книг убираем при запуске, когда список уже прочитан.
+async function pruneCovers(books) {
+  const used = new Set(books.map((b) => b && b.cover).filter(Boolean));
+  let names;
+  try {
+    names = await fsp.readdir(coversDir());
+  } catch {
+    return;
+  }
+  for (const n of names) {
+    if (COVER_NAME.test(n) && !used.has(n)) await fsp.rm(path.join(coversDir(), n), { force: true }).catch(() => {});
+  }
+}
+
+async function getBooksJson(url) {
+  const r = await net.fetch(url, {
+    headers: { 'User-Agent': booksUserAgent(), Accept: 'application/json' },
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+// Apple Books: хорошо находит русские книги и даёт обложки в любом размере.
+async function searchApple(q) {
+  const j = await getBooksJson(`https://itunes.apple.com/search?media=ebook&entity=ebook&country=us&limit=20&term=${encodeURIComponent(q)}`);
+  return (j.results || [])
+    .filter((x) => x.trackName)
+    .map((x) => ({
+      title: String(x.trackName),
+      author: String(x.artistName || ''),
+      year: String(x.releaseDate || '').slice(0, 4),
+      cover: x.artworkUrl100 ? String(x.artworkUrl100).replace(/\/\d+x\d+bb\.(jpg|png)$/, '/600x900bb.jpg') : null,
+      ref: 'apple:' + x.trackId,
+    }));
+}
+
+// Open Library: открытый каталог, год первого издания.
+async function searchOpenLibrary(q) {
+  const j = await getBooksJson(`https://openlibrary.org/search.json?limit=20&fields=key,title,author_name,first_publish_year,cover_i&q=${encodeURIComponent(q)}`);
+  return (j.docs || [])
+    .filter((d) => d.title)
+    .map((d) => ({
+      title: String(d.title),
+      author: (d.author_name || []).slice(0, 2).join(', '),
+      year: d.first_publish_year ? String(d.first_publish_year) : '',
+      cover: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-L.jpg` : null,
+      ref: 'ol:' + d.key,
+    }));
+}
+
+const bookKey = (b) => {
+  const norm = (s) => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/\([^)]*\)|\[[^\]]*\]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  return norm(b.title) + '|' + norm(b.author).split(' ').pop();
+};
+
+async function searchBooks(q) {
+  const [apple, ol] = await Promise.allSettled([searchApple(q), searchOpenLibrary(q)]);
+  if (apple.status === 'rejected' && ol.status === 'rejected') throw apple.reason;
+  const lists = [apple.value || [], ol.value || []];
+  const out = [];
+  const seen = new Map();
+  // по очереди из обоих источников; одну и ту же книгу показываем один раз
+  for (let i = 0; i < 20; i++) {
+    for (const list of lists) {
+      const b = list[i];
+      if (!b) continue;
+      const prev = seen.get(bookKey(b));
+      if (prev) {
+        if (!prev.cover && b.cover) prev.cover = b.cover;
+        // у переизданий год новый — оставляем самый ранний
+        if (b.year && (!prev.year || b.year < prev.year)) prev.year = b.year;
+        continue;
+      }
+      seen.set(bookKey(b), b);
+      out.push(b);
+    }
+  }
+  return out.slice(0, 30);
+}
+
+async function fetchImage(url) {
+  let u;
+  try {
+    u = new URL(url);
+  } catch {
+    throw new Error('BAD_URL');
+  }
+  if (u.protocol !== 'https:' || !COVER_HOSTS.test(u.hostname)) throw new Error('BAD_URL');
+  const r = await net.fetch(u.href, { headers: { 'User-Agent': booksUserAgent() }, signal: AbortSignal.timeout(15000) });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const buf = Buffer.from(await r.arrayBuffer());
+  if (buf.length > 10 * 1024 * 1024) throw new Error('TOO_LARGE');
+  const img = nativeImage.createFromBuffer(buf);
+  if (img.isEmpty() || img.getSize().width < 10) throw new Error('NOT_IMAGE');
+  return img;
+}
+
+const fitWidth = (img, w) => (img.getSize().width > w ? img.resize({ width: w, quality: 'best' }) : img);
+
+// Миниатюры для результатов поиска — data:-адресами, окну не нужен доступ в сеть.
+const thumbCache = new Map();
+async function coverThumb(url) {
+  if (thumbCache.has(url)) return thumbCache.get(url);
+  const small = url.replace(/\/\d+x\d+bb\.jpg$/, '/120x180bb.jpg').replace(/-L\.jpg$/, '-M.jpg');
+  const data = 'data:image/jpeg;base64,' + fitWidth(await fetchImage(small), 120).toJPEG(82).toString('base64');
+  if (thumbCache.size > 300) thumbCache.delete(thumbCache.keys().next().value);
+  thumbCache.set(url, data);
+  return data;
+}
+
+async function saveCover(url) {
+  const img = fitWidth(await fetchImage(url), 400);
+  const name = crypto.randomBytes(8).toString('hex') + '.jpg';
+  await fsp.mkdir(coversDir(), { recursive: true });
+  await fsp.writeFile(path.join(coversDir(), name), img.toJPEG(86));
+  return name;
+}
+
+function registerCoverProtocol() {
+  protocol.handle('lampa-cover', (req) => {
+    const name = path.basename(new URL(req.url).pathname);
+    if (!COVER_NAME.test(name)) return new Response(null, { status: 404 });
+    return net.fetch(pathToFileURL(path.join(coversDir(), name)).href);
+  });
+}
+
 // ---------- IPC ----------
 
 function registerIpc() {
@@ -267,6 +434,22 @@ function registerIpc() {
     return done;
   });
 
+  ipcMain.handle('shelf:load', async () => {
+    const books = await readShelf();
+    pruneCovers(books);
+    return books;
+  });
+  ipcMain.handle('shelf:save', (_e, books) => {
+    if (!Array.isArray(books)) throw new Error('BAD_REQUEST');
+    return writeShelf(books);
+  });
+  ipcMain.handle('shelf:search', (_e, q) => {
+    const query = typeof q === 'string' ? q.trim().slice(0, 200) : '';
+    return query ? searchBooks(query) : [];
+  });
+  ipcMain.handle('shelf:thumb', (_e, url) => coverThumb(String(url)));
+  ipcMain.handle('shelf:cover', (_e, url) => saveCover(String(url)));
+
   // Удаляем копию книги — только внутри папки библиотеки.
   ipcMain.handle('books:forget', async (_e, p) => {
     const dir = storedBookDir(p);
@@ -280,6 +463,13 @@ function registerIpc() {
     // обновление могло скачаться раньше, чем окно было готово
     if (updateReady && win) win.webContents.send('update-ready', updateReady);
     return p;
+  });
+
+  // применится при следующем запуске
+  ipcMain.on('app:ui-lang', (_e, lang) => {
+    if (typeof lang !== 'string' || !/^[a-z]{2}$/.test(lang) || state.uiLang === lang) return;
+    state.uiLang = lang;
+    saveState();
   });
 
   ipcMain.on('app:install-update', () => {
@@ -361,6 +551,10 @@ function migrateUserData() {
 if (process.env.LAMPA_USER_DATA) app.setPath('userData', path.resolve(process.env.LAMPA_USER_DATA));
 else migrateUserData();
 
+// Язык окна — как у интерфейса Lampa: от него зависит, например, формат даты в полях ввода.
+const savedUiLang = loadState().uiLang;
+if (savedUiLang) app.commandLine.appendSwitch('lang', savedUiLang);
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
@@ -384,6 +578,7 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(() => {
     state = loadState();
     setupMenu();
+    registerCoverProtocol();
     registerIpc();
     createWindow();
     setupAutoUpdate();

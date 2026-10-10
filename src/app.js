@@ -281,6 +281,7 @@
   function applyLanguage() {
     I18n.setLang(settings.lang);
     I18n.apply();
+    api.setUiLang(I18n.lang);
     const langSel = $('#lang');
     langSel.options[0].textContent = t('langAuto');
     fillFontSelect($('#font'));
@@ -1462,6 +1463,8 @@
   }
 
   function renderHome() {
+    renderHomeTabs();
+    renderShelf();
     ui.recent.replaceChildren();
     $('#recent-section').hidden = !library.length;
 
@@ -2445,6 +2448,14 @@
 
   function onKeyDown(e) {
     const ctrl = e.ctrlKey || e.metaKey;
+    // окно книги перехватывает клавиши, Esc его закрывает
+    if (dlgOpen()) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeBookDialog();
+      }
+      return;
+    }
     // Эти работают и из поля поиска.
     if (ctrl && e.code === 'KeyF') {
       e.preventDefault();
@@ -2562,9 +2573,475 @@
     });
   }
 
+  // ---------- мои книги: «Прочитано» и «Хочу прочитать» ----------
+  // Список ведётся вручную: книгу не обязательно читать в Lampa. Хранится в shelf.json в папке профиля.
+
+  const SHELF_SORTS = { read: ['finished', 'rating', 'added', 'title', 'author'], want: ['added', 'title', 'author'] };
+  const SORT_LABELS = { finished: 'sortFinished', rating: 'sortRating', added: 'sortAdded', title: 'sortTitle', author: 'sortAuthor' };
+  const STAR_PATH = 'M12 3.6l2.55 5.2 5.75.83-4.16 4.05.98 5.72L12 16.7l-5.12 2.7.98-5.72L3.7 9.63l5.75-.83z';
+
+  let shelf = [];
+  // список не прочитался — не перезаписываем файл пустым
+  let shelfReady = false;
+  let homeTab = loadJSON('lampa.homeTab', 'library');
+  if (!['library', 'read', 'want'].includes(homeTab)) homeTab = 'library';
+  const shelfSort = { read: 'finished', want: 'added', ...(loadJSON('lampa.shelfSort', null) || {}) };
+  // миниатюра из поиска, пока обложка скачивается
+  const pendingThumbs = new WeakMap();
+
+  // книга в окне правки: копия записи или новая; pickCoverOnly — поиск только ради обложки
+  let draft = null;
+  let pickCoverOnly = false;
+  let lastBookQuery = '';
+  let bookSearchToken = 0;
+  let bookSearchTimer = 0;
+
+  const normText = (s) => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const shelfKey = (b) => normText(b.title) + '|' + normText(b.author);
+  const listName = (list) => t(list === 'read' ? 'tabRead' : 'tabWant');
+  const dlgOpen = () => !$('#book-dlg').hidden;
+
+  function today() {
+    const d = new Date();
+    return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  }
+
+  function svgIcon(d) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('d', d);
+    svg.append(p);
+    return svg;
+  }
+
+  function saveShelf() {
+    if (!shelfReady) return;
+    api.shelfSave(shelf).catch((e) => toast(t('shelfSaveFailed', { e: errorText(e) }), 5000));
+  }
+
+  async function loadShelf() {
+    try {
+      const books = await api.shelfLoad();
+      shelf = books.filter((b) => b && typeof b.title === 'string' && (b.list === 'read' || b.list === 'want'));
+      shelfReady = true;
+    } catch (e) {
+      toast(t('shelfLoadFailed', { e: errorText(e) }), 6000);
+    }
+    renderHomeTabs();
+    renderShelf();
+  }
+
+  function renderHomeTabs() {
+    for (const b of document.querySelectorAll('#home-tabs [data-tab]')) {
+      b.classList.toggle('active', b.dataset.tab === homeTab);
+      const n = b.querySelector('.count');
+      if (n) n.textContent = shelf.filter((x) => x.list === b.dataset.tab).length || '';
+    }
+    $('#home-library').hidden = homeTab !== 'library';
+    $('#shelf-view').hidden = homeTab === 'library';
+  }
+
+  function switchHomeTab(tab) {
+    homeTab = tab;
+    saveJSON('lampa.homeTab', tab);
+    $('#shelf-filter').value = '';
+    renderHomeTabs();
+    renderShelf();
+  }
+
+  function sortedShelf(list) {
+    const c = new Intl.Collator(I18n.lang, { sensitivity: 'base', numeric: true });
+    const byAdded = (a, b) => (b.added || 0) - (a.added || 0);
+    const cmp = {
+      added: byAdded,
+      // без даты — в конце
+      finished: (a, b) => (b.finished || '').localeCompare(a.finished || '') || byAdded(a, b),
+      rating: (a, b) => (b.rating || 0) - (a.rating || 0) || c.compare(a.title, b.title),
+      title: (a, b) => c.compare(a.title, b.title),
+      author: (a, b) => c.compare(a.author || '￿', b.author || '￿') || c.compare(a.title, b.title),
+    }[shelfSort[list]] || byAdded;
+    return shelf.filter((b) => b.list === list).sort(cmp);
+  }
+
+  function renderShelf() {
+    if (homeTab === 'library') return;
+    const list = homeTab;
+    const sort = $('#shelf-sort');
+    sort.replaceChildren();
+    for (const id of SHELF_SORTS[list]) {
+      const o = el('option', null, t(SORT_LABELS[id]));
+      o.value = id;
+      sort.append(o);
+    }
+    if (!SHELF_SORTS[list].includes(shelfSort[list])) shelfSort[list] = SHELF_SORTS[list][0];
+    sort.value = shelfSort[list];
+
+    const all = sortedShelf(list);
+    const q = normText($('#shelf-filter').value);
+    const items = q ? all.filter((b) => normText(b.title + ' ' + b.author).includes(q)) : all;
+
+    let stats = all.length ? t('shelfCount', { n: all.length }) : '';
+    const rated = all.filter((b) => b.rating > 0);
+    if (list === 'read' && rated.length) {
+      const avg = rated.reduce((s, b) => s + b.rating, 0) / rated.length;
+      stats += ' · ' + t('shelfAvg', { r: new Intl.NumberFormat(I18n.lang, { maximumFractionDigits: 1 }).format(avg) });
+    }
+    $('#shelf-stats').textContent = stats;
+
+    $('#shelf-grid').replaceChildren(...items.map(shelfCard));
+    const empty = $('#shelf-empty');
+    empty.hidden = items.length > 0;
+    empty.textContent = all.length ? t('shelfNoMatch') : t(list === 'read' ? 'shelfEmptyRead' : 'shelfEmptyWant');
+  }
+
+  function bookThumb(b, thumb) {
+    const src = thumb || pendingThumbs.get(b) || (b.cover ? 'lampa-cover://c/' + b.cover : '');
+    if (src) {
+      const img = el('img', 'thumb');
+      img.src = src;
+      img.alt = '';
+      img.loading = 'lazy';
+      return img;
+    }
+    const ph = el('div', 'thumb ph', (b.title || '?').trim().charAt(0).toUpperCase());
+    ph.style.setProperty('--h', hue(b.title));
+    return ph;
+  }
+
+  function shelfCard(b) {
+    const card = el('div', 'card');
+    card.tabIndex = 0;
+    card.setAttribute('role', 'button');
+    card.append(bookThumb(b), el('div', 't', b.title), el('div', 'a', [b.author, b.year].filter(Boolean).join(' · ') || ' '));
+    if (b.list === 'read') {
+      const rate = el('div', b.rating ? 'rate' : 'rate none');
+      if (b.rating) rate.append(svgIcon(STAR_PATH), el('span', null, String(b.rating)), el('span', 'of', '/10'));
+      else rate.textContent = t('noRating');
+      card.append(rate);
+    } else {
+      // дочитал — сразу в окно с оценкой
+      const done = el('button', 'mark-read');
+      done.append(svgIcon('M5 12.5l4.5 4.5L19 7.5'), el('span', null, t('markRead')));
+      done.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openBookEditor({ ...b, list: 'read', finished: b.finished || today() });
+      });
+      card.append(done);
+    }
+    card.addEventListener('click', () => openBookEditor(b));
+    card.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.target === card) openBookEditor(b);
+    });
+    return card;
+  }
+
+  // --- окно: поиск книги ---
+
+  function closeBookDialog() {
+    $('#book-dlg').hidden = true;
+    draft = null;
+    pickCoverOnly = false;
+    clearTimeout(bookSearchTimer);
+    bookSearchToken++;
+  }
+
+  function startAddBook() {
+    draft = null;
+    pickCoverOnly = false;
+    openBookSearch(lastBookQuery);
+  }
+
+  function openBookSearch(query) {
+    $('#book-dlg').hidden = false;
+    $('#dlg-heading').textContent = t(pickCoverOnly ? 'findCover' : 'shelfAdd');
+    $('#dlg-search').hidden = false;
+    $('#dlg-edit').hidden = true;
+    $('#book-manual-row').hidden = pickCoverOnly;
+    $('#book-results').replaceChildren();
+    $('#book-status').textContent = '';
+    const input = $('#book-q');
+    input.value = query || '';
+    input.focus();
+    input.select();
+    if (input.value.trim()) runBookSearch();
+  }
+
+  function runBookSearch() {
+    clearTimeout(bookSearchTimer);
+    const q = $('#book-q').value.trim();
+    const token = ++bookSearchToken;
+    const status = $('#book-status');
+    if (q.length < 2) {
+      $('#book-results').replaceChildren();
+      status.textContent = '';
+      return;
+    }
+    if (!pickCoverOnly) lastBookQuery = q;
+    status.textContent = t('shelfSearching');
+    api.shelfSearch(q).then(
+      (results) => {
+        if (token !== bookSearchToken) return;
+        const shown = pickCoverOnly ? results.filter((r) => r.cover) : results;
+        status.textContent = shown.length ? '' : t('shelfNoResults');
+        $('#book-results').replaceChildren(...shown.map(resultRow));
+      },
+      (e) => {
+        if (token !== bookSearchToken) return;
+        status.textContent = t('shelfSearchFailed', { e: errorText(e) });
+      },
+    );
+  }
+
+  function resultRow(r) {
+    const row = el('button', 'book-result');
+    row.type = 'button';
+    const ph = el('div', 'rthumb ph', (r.title || '?').trim().charAt(0).toUpperCase());
+    ph.style.setProperty('--h', hue(r.title));
+    const info = el('div', 'rinfo');
+    info.append(el('div', 'rt', r.title), el('div', 'ra', [r.author, r.year].filter(Boolean).join(' · ')));
+    const have = !pickCoverOnly && shelf.find((b) => shelfKey(b) === shelfKey(r));
+    if (have) info.append(el('div', 'rhave', t(have.list === 'read' ? 'inRead' : 'inWant')));
+    row.append(ph, info);
+    if (r.cover) {
+      api.shelfThumb(r.cover).then(
+        (src) => {
+          r.thumb = src;
+          const img = el('img', 'rthumb');
+          img.src = src;
+          img.alt = '';
+          ph.replaceWith(img);
+        },
+        () => {
+          r.cover = null;
+        },
+      );
+    }
+    row.addEventListener('click', () => pickResult(r));
+    return row;
+  }
+
+  function pickResult(r) {
+    if (pickCoverOnly) {
+      if (r.cover) Object.assign(draft, { coverUrl: r.cover, thumb: r.thumb || null });
+      showEditor();
+      return;
+    }
+    const have = shelf.find((b) => shelfKey(b) === shelfKey(r));
+    if (have) {
+      toast(t('shelfAlready'));
+      openBookEditor(have);
+      return;
+    }
+    openBookEditor({
+      list: homeTab === 'want' ? 'want' : 'read',
+      title: r.title,
+      author: r.author,
+      year: r.year,
+      ref: r.ref,
+      coverUrl: r.cover,
+      thumb: r.thumb || null,
+    });
+  }
+
+  // --- окно: правка книги ---
+
+  function openBookEditor(b) {
+    draft = { rating: 0, finished: '', note: '', ...b };
+    showEditor();
+  }
+
+  function showEditor() {
+    pickCoverOnly = false;
+    bookSearchToken++;
+    $('#book-dlg').hidden = false;
+    $('#dlg-heading').textContent = t(draft.id ? 'editBook' : 'shelfAdd');
+    $('#dlg-search').hidden = true;
+    $('#dlg-edit').hidden = false;
+    $('#ed-title').value = draft.title || '';
+    $('#ed-author').value = draft.author || '';
+    $('#ed-year').value = draft.year || '';
+    $('#ed-finished').value = draft.finished || '';
+    $('#ed-note').value = draft.note || '';
+    $('#ed-delete').hidden = !draft.id;
+    $('#ed-delete').classList.remove('confirm');
+    $('#ed-delete').textContent = t('delete');
+    $('#ed-back').hidden = !!draft.id;
+    renderEditorCover();
+    renderEditorList();
+    renderStars();
+    if (!draft.title) $('#ed-title').focus();
+  }
+
+  function syncDraft() {
+    Object.assign(draft, {
+      title: $('#ed-title').value.trim(),
+      author: $('#ed-author').value.trim(),
+      year: $('#ed-year').value.trim(),
+      finished: $('#ed-finished').value,
+      note: $('#ed-note').value.trim(),
+    });
+  }
+
+  function renderEditorCover() {
+    const shown = draft.coverUrl ? { title: draft.title } : draft;
+    $('#ed-cover').replaceChildren(bookThumb(shown, draft.coverUrl ? draft.thumb : null));
+  }
+
+  function renderEditorList() {
+    for (const b of document.querySelectorAll('#ed-list button')) b.classList.toggle('active', b.dataset.value === draft.list);
+    $('#dlg-edit').classList.toggle('want', draft.list === 'want');
+  }
+
+  function buildStars() {
+    const box = $('#ed-stars');
+    for (let i = 1; i <= 10; i++) {
+      const b = el('button', 'star');
+      b.type = 'button';
+      b.dataset.n = i;
+      b.setAttribute('aria-label', `${i}/10`);
+      b.append(svgIcon(STAR_PATH));
+      // повторный щелчок по той же звезде убирает оценку
+      b.addEventListener('click', () => {
+        draft.rating = draft.rating === i ? 0 : i;
+        renderStars();
+      });
+      b.addEventListener('mouseenter', () => renderStars(i));
+      box.append(b);
+    }
+    box.addEventListener('mouseleave', () => renderStars());
+  }
+
+  function renderStars(hover) {
+    const v = hover || (draft && draft.rating) || 0;
+    for (const b of document.querySelectorAll('#ed-stars .star')) b.classList.toggle('on', Number(b.dataset.n) <= v);
+    $('#ed-stars').classList.toggle('hover', !!hover);
+    $('#ed-rating-val').textContent = v ? `${v}/10` : t('noRating');
+  }
+
+  async function saveDraft(e) {
+    e.preventDefault();
+    syncDraft();
+    const d = draft;
+    if (!d.title) {
+      $('#ed-title').focus();
+      return;
+    }
+    if (!/^\d{1,4}$/.test(d.year)) d.year = '';
+    let entry = d.id && shelf.find((b) => b.id === d.id);
+    const isNew = !entry;
+    if (isNew) {
+      entry = { id: uid(), added: Date.now(), cover: null };
+      shelf.push(entry);
+    }
+    Object.assign(entry, {
+      list: d.list,
+      title: d.title,
+      author: d.author,
+      year: d.year,
+      rating: d.list === 'read' ? d.rating || 0 : 0,
+      finished: d.list === 'read' ? d.finished : '',
+      note: d.note,
+      ref: d.ref || entry.ref || '',
+    });
+    if (d.coverUrl && d.thumb) pendingThumbs.set(entry, d.thumb);
+    closeBookDialog();
+    saveShelf();
+    renderHomeTabs();
+    renderShelf();
+    if (d.list !== homeTab) toast(t('shelfMoved', { list: listName(d.list) }));
+
+    // обложку скачиваем после закрытия окна, чтобы не ждать
+    if (d.coverUrl) setCover(entry, d.coverUrl);
+    else if (isNew) findCover(entry);
+  }
+
+  async function setCover(entry, url) {
+    try {
+      const name = await api.shelfCover(url);
+      if (!shelf.includes(entry)) return;
+      entry.cover = name;
+      saveShelf();
+    } catch {
+      // нет сети — останется заглушка с буквой
+    }
+    pendingThumbs.delete(entry);
+    renderShelf();
+  }
+
+  // Книга добавлена вручную — пробуем найти обложку по названию и автору.
+  async function findCover(entry) {
+    try {
+      const results = await api.shelfSearch(`${entry.title} ${entry.author}`.trim());
+      const title = normText(entry.title);
+      const hit = results.find((r) => r.cover && normText(r.title).startsWith(title));
+      if (hit) await setCover(entry, hit.cover);
+    } catch {}
+  }
+
+  function deleteDraft() {
+    const btn = $('#ed-delete');
+    // удаление в два щелчка: вместе с книгой пропадают оценка и заметки
+    if (!btn.classList.contains('confirm')) {
+      btn.classList.add('confirm');
+      btn.textContent = t('deleteConfirm');
+      return;
+    }
+    const i = shelf.findIndex((b) => b.id === draft.id);
+    if (i >= 0) shelf.splice(i, 1);
+    closeBookDialog();
+    saveShelf();
+    renderHomeTabs();
+    renderShelf();
+    toast(t('shelfDeleted'));
+  }
+
+  function bindShelf() {
+    for (const b of document.querySelectorAll('#home-tabs [data-tab]')) b.addEventListener('click', () => switchHomeTab(b.dataset.tab));
+    $('#shelf-add').addEventListener('click', startAddBook);
+    $('#shelf-filter').addEventListener('input', renderShelf);
+    $('#shelf-sort').addEventListener('change', (e) => {
+      shelfSort[homeTab] = e.target.value;
+      saveJSON('lampa.shelfSort', shelfSort);
+      renderShelf();
+    });
+    const q = $('#book-q');
+    q.addEventListener('input', () => {
+      clearTimeout(bookSearchTimer);
+      bookSearchTimer = setTimeout(runBookSearch, 450);
+    });
+    q.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') runBookSearch();
+    });
+    $('#book-manual').addEventListener('click', () => {
+      openBookEditor({ list: homeTab === 'want' ? 'want' : 'read', title: q.value.trim(), author: '', year: '' });
+    });
+    $('#book-dlg').addEventListener('mousedown', (e) => {
+      if (e.target.id === 'book-dlg') closeBookDialog();
+    });
+    $('#dlg-close').addEventListener('click', closeBookDialog);
+    $('#dlg-edit').addEventListener('submit', saveDraft);
+    $('#ed-delete').addEventListener('click', deleteDraft);
+    $('#ed-back').addEventListener('click', startAddBook);
+    $('#ed-find-cover').addEventListener('click', () => {
+      syncDraft();
+      pickCoverOnly = true;
+      openBookSearch([draft.title, draft.author].filter(Boolean).join(' '));
+    });
+    for (const b of document.querySelectorAll('#ed-list button')) {
+      b.addEventListener('click', () => {
+        if (b.dataset.value === 'read' && draft.list !== 'read' && draft.id && !$('#ed-finished').value) $('#ed-finished').value = today();
+        draft.list = b.dataset.value;
+        renderEditorList();
+      });
+    }
+    buildStars();
+  }
+
   // ---------- запуск ----------
 
   function bindUI() {
+    bindShelf();
     $('#btn-open').addEventListener('click', openDialog);
     $('#home-open').addEventListener('click', openDialog);
     $('#btn-home').addEventListener('click', showHome);
@@ -2806,6 +3283,7 @@ ${sentence}` : translation);
     if (!localStorage.getItem(LS.library)) saveLibrary();
     if (!localStorage.getItem(LS.marks)) saveMarks();
     adoptOldBooks();
+    loadShelf();
     api.onOpenPath(openPath);
     const initial = await api.takeInitialPath();
     if (initial) openPath(initial);

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; font-src 'self'">
+        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob: data: lampa-cover:; font-src 'self'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Lampa</title>
   <link rel="stylesheet" href="fonts/fonts.css">
@@ -77,6 +77,12 @@
 
   <main id="home">
     <div class="home-inner">
+      <nav class="home-tabs" id="home-tabs">
+        <button data-tab="library" data-i18n="library"></button>
+        <button data-tab="read"><span data-i18n="tabRead"></span><span class="count"></span></button>
+        <button data-tab="want"><span data-i18n="tabWant"></span><span class="count"></span></button>
+      </nav>
+      <div id="home-library">
       <section class="hero">
         <img class="logo-icon" src="../build/icon.png" alt="">
         <div class="logo">Lampa</div>
@@ -96,6 +102,22 @@
       <section id="recent-section" hidden>
         <h2 class="section-title" data-i18n="recent"></h2>
         <div class="grid" id="recent"></div>
+      </section>
+      </div>
+
+      <!-- прочитанные и «хочу прочитать»: список ведётся вручную -->
+      <section id="shelf-view" hidden>
+        <div class="shelf-tools">
+          <input id="shelf-filter" type="search" autocomplete="off" spellcheck="false" data-i18n-placeholder="shelfFilter">
+          <select id="shelf-sort"></select>
+          <button class="primary-btn" id="shelf-add">
+            <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+            <span data-i18n="shelfAdd"></span>
+          </button>
+        </div>
+        <div class="shelf-stats" id="shelf-stats"></div>
+        <div class="grid" id="shelf-grid"></div>
+        <p class="shelf-empty" id="shelf-empty" hidden></p>
       </section>
     </div>
   </main>
@@ -287,6 +309,53 @@
       </div>
       <button class="text-btn" id="annot-delete" data-i18n="delete"></button>
       <button class="primary-btn" id="annot-save" data-i18n="done"></button>
+    </div>
+  </div>
+
+  <div id="book-dlg" hidden>
+    <div class="dlg-box" role="dialog" aria-modal="true" aria-labelledby="dlg-heading">
+      <header>
+        <h3 id="dlg-heading"></h3>
+        <button class="icon-btn" id="dlg-close" data-i18n-title="close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </header>
+      <div id="dlg-search">
+        <input id="book-q" type="search" autocomplete="off" spellcheck="false" data-i18n-placeholder="shelfSearchPh">
+        <div id="book-status"></div>
+        <div id="book-results"></div>
+        <div class="dlg-foot" id="book-manual-row">
+          <span data-i18n="shelfNotFound"></span>
+          <button type="button" class="link-btn" id="book-manual" data-i18n="shelfManual"></button>
+        </div>
+      </div>
+      <form id="dlg-edit" hidden autocomplete="off">
+        <div class="ed-side">
+          <div id="ed-cover"></div>
+          <button type="button" class="link-btn" id="ed-find-cover" data-i18n="findCover"></button>
+        </div>
+        <div class="ed-main">
+          <label class="fld"><span data-i18n="fTitle"></span><input id="ed-title" maxlength="300"></label>
+          <label class="fld"><span data-i18n="fAuthor"></span><input id="ed-author" maxlength="300"></label>
+          <div class="fld-row">
+            <label class="fld fld-year"><span data-i18n="fYear"></span><input id="ed-year" inputmode="numeric" maxlength="4"></label>
+            <label class="fld read-fld"><span data-i18n="fFinished"></span><input id="ed-finished" type="date"></label>
+          </div>
+          <div class="seg" id="ed-list">
+            <button type="button" data-value="read" data-i18n="tabRead"></button>
+            <button type="button" data-value="want" data-i18n="tabWant"></button>
+          </div>
+          <div class="fld read-fld">
+            <span class="fld-label"><span data-i18n="fRating"></span><b id="ed-rating-val"></b></span>
+            <div id="ed-stars"></div>
+          </div>
+          <label class="fld"><span data-i18n="fNote"></span><textarea id="ed-note" rows="3" maxlength="5000"></textarea></label>
+          <div class="ed-actions">
+            <button type="button" class="link-btn" id="ed-back" data-i18n="backToSearch"></button>
+            <button type="button" class="text-btn" id="ed-delete" data-i18n="delete"></button>
+            <span class="spacer"></span>
+            <button type="submit" class="primary-btn" data-i18n="save"></button>
+          </div>
+        </div>
+      </form>
     </div>
   </div>
 
