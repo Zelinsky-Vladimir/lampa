@@ -110,6 +110,7 @@
         <div class="shelf-tools">
           <input id="shelf-filter" type="search" autocomplete="off" spellcheck="false" data-i18n-placeholder="shelfFilter">
           <select id="shelf-sort"></select>
+          <select id="shelf-genre" hidden></select>
           <button class="primary-btn" id="shelf-add">
             <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
             <span data-i18n="shelfAdd"></span>
@@ -349,8 +350,10 @@
         <div class="ed-main">
           <label class="fld"><span data-i18n="fTitle"></span><input id="ed-title" maxlength="300"></label>
           <label class="fld"><span data-i18n="fAuthor"></span><input id="ed-author" maxlength="300"></label>
+          <div class="ed-world" id="ed-world" hidden></div>
           <div class="fld-row">
             <label class="fld fld-year"><span data-i18n="fYear"></span><input id="ed-year" inputmode="numeric" maxlength="4"></label>
+            <label class="fld"><span data-i18n="fGenre"></span><select id="ed-genre"></select></label>
             <label class="fld read-fld"><span data-i18n="fFinished"></span><input id="ed-finished" type="date"></label>
           </div>
           <div class="seg" id="ed-list">

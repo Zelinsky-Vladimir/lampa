@@ -280,6 +280,59 @@ async function getBooksJson(url) {
   return r.json();
 }
 
+// Жанр по рубрикам Apple Books или темам Open Library. Порядок — приоритет при равенстве.
+const GENRE_RULES = [
+  ['classics', /classic|классик/],
+  ['scifi', /science.?fiction|sci-?fi|научн\S* фантаст|фантастик/],
+  ['fantasy', /fantasy|фэнтези/],
+  ['mystery', /myster|detective|crime|детектив/],
+  ['thriller', /thriller|suspense|триллер/],
+  ['horror', /horror|ужас/],
+  ['romance', /romance|love stor|любовн/],
+  ['adventure', /adventure|приключ/],
+  ['ya', /young adult|teen|подрост/],
+  ['children', /child|kids|juvenile|picture book|детск/],
+  ['comics', /comic|graphic novel|manga|комикс|манга/],
+  ['poetry', /poetry|poems|поэз|стихи/],
+  ['drama', /drama|plays\b|пьес/],
+  ['biography', /biograph|memoir|биограф|мемуар/],
+  ['history', /histor|истори/],
+  ['philosophy', /philosoph|философ/],
+  ['religion', /religio|spiritual|christian|bible|религи/],
+  ['selfhelp', /self-?help|self-improvement|personal growth|psycholog|mind & body|саморазвит|психолог/],
+  ['business', /business|financ|econom|management|marketing|бизнес|экономик/],
+  ['science', /^(?!.*fiction).*(science|nature|physics|biolog|mathemat|astronom|научпоп)/],
+  ['travel', /travel|путешеств/],
+  // «political fiction» — художественная книга, а не публицистика
+  ['nonfiction', /non-?fiction|^(?!.*(?<!non-?)fiction).*(politic|current events|reference|computer|technolog|cook|parenting|sport)/],
+  ['fiction', /fiction|literature|novel|литератур|роман|проза/],
+  // сатира обычно ещё и проза — при равенстве побеждает проза
+  ['humor', /humou?r|satire|comedy|юмор|сатир/],
+];
+
+// primaryFirst: у Apple первая рубрика — основная, она весит вдвое больше.
+function classifyGenre(items, primaryFirst) {
+  const score = new Map();
+  (items || []).forEach((raw, i) => {
+    let hits = GENRE_RULES.filter(([, re]) => re.test(String(raw).toLowerCase())).map(([id]) => id);
+    // «Science Fiction» — фантастика, а не просто проза; «Mysteries for Young Adults» — детектив
+    if (hits.length > 1) hits = hits.filter((id) => id !== 'ya');
+    if (hits.length > 1) hits = hits.filter((id) => id !== 'fiction');
+    const weight = primaryFirst && i === 0 ? 2 : 1;
+    for (const id of hits) score.set(id, (score.get(id) || 0) + weight / hits.length);
+  });
+  let best = '';
+  for (const [id] of GENRE_RULES) if (score.has(id) && (!best || score.get(id) > score.get(best))) best = id;
+  return best;
+}
+
+// Средняя оценка читателей по пятибалльной шкале; редкие оценки ничего не говорят.
+// rank — чем больше, тем надёжнее: Apple округляет среднюю до 0,5, поэтому Open Library с 20+ оценками точнее.
+const readerRating = (avg, n, src) =>
+  Number(n) >= 10 && Number(avg) > 0
+    ? { avg: Math.round(Number(avg) * 100) / 100, n: Number(n), src, rank: Number(n) * (src === 'Open Library' && Number(n) >= 20 ? 1000 : 1) }
+    : null;
+
 // Apple Books: хорошо находит русские книги и даёт обложки в любом размере.
 async function searchApple(q) {
   const j = await getBooksJson(`https://itunes.apple.com/search?media=ebook&entity=ebook&country=us&limit=20&term=${encodeURIComponent(q)}`);
@@ -290,13 +343,16 @@ async function searchApple(q) {
       author: String(x.artistName || ''),
       year: String(x.releaseDate || '').slice(0, 4),
       cover: x.artworkUrl100 ? String(x.artworkUrl100).replace(/\/\d+x\d+bb\.(jpg|png)$/, '/600x900bb.jpg') : null,
+      genre: classifyGenre(x.genres, true),
+      rating: readerRating(x.averageUserRating, x.userRatingCount, 'Apple Books'),
       ref: 'apple:' + x.trackId,
     }));
 }
 
-// Open Library: открытый каталог, год первого издания.
+// Open Library: открытый каталог, год первого издания, оценки читателей.
 async function searchOpenLibrary(q) {
-  const j = await getBooksJson(`https://openlibrary.org/search.json?limit=20&fields=key,title,author_name,first_publish_year,cover_i&q=${encodeURIComponent(q)}`);
+  const fields = 'key,title,author_name,first_publish_year,cover_i,ratings_average,ratings_count,subject';
+  const j = await getBooksJson(`https://openlibrary.org/search.json?limit=20&fields=${fields}&q=${encodeURIComponent(q)}`);
   return (j.docs || [])
     .filter((d) => d.title)
     .map((d) => ({
@@ -304,6 +360,8 @@ async function searchOpenLibrary(q) {
       author: (d.author_name || []).slice(0, 2).join(', '),
       year: d.first_publish_year ? String(d.first_publish_year) : '',
       cover: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-L.jpg` : null,
+      genre: classifyGenre((d.subject || []).slice(0, 40)),
+      rating: readerRating(d.ratings_average, d.ratings_count, 'Open Library'),
       ref: 'ol:' + d.key,
     }));
 }
@@ -329,6 +387,8 @@ async function searchBooks(q) {
         if (!prev.cover && b.cover) prev.cover = b.cover;
         // у переизданий год новый — оставляем самый ранний
         if (b.year && (!prev.year || b.year < prev.year)) prev.year = b.year;
+        if (b.rating && (!prev.rating || b.rating.rank > prev.rating.rank)) prev.rating = b.rating;
+        if (!prev.genre) prev.genre = b.genre;
         continue;
       }
       seen.set(bookKey(b), b);

@@ -2579,6 +2579,11 @@
   const SHELF_SORTS = { read: ['finished', 'rating', 'added', 'title', 'author'], want: ['added', 'title', 'author'] };
   const SORT_LABELS = { finished: 'sortFinished', rating: 'sortRating', added: 'sortAdded', title: 'sortTitle', author: 'sortAuthor' };
   const STAR_PATH = 'M12 3.6l2.55 5.2 5.75.83-4.16 4.05.98 5.72L12 16.7l-5.12 2.7.98-5.72L3.7 9.63l5.75-.83z';
+  const GLOBE_PATH = 'M12 3.5a8.5 8.5 0 1 0 0 17a8.5 8.5 0 1 0 0-17zM3.5 12h17M12 3.5c2.3 2.4 3.5 5.2 3.5 8.5s-1.2 6.1-3.5 8.5M12 3.5c-2.3 2.4-3.5 5.2-3.5 8.5s1.2 6.1 3.5 8.5';
+  // те же жанры, что определяет main.js по данным каталогов
+  const GENRE_IDS = ['fiction', 'classics', 'scifi', 'fantasy', 'mystery', 'thriller', 'horror', 'romance', 'adventure', 'humor', 'ya', 'children', 'comics', 'poetry', 'drama', 'biography', 'history', 'philosophy', 'religion', 'selfhelp', 'business', 'science', 'travel', 'nonfiction'];
+  // пауза между фоновыми запросами: у Apple Books ограничение около 20 запросов в минуту
+  const LOOKUP_GAP = 5000;
 
   let shelf = [];
   // список не прочитался — не перезаписываем файл пустым
@@ -2595,6 +2600,13 @@
   let lastBookQuery = '';
   let bookSearchToken = 0;
   let bookSearchTimer = 0;
+  // фильтр «Хочу прочитать» по жанру; перетаскиваемая книга
+  let wantGenre = 'all';
+  let dragId = null;
+  let renderAfterDrag = false;
+
+  const genreName = (id) => t('g_' + id);
+  const fmtNum = (n, digits) => new Intl.NumberFormat(I18n.lang, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(n);
 
   const normText = (s) => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
   const shelfKey = (b) => normText(b.title) + '|' + normText(b.author);
@@ -2628,8 +2640,62 @@
     } catch (e) {
       toast(t('shelfLoadFailed', { e: errorText(e) }), 6000);
     }
+    // порядок «Хочу прочитать» раньше шёл от новых к старым — сохраняем его как ручной
+    const want = shelf.filter((b) => b.list === 'want');
+    if (want.some((b) => typeof b.pos !== 'number')) {
+      want.sort((a, b) => (a.pos ?? -a.added) - (b.pos ?? -b.added)).forEach((b, i) => (b.pos = i));
+      saveShelf();
+    }
     renderHomeTabs();
     renderShelf();
+    enrichShelf();
+  }
+
+  // Перерисовка, которая не ломает перетаскивание.
+  function refreshShelf() {
+    if (dragId) renderAfterDrag = true;
+    else renderShelf();
+  }
+
+  const nextWantPos = () => shelf.reduce((m, b) => (b.list === 'want' && typeof b.pos === 'number' ? Math.max(m, b.pos + 1) : m), 0);
+
+  // Оценка читателей и жанр для книг, добавленных вручную или до появления этих полей.
+  async function lookupBook(entry, wantCover) {
+    const results = await api.shelfSearch(`${entry.title} ${entry.author}`.trim());
+    if (!shelf.includes(entry)) return;
+    const title = normText(entry.title);
+    const lastName = normText(entry.author).split(' ').pop();
+    let pool = results.filter((r) => normText(r.title).startsWith(title));
+    const exact = pool.filter((r) => normText(r.title) === title);
+    if (exact.length) pool = exact;
+    const sameAuthor = lastName ? pool.filter((r) => normText(r.author).includes(lastName)) : [];
+    if (sameAuthor.length) pool = sameAuthor;
+    const rated = pool.filter((r) => r.rating).sort((a, b) => (b.rating.rank || 0) - (a.rating.rank || 0))[0];
+    if (rated) entry.world = rated.rating;
+    if (!entry.genre) entry.genre = (pool.find((r) => r.genre) || {}).genre || '';
+    entry.checked = Date.now();
+    saveShelf();
+    refreshShelf();
+    const hit = wantCover && !entry.cover && pool.find((r) => r.cover);
+    if (hit) await setCover(entry, hit.cover);
+  }
+
+  let enriching = false;
+  async function enrichShelf() {
+    if (enriching || !shelfReady) return;
+    enriching = true;
+    try {
+      for (let entry; (entry = shelf.find((b) => !b.checked)); ) {
+        try {
+          await lookupBook(entry, true);
+        } catch {
+          break; // нет сети — попробуем при следующем запуске
+        }
+        await sleep(LOOKUP_GAP);
+      }
+    } finally {
+      enriching = false;
+    }
   }
 
   function renderHomeTabs() {
@@ -2651,6 +2717,8 @@
   }
 
   function sortedShelf(list) {
+    // «Хочу прочитать» — в порядке, который задали перетаскиванием
+    if (list === 'want') return shelf.filter((b) => b.list === 'want').sort((a, b) => (a.pos ?? 0) - (b.pos ?? 0));
     const c = new Intl.Collator(I18n.lang, { sensitivity: 'base', numeric: true });
     const byAdded = (a, b) => (b.added || 0) - (a.added || 0);
     const cmp = {
@@ -2668,18 +2736,22 @@
     if (homeTab === 'library') return;
     const list = homeTab;
     const sort = $('#shelf-sort');
+    sort.hidden = list === 'want';
     sort.replaceChildren();
-    for (const id of SHELF_SORTS[list]) {
+    for (const id of SHELF_SORTS.read) {
       const o = el('option', null, t(SORT_LABELS[id]));
       o.value = id;
       sort.append(o);
     }
-    if (!SHELF_SORTS[list].includes(shelfSort[list])) shelfSort[list] = SHELF_SORTS[list][0];
-    sort.value = shelfSort[list];
+    if (!SHELF_SORTS.read.includes(shelfSort.read)) shelfSort.read = SHELF_SORTS.read[0];
+    sort.value = shelfSort.read;
 
     const all = sortedShelf(list);
+    if (list === 'want') fillGenreFilter(all);
+    $('#shelf-genre').hidden = list !== 'want' || $('#shelf-genre').options.length < 3;
     const q = normText($('#shelf-filter').value);
-    const items = q ? all.filter((b) => normText(b.title + ' ' + b.author).includes(q)) : all;
+    let items = q ? all.filter((b) => normText(b.title + ' ' + b.author).includes(q)) : all;
+    if (list === 'want' && wantGenre !== 'all') items = items.filter((b) => (b.genre || '') === wantGenre);
 
     let stats = all.length ? t('shelfCount', { n: all.length }) : '';
     const rated = all.filter((b) => b.rating > 0);
@@ -2703,6 +2775,92 @@
     $('#shelf-other-grid').replaceChildren(...other.map(shelfCard));
 
     renderOnline();
+  }
+
+  // Жанры, которые есть в «Хочу прочитать», с числом книг. Фильтр прячется, если жанр один.
+  function fillGenreFilter(books) {
+    const counts = new Map();
+    for (const b of books) counts.set(b.genre || '', (counts.get(b.genre || '') || 0) + 1);
+    if (wantGenre !== 'all' && !counts.has(wantGenre)) wantGenre = 'all';
+    const sel = $('#shelf-genre');
+    const all = el('option', null, t('genreAll'));
+    all.value = 'all';
+    const c = new Intl.Collator(I18n.lang);
+    const ids = [...counts.keys()].filter(Boolean).sort((a, b) => c.compare(genreName(a), genreName(b)));
+    if (counts.has('')) ids.push('');
+    sel.replaceChildren(
+      all,
+      ...ids.map((id) => {
+        const o = el('option', null, `${id ? genreName(id) : t('genreNone')} (${counts.get(id)})`);
+        o.value = id;
+        return o;
+      }),
+    );
+    sel.value = wantGenre;
+  }
+
+  function worldBadge(w) {
+    if (!w || !w.avg || w.n < 10) return null;
+    const box = el('span', 'world');
+    box.title = t('worldTip', { src: w.src, avg: fmtNum(w.avg, 2), n: fmtNum(w.n, 0) });
+    box.append(svgIcon(GLOBE_PATH), el('span', null, fmtNum(w.avg * 2, 1)));
+    return box;
+  }
+
+  // --- «Хочу прочитать»: перетаскивание ---
+
+  function makeDraggable(card, b) {
+    card.draggable = true;
+    for (const img of card.querySelectorAll('img')) img.draggable = false;
+    const clearMarks = () => {
+      for (const c of document.querySelectorAll('.drop-before, .drop-after')) c.classList.remove('drop-before', 'drop-after');
+    };
+    card.addEventListener('dragstart', (e) => {
+      dragId = b.id;
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('application/x-lampa-book', b.id);
+    });
+    card.addEventListener('dragend', () => {
+      dragId = null;
+      card.classList.remove('dragging');
+      clearMarks();
+      if (renderAfterDrag) {
+        renderAfterDrag = false;
+        renderShelf();
+      }
+    });
+    card.addEventListener('dragover', (e) => {
+      if (!dragId || dragId === b.id) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const r = card.getBoundingClientRect();
+      const after = e.clientX > r.left + r.width / 2;
+      if (card.classList.contains(after ? 'drop-after' : 'drop-before')) return;
+      clearMarks();
+      card.classList.add(after ? 'drop-after' : 'drop-before');
+    });
+    card.addEventListener('dragleave', (e) => {
+      if (!card.contains(e.relatedTarget)) card.classList.remove('drop-before', 'drop-after');
+    });
+    card.addEventListener('drop', (e) => {
+      if (!dragId || dragId === b.id) return;
+      e.preventDefault();
+      e.stopPropagation();
+      moveWant(dragId, b.id, card.classList.contains('drop-after'));
+    });
+  }
+
+  // Ставим книгу перед или после другой; при фильтре по жанру — относительно видимой соседки.
+  function moveWant(id, targetId, after) {
+    const order = sortedShelf('want');
+    const moving = order.find((x) => x.id === id);
+    if (!moving) return;
+    order.splice(order.indexOf(moving), 1);
+    order.splice(order.findIndex((x) => x.id === targetId) + (after ? 1 : 0), 0, moving);
+    order.forEach((x, i) => (x.pos = i));
+    saveShelf();
+    renderAfterDrag = true;
   }
 
   // ---------- поиск в интернете прямо из поля над списком ----------
@@ -2771,6 +2929,8 @@
       );
     }
     card.append(thumb, el('div', 't', r.title), el('div', 'a', [r.author, r.year].filter(Boolean).join(' · ') || ' '));
+    const world = worldBadge(r.rating);
+    if (world) card.append(world);
     const have = shelf.find((b) => shelfKey(b) === shelfKey(r));
     if (have) {
       card.append(el('div', 'have', t(have.list === 'read' ? 'inRead' : 'inWant')));
@@ -2805,7 +2965,11 @@
       finished: '',
       note: '',
       ref: r.ref || '',
+      genre: r.genre || '',
+      world: r.rating || null,
+      checked: Date.now(),
     };
+    if (entry.list === 'want') entry.pos = nextWantPos();
     shelf.push(entry);
     if (r.thumb) pendingThumbs.set(entry, r.thumb);
     saveShelf();
@@ -2834,12 +2998,16 @@
     card.tabIndex = 0;
     card.setAttribute('role', 'button');
     card.append(bookThumb(b), el('div', 't', b.title), el('div', 'a', [b.author, b.year].filter(Boolean).join(' · ') || ' '));
+    const world = worldBadge(b.world);
     if (b.list === 'read') {
+      // своя оценка и рядом — средняя у читателей, в той же шкале до 10
       const rate = el('div', b.rating ? 'rate' : 'rate none');
       if (b.rating) rate.append(svgIcon(STAR_PATH), el('span', null, String(b.rating)), el('span', 'of', '/10'));
-      else rate.textContent = t('noRating');
+      else rate.append(el('span', null, t('noRating')));
+      if (world) rate.append(world);
       card.append(rate);
     } else {
+      if (world) card.append(world);
       // дочитал — сразу в окно с оценкой
       const done = el('button', 'mark-read');
       done.append(svgIcon('M5 12.5l4.5 4.5L19 7.5'), el('span', null, t('markRead')));
@@ -2848,6 +3016,7 @@
         openBookEditor({ ...b, list: 'read', finished: b.finished || today() });
       });
       card.append(done);
+      if (homeTab === 'want') makeDraggable(card, b);
     }
     card.addEventListener('click', () => openBookEditor(b));
     card.addEventListener('keydown', (e) => {
@@ -2961,6 +3130,9 @@
       ref: r.ref,
       coverUrl: r.cover,
       thumb: r.thumb || null,
+      genre: r.genre || '',
+      world: r.rating || null,
+      checked: Date.now(),
     });
   }
 
@@ -2987,6 +3159,29 @@
     $('#ed-delete').classList.remove('confirm');
     $('#ed-delete').textContent = t('delete');
     $('#ed-back').hidden = !!draft.id;
+    const genre = $('#ed-genre');
+    const c = new Intl.Collator(I18n.lang);
+    const none = el('option', null, '—');
+    none.value = '';
+    genre.replaceChildren(
+      none,
+      ...[...GENRE_IDS]
+        .sort((a, b) => c.compare(genreName(a), genreName(b)))
+        .map((id) => {
+          const o = el('option', null, genreName(id));
+          o.value = id;
+          return o;
+        }),
+    );
+    genre.value = draft.genre || '';
+    const world = $('#ed-world');
+    world.hidden = !draft.world;
+    if (draft.world) {
+      world.replaceChildren(
+        svgIcon(GLOBE_PATH),
+        el('span', null, t('worldLine', { r: fmtNum(draft.world.avg * 2, 1), n: fmtNum(draft.world.n, 0), src: draft.world.src })),
+      );
+    }
     renderEditorCover();
     renderEditorList();
     renderStars();
@@ -3000,6 +3195,7 @@
       year: $('#ed-year').value.trim(),
       finished: $('#ed-finished').value,
       note: $('#ed-note').value.trim(),
+      genre: $('#ed-genre').value,
     });
   }
 
@@ -3054,6 +3250,8 @@
       entry = { id: uid(), added: Date.now(), cover: null };
       shelf.push(entry);
     }
+    // в «Хочу прочитать» новая книга встаёт в конец очереди
+    if (d.list === 'want' && entry.list !== 'want') entry.pos = nextWantPos();
     Object.assign(entry, {
       list: d.list,
       title: d.title,
@@ -3063,6 +3261,9 @@
       finished: d.list === 'read' ? d.finished : '',
       note: d.note,
       ref: d.ref || entry.ref || '',
+      genre: d.genre || '',
+      world: d.world || entry.world || null,
+      checked: d.checked || entry.checked || 0,
     });
     if (d.coverUrl && d.thumb) pendingThumbs.set(entry, d.thumb);
     closeBookDialog();
@@ -3073,7 +3274,8 @@
 
     // обложку скачиваем после закрытия окна, чтобы не ждать
     if (d.coverUrl) setCover(entry, d.coverUrl);
-    else if (isNew) findCover(entry);
+    // добавлена вручную — ищем обложку, оценку читателей и жанр
+    if (!entry.checked) lookupBook(entry, !d.coverUrl).catch(() => {});
   }
 
   async function setCover(entry, url) {
@@ -3086,17 +3288,7 @@
       // нет сети — останется заглушка с буквой
     }
     pendingThumbs.delete(entry);
-    renderShelf();
-  }
-
-  // Книга добавлена вручную — пробуем найти обложку по названию и автору.
-  async function findCover(entry) {
-    try {
-      const results = await api.shelfSearch(`${entry.title} ${entry.author}`.trim());
-      const title = normText(entry.title);
-      const hit = results.find((r) => r.cover && normText(r.title).startsWith(title));
-      if (hit) await setCover(entry, hit.cover);
-    } catch {}
+    refreshShelf();
   }
 
   function deleteDraft() {
@@ -3129,6 +3321,10 @@
     });
     $('#shelf-manual').addEventListener('click', () => {
       openBookEditor({ list: homeTab === 'want' ? 'want' : 'read', title: filter.value.trim(), author: '', year: '' });
+    });
+    $('#shelf-genre').addEventListener('change', (e) => {
+      wantGenre = e.target.value;
+      renderShelf();
     });
     $('#shelf-sort').addEventListener('change', (e) => {
       shelfSort[homeTab] = e.target.value;

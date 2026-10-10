@@ -439,7 +439,31 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 }
 #shelf-filter:focus, #book-q:focus, .fld input:focus, .fld textarea:focus { outline: none; border-color: var(--accent); }
 #shelf-filter { flex: 1 1 220px; min-width: 0; }
-#shelf-sort { flex: 0 1 240px; width: auto; padding: 9px 10px; border-radius: 9px; }
+#shelf-sort, #shelf-genre { flex: 0 1 240px; width: auto; padding: 9px 10px; border-radius: 9px; }
+.fld select { padding: 8px 8px; border-radius: 9px; }
+
+/* средняя оценка читателей — рядом со своей */
+.world { display: inline-flex; align-items: center; gap: 3px; font-size: 12.5px; font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; }
+.world svg, .card .rate .world svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7; }
+.card .rate .world { margin-left: 8px; }
+.card > .world { display: flex; width: max-content; margin-top: 7px; }
+.ed-world { display: flex; align-items: center; gap: 6px; margin-top: -4px; font-size: 12.5px; color: var(--muted); }
+.ed-world svg { width: 14px; height: 14px; }
+
+/* «Хочу прочитать»: порядок меняется перетаскиванием */
+.card[draggable="true"] { cursor: grab; }
+.card.dragging { opacity: 0.35; }
+.card.drop-before::before, .card.drop-after::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.card.drop-before::before { left: -12px; }
+.card.drop-after::after { right: -12px; }
 #shelf-add { padding: 9px 18px; }
 .shelf-stats { min-height: 1.3em; margin: 16px 0 18px; font-size: 13px; color: var(--muted); }
 .shelf-empty { max-width: 440px; margin: 40px auto; text-align: center; font-size: 14.5px; line-height: 1.5; color: var(--muted); }
