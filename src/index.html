@@ -118,6 +118,20 @@
         <div class="shelf-stats" id="shelf-stats"></div>
         <div class="grid" id="shelf-grid"></div>
         <p class="shelf-empty" id="shelf-empty" hidden></p>
+        <!-- при поиске: совпадения из другого списка и книги из интернета -->
+        <div id="shelf-other" hidden>
+          <h2 class="section-title" id="shelf-other-title"></h2>
+          <div class="grid" id="shelf-other-grid"></div>
+        </div>
+        <div id="shelf-online" hidden>
+          <h2 class="section-title" data-i18n="shelfOnline"></h2>
+          <div class="shelf-stats" id="shelf-online-status"></div>
+          <div class="grid" id="shelf-online-grid"></div>
+          <p class="dlg-foot shelf-manual">
+            <span data-i18n="shelfNotFound"></span>
+            <button type="button" class="link-btn" id="shelf-manual" data-i18n="shelfManual"></button>
+          </p>
+        </div>
       </section>
     </div>
   </main>

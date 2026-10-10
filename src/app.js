@@ -2645,7 +2645,7 @@
   function switchHomeTab(tab) {
     homeTab = tab;
     saveJSON('lampa.homeTab', tab);
-    $('#shelf-filter').value = '';
+    // запрос остаётся: нашли книгу на одной вкладке — можно добавить её на другой
     renderHomeTabs();
     renderShelf();
   }
@@ -2692,7 +2692,127 @@
     $('#shelf-grid').replaceChildren(...items.map(shelfCard));
     const empty = $('#shelf-empty');
     empty.hidden = items.length > 0;
-    empty.textContent = all.length ? t('shelfNoMatch') : t(list === 'read' ? 'shelfEmptyRead' : 'shelfEmptyWant');
+    empty.textContent = all.length || q ? t('shelfNoMatch') : t(list === 'read' ? 'shelfEmptyRead' : 'shelfEmptyWant');
+    $('#shelf-view').classList.toggle('searching', !!q);
+
+    // при поиске показываем совпадения и из другого списка
+    const otherList = list === 'read' ? 'want' : 'read';
+    const other = q ? sortedShelf(otherList).filter((b) => normText(b.title + ' ' + b.author).includes(q)) : [];
+    $('#shelf-other').hidden = !other.length;
+    $('#shelf-other-title').textContent = t('shelfOtherList', { list: listName(otherList) });
+    $('#shelf-other-grid').replaceChildren(...other.map(shelfCard));
+
+    renderOnline();
+  }
+
+  // ---------- поиск в интернете прямо из поля над списком ----------
+
+  let online = { q: '', results: null, error: '' };
+  let onlineToken = 0;
+  let onlineTimer = 0;
+
+  function scheduleOnline(now) {
+    clearTimeout(onlineTimer);
+    const q = $('#shelf-filter').value.trim();
+    if (q.length < 2) {
+      onlineToken++;
+      online = { q: '', results: null, error: '' };
+      renderOnline();
+      return;
+    }
+    if (q === online.q && online.results) return;
+    onlineTimer = setTimeout(() => runOnline(q), now ? 0 : 450);
+  }
+
+  function runOnline(q) {
+    const token = ++onlineToken;
+    online = { q, results: null, error: '' };
+    renderOnline();
+    api.shelfSearch(q).then(
+      (results) => {
+        if (token !== onlineToken) return;
+        online.results = results;
+        renderOnline();
+      },
+      (e) => {
+        if (token !== onlineToken) return;
+        online.error = errorText(e);
+        renderOnline();
+      },
+    );
+  }
+
+  function renderOnline() {
+    const box = $('#shelf-online');
+    const q = $('#shelf-filter').value.trim();
+    box.hidden = homeTab === 'library' || q.length < 2;
+    if (box.hidden) return;
+    const status = $('#shelf-online-status');
+    if (online.error) status.textContent = t('shelfSearchFailed', { e: online.error });
+    else if (!online.results) status.textContent = t('shelfSearching');
+    else status.textContent = online.results.length ? '' : t('shelfNoResults');
+    $('#shelf-online-grid').replaceChildren(...(online.results || []).map(onlineCard));
+  }
+
+  function onlineCard(r) {
+    const card = el('div', 'card');
+    card.tabIndex = 0;
+    card.setAttribute('role', 'button');
+    const thumb = bookThumb({ title: r.title }, r.thumb);
+    if (r.cover && !r.thumb) {
+      api.shelfThumb(r.cover).then(
+        (src) => {
+          r.thumb = src;
+          thumb.replaceWith(bookThumb({ title: r.title }, src));
+        },
+        () => {
+          r.cover = null;
+        },
+      );
+    }
+    card.append(thumb, el('div', 't', r.title), el('div', 'a', [r.author, r.year].filter(Boolean).join(' · ') || ' '));
+    const have = shelf.find((b) => shelfKey(b) === shelfKey(r));
+    if (have) {
+      card.append(el('div', 'have', t(have.list === 'read' ? 'inRead' : 'inWant')));
+    } else {
+      // «+» — сразу в открытый список; щелчок по карточке — окно с оценкой и датой
+      const add = el('button', 'quick-add');
+      add.append(svgIcon('M12 5v14M5 12h14'), el('span', null, t('quickAdd')));
+      add.addEventListener('click', (e) => {
+        e.stopPropagation();
+        quickAdd(r);
+      });
+      card.append(add);
+    }
+    const open = () => pickResult(r);
+    card.addEventListener('click', open);
+    card.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.target === card) open();
+    });
+    return card;
+  }
+
+  function quickAdd(r) {
+    const entry = {
+      id: uid(),
+      added: Date.now(),
+      cover: null,
+      list: homeTab === 'want' ? 'want' : 'read',
+      title: r.title,
+      author: r.author,
+      year: r.year,
+      rating: 0,
+      finished: '',
+      note: '',
+      ref: r.ref || '',
+    };
+    shelf.push(entry);
+    if (r.thumb) pendingThumbs.set(entry, r.thumb);
+    saveShelf();
+    renderHomeTabs();
+    renderShelf();
+    toast(t('shelfMoved', { list: listName(entry.list) }));
+    if (r.cover) setCover(entry, r.cover);
   }
 
   function bookThumb(b, thumb) {
@@ -2999,7 +3119,17 @@
   function bindShelf() {
     for (const b of document.querySelectorAll('#home-tabs [data-tab]')) b.addEventListener('click', () => switchHomeTab(b.dataset.tab));
     $('#shelf-add').addEventListener('click', startAddBook);
-    $('#shelf-filter').addEventListener('input', renderShelf);
+    const filter = $('#shelf-filter');
+    filter.addEventListener('input', () => {
+      renderShelf();
+      scheduleOnline();
+    });
+    filter.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') scheduleOnline(true);
+    });
+    $('#shelf-manual').addEventListener('click', () => {
+      openBookEditor({ list: homeTab === 'want' ? 'want' : 'read', title: filter.value.trim(), author: '', year: '' });
+    });
     $('#shelf-sort').addEventListener('change', (e) => {
       shelfSort[homeTab] = e.target.value;
       saveJSON('lampa.shelfSort', shelfSort);

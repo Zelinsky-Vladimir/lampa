@@ -448,7 +448,7 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .card .rate svg { width: 15px; height: 15px; align-self: center; fill: var(--star); stroke: none; }
 .card .rate .of { font-size: 11.5px; font-weight: 400; color: var(--muted); }
 .card .rate.none { font-size: 12px; font-weight: 400; color: var(--muted); }
-.card .mark-read {
+.card .mark-read, .card .quick-add {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -463,9 +463,15 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
   font-size: 12px;
   cursor: pointer;
 }
-.card .mark-read:hover { border-color: var(--accent); color: var(--accent); }
-.card .mark-read svg { flex: none; width: 14px; height: 14px; stroke-width: 2.2; }
-.card .mark-read span { overflow: hidden; text-overflow: ellipsis; }
+.card .mark-read:hover, .card .quick-add:hover { border-color: var(--accent); color: var(--accent); }
+.card .mark-read svg, .card .quick-add svg { flex: none; width: 14px; height: 14px; stroke-width: 2.2; }
+.card .mark-read span, .card .quick-add span { overflow: hidden; text-overflow: ellipsis; }
+.card .quick-add { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); color: var(--accent); }
+.card .have { margin-top: 8px; font-size: 12px; color: var(--accent); }
+#shelf-view.searching .shelf-empty { margin: 4px 0 0; text-align: left; font-size: 13.5px; }
+#shelf-online .dlg-foot { margin-top: 24px; }
+#shelf-online-status { min-height: 0; margin-top: -4px; }
+#shelf-online-status:empty, .shelf-stats:empty { display: none; }
 
 /* окно добавления и правки книги */
 #book-dlg {
