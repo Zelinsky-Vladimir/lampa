@@ -415,6 +415,11 @@
       const query = typeof q === 'string' ? q.trim().slice(0, 200) : '';
       return query ? Online.searchBooks(query, getJson) : Promise.resolve([]);
     },
+    shelfLookup(title, author) {
+      title = String(title || '').trim().slice(0, 300);
+      if (!title) return Promise.reject(new Error('BAD_REQUEST'));
+      return Online.lookupBook(title, String(author || '').trim().slice(0, 300), getJson);
+    },
     shelfThumb: (url) => coverThumb(String(url)),
     shelfCover: (url) => saveCover(String(url)),
     coverUrl: (name) => (native ? Cap.convertFileSrc(coversBase + '/' + name) : devCovers.get(name) || ''),

@@ -143,10 +143,9 @@
       }));
   }
 
-  const bookKey = (b) => {
-    const norm = (s) => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/\([^)]*\)|\[[^\]]*\]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-    return norm(b.title) + '|' + norm(b.author).split(' ').pop();
-  };
+  const norm = (s) => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/\([^)]*\)|\[[^\]]*\]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const lastName = (author) => norm(author).split(' ').pop();
+  const bookKey = (b) => norm(b.title) + '|' + lastName(b.author);
 
   async function searchBooks(q, getJson) {
     const [apple, ol] = await Promise.allSettled([searchApple(q, getJson), searchOpenLibrary(q, getJson)]);
@@ -175,5 +174,68 @@
     return out.slice(0, 30);
   }
 
-  return { MAX_TRANSLATE, isLangCode, translate, searchBooks, classifyGenre, isCoverUrl, thumbUrl };
+  // ---------- оценка и жанр для книги из списка ----------
+
+  // Результаты поиска, которые относятся к этой книге: то же название (или его начало) и тот же автор.
+  function sameBook(results, title, author) {
+    const t = norm(title);
+    const last = lastName(author);
+    let pool = results.filter((r) => norm(r.title).startsWith(t));
+    const exact = pool.filter((r) => norm(r.title) === t);
+    if (exact.length) pool = exact;
+    const byAuthor = last ? pool.filter((r) => norm(r.author).includes(last)) : [];
+    return byAuthor.length ? byAuthor : pool;
+  }
+
+  const bestRated = (pool) => pool.filter((r) => r.rating).sort((a, b) => b.rating.rank - a.rating.rank)[0] || null;
+
+  // Английское название и автор по Wikidata: у русских изданий в каталогах мало оценок, у оригинала — сотни.
+  async function englishTitle(title, author, getJson) {
+    const api = 'https://www.wikidata.org/w/api.php?format=json&origin=*';
+    const s = await getJson(`${api}&action=wbsearchentities&type=item&limit=20&language=ru&uselang=ru&search=${encodeURIComponent(title)}`);
+    const items = s.search || [];
+    // «Трудно быть богом» — это и фильм, и игра; нужна повесть: в описании есть фамилия автора или «роман»
+    const stem = lastName(author).slice(0, 5);
+    const literary = /роман|повест|рассказ|книг|пьес|поэм|novel|novella|book|poem/i;
+    const pick = (stem && items.find((x) => norm(x.description).includes(stem))) || items.find((x) => literary.test(x.description || ''));
+    if (!pick) return null;
+    const e = await getJson(`${api}&action=wbgetentities&props=labels|claims&languages=en&ids=${pick.id}`);
+    const ent = e.entities && e.entities[pick.id];
+    // «Frankenstein; or, The Modern Prometheus» — в каталогах просто «Frankenstein»
+    const en = ent && ent.labels && ent.labels.en && ent.labels.en.value.split(/[:;]|,? or,? /i)[0].trim();
+    if (!en) return null;
+    const authorIds = ((ent.claims && ent.claims.P50) || [])
+      .map((c) => c.mainsnak && c.mainsnak.datavalue && c.mainsnak.datavalue.value && c.mainsnak.datavalue.value.id)
+      .filter(Boolean)
+      .slice(0, 3);
+    let enAuthor = '';
+    if (authorIds.length) {
+      const a = await getJson(`${api}&action=wbgetentities&props=labels&languages=en&ids=${authorIds.join('|')}`);
+      enAuthor = authorIds.map((id) => a.entities && a.entities[id] && a.entities[id].labels.en && a.entities[id].labels.en.value).find(Boolean) || '';
+    }
+    return { title: en, author: enAuthor };
+  }
+
+  // Оценка читателей, жанр и обложка для книги, которую добавили вручную или раньше, чем появились эти поля.
+  async function lookupBook(title, author, getJson) {
+    let pool = sameBook(await searchBooks(`${title} ${author}`.trim(), getJson), title, author);
+    let best = bestRated(pool);
+    // нелатинское название без оценки или с горсткой оценок — пробуем оригинал на английском
+    if ((!best || best.rating.n < 50) && /[^\u0000-ɏ\s\d\p{P}]/u.test(title)) {
+      const en = await englishTitle(title, author, getJson).catch(() => null);
+      if (en) {
+        const pool2 = sameBook(await searchBooks(`${en.title} ${en.author}`.trim(), getJson), en.title, en.author);
+        best = bestRated([best, bestRated(pool2)].filter(Boolean));
+        if (!pool.length) pool = pool2;
+        else if (!pool.some((r) => r.genre)) pool = pool.concat(pool2);
+      }
+    }
+    return {
+      rating: best ? best.rating : null,
+      genre: (pool.find((r) => r.genre) || best || {}).genre || '',
+      cover: (pool.find((r) => r.cover) || {}).cover || null,
+    };
+  }
+
+  return { MAX_TRANSLATE, isLangCode, translate, searchBooks, lookupBook, classifyGenre, isCoverUrl, thumbUrl };
 });

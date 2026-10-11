@@ -359,6 +359,12 @@ function registerIpc() {
     const query = typeof q === 'string' ? q.trim().slice(0, 200) : '';
     return query ? Online.searchBooks(query, getBooksJson) : [];
   });
+  ipcMain.handle('shelf:lookup', (_e, req) => {
+    const title = req && typeof req.title === 'string' ? req.title.trim().slice(0, 300) : '';
+    const author = req && typeof req.author === 'string' ? req.author.trim().slice(0, 300) : '';
+    if (!title) throw new Error('BAD_REQUEST');
+    return Online.lookupBook(title, author, getBooksJson);
+  });
   ipcMain.handle('shelf:thumb', (_e, url) => coverThumb(String(url)));
   ipcMain.handle('shelf:cover', (_e, url) => saveCover(String(url)));
 

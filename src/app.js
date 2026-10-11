@@ -2686,32 +2686,30 @@
   const nextWantPos = () => shelf.reduce((m, b) => (b.list === 'want' && typeof b.pos === 'number' ? Math.max(m, b.pos + 1) : m), 0);
 
   // Оценка читателей и жанр для книг, добавленных вручную или до появления этих полей.
+  // Поиск оценки умнеет — книги без оценки проверяем ещё раз, когда версия растёт.
+  // 2: русские названия ищутся и по английскому оригиналу (через Wikidata).
+  const LOOKUP_VERSION = 2;
+
   async function lookupBook(entry, wantCover) {
-    const results = await api.shelfSearch(`${entry.title} ${entry.author}`.trim());
+    const found = await api.shelfLookup(entry.title, entry.author);
     if (!shelf.includes(entry)) return;
-    const title = normText(entry.title);
-    const lastName = normText(entry.author).split(' ').pop();
-    let pool = results.filter((r) => normText(r.title).startsWith(title));
-    const exact = pool.filter((r) => normText(r.title) === title);
-    if (exact.length) pool = exact;
-    const sameAuthor = lastName ? pool.filter((r) => normText(r.author).includes(lastName)) : [];
-    if (sameAuthor.length) pool = sameAuthor;
-    const rated = pool.filter((r) => r.rating).sort((a, b) => (b.rating.rank || 0) - (a.rating.rank || 0))[0];
-    if (rated) entry.world = rated.rating;
-    if (!entry.genre) entry.genre = (pool.find((r) => r.genre) || {}).genre || '';
+    if (found.rating) entry.world = found.rating;
+    if (!entry.genre) entry.genre = found.genre || '';
     entry.checked = Date.now();
+    entry.lookupV = LOOKUP_VERSION;
     saveShelf();
     refreshShelf();
-    const hit = wantCover && !entry.cover && pool.find((r) => r.cover);
-    if (hit) await setCover(entry, hit.cover);
+    if (wantCover && !entry.cover && found.cover) await setCover(entry, found.cover);
   }
+
+  const needsLookup = (b) => !b.checked || ((b.lookupV || 1) < LOOKUP_VERSION && (!b.world || b.world.n < 50));
 
   let enriching = false;
   async function enrichShelf() {
     if (enriching || !shelfReady) return;
     enriching = true;
     try {
-      for (let entry; (entry = shelf.find((b) => !b.checked)); ) {
+      for (let entry; (entry = shelf.find(needsLookup)); ) {
         try {
           await lookupBook(entry, true);
         } catch {

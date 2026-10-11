@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('api', {
   shelfLoad: () => ipcRenderer.invoke('shelf:load'),
   shelfSave: (books) => ipcRenderer.invoke('shelf:save', books),
   shelfSearch: (q) => ipcRenderer.invoke('shelf:search', q),
+  shelfLookup: (title, author) => ipcRenderer.invoke('shelf:lookup', { title, author }),
   shelfThumb: (url) => ipcRenderer.invoke('shelf:thumb', url),
   shelfCover: (url) => ipcRenderer.invoke('shelf:cover', url),
   takeInitialPath: () => ipcRenderer.invoke('app:take-initial-path'),
