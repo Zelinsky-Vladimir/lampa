@@ -1,0 +1,42 @@
+name: iOS
+
+# Проверочная сборка iOS-версии под симулятор, без подписи: ловит ошибки в проекте Xcode и плагинах.
+# Ставить на iPhone — на Mac через Xcode (см. README, раздел про iOS).
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'mobile/**'
+      - 'ios/**'
+      - 'scripts/build-mobile.js'
+      - 'capacitor.config.json'
+      - 'package.json'
+      - '.github/workflows/ios.yml'
+  workflow_dispatch:
+
+jobs:
+  simulator:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - run: npm ci
+        env:
+          # Electron для iOS-сборки не нужен
+          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+
+      - run: npm run build:mobile
+
+      - run: npx cap sync ios
+
+      - name: Build for the iOS simulator
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build | tail -40

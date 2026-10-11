@@ -110,6 +110,29 @@ chmod +x Lampa-linux-x86_64.AppImage
 sudo apt install ./Lampa-linux-amd64.deb
 ```
 
+### iPhone and iPad (early version)
+
+The iOS app isn't in the App Store yet; you build it yourself on a Mac with [Xcode](https://apps.apple.com/app/xcode/id497799835) and [Node.js](https://nodejs.org).
+
+```bash
+git clone https://github.com/Zelinsky-Vladimir/lampa.git
+cd lampa
+npm ci
+npm run ios
+```
+
+`npm run ios` builds the app and opens it in Xcode. Then:
+
+1. Select the **App** project → **App** target → **Signing & Capabilities**, and pick your Apple ID under **Team** (**Add Account…** if it isn't there).
+2. Connect the iPhone, turn on **Developer Mode** on it (Settings → Privacy & Security), and choose it at the top of the Xcode window.
+3. Press **Run** (▶). The first time, allow the developer on the iPhone: Settings → General → VPN & Device Management.
+
+With a free Apple ID the app runs for 7 days, after which you press **Run** again (your books and notes stay). A paid Apple Developer account extends this to a year and allows TestFlight.
+
+On the phone, books open from the Files app, or from Telegram, Mail and others with **Share → Lampa**. Pages turn with a swipe or a tap on the page edge; a tap in the middle shows the panels.
+
+To update: `git pull && npm ci && npm run ios`, then **Run**.
+
 ## Updates
 
 The installed Windows app and the Linux AppImage check [Releases](https://github.com/Zelinsky-Vladimir/lampa/releases) on start. A new version downloads in the background; click **Restart** in the banner, or it installs the next time you close Lampa. The portable `.exe`, the `.deb` and the macOS build don't update themselves, so download them again to update.
@@ -169,7 +192,10 @@ src/app.js          the reader: scrolling, pages, search, bookmarks, notes, sett
 src/parsers.js      FB2 / EPUB / TXT → safe DOM
 src/decode.js       text encoding detection
 src/i18n.js         interface translations
+src/online.js       book search, reader ratings, genres and translation (shared by desktop and mobile)
 src/fonts/          built-in fonts (regenerate with npm run fonts)
+mobile/             the iOS version's platform layer (files, network, covers) and phone styles
+ios/                the Xcode project (Capacitor); npm run build:mobile assembles www/ for it
 ```
 
 Book content is never inserted as HTML. Every element is rebuilt from an allow-list, so scripts, iframes and event handlers inside an EPUB can't run. The window runs sandboxed with a strict Content Security Policy.

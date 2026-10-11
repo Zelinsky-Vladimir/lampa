@@ -1,0 +1,15 @@
+{
+  "appId": "io.github.zelinskyvladimir.lampa",
+  "appName": "Lampa",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#f4ecd8",
+    "scrollEnabled": false
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": false
+    }
+  }
+}

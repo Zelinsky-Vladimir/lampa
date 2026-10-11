@@ -88,7 +88,11 @@
     pageAnim: 'curl',
     curlDefault: true,
     pageCols: 1,
+    // мобильная версия: страницы вместо ленты, сдвиг вместо загиба
+    ...(api.defaults || {}),
   };
+  // Чего нет на этой платформе (мобильная версия): загиб страницы, полный экран, перетаскивание файлов.
+  const features = { curl: true, fullscreen: true, dragDrop: true, ...(api.features || {}) };
 
   const LS = { settings: 'lampa.settings', library: 'lampa.library', marks: 'lampa.marks' };
   // Прежнее название приложения — данные переезжают при первом запуске.
@@ -176,6 +180,7 @@
   if (savedSettings && !savedSettings.lang) settings.lang = 'ru';
   if (!FONTS.some((f) => f.id === settings.font)) settings.font = DEFAULTS.font;
   if (savedSettings && !savedSettings.curlDefault) Object.assign(settings, { pageAnim: 'curl', curlDefault: true });
+  if (!features.curl && settings.pageAnim === 'curl') settings.pageAnim = 'slide';
 
   let library = loadStored('library', []);
   if (!Array.isArray(library)) library = [];
@@ -592,14 +597,30 @@
   // step/count — экраны (разворот из двух страниц — один экран), colStep/pagesTotal — отдельные страницы.
   const pg = { step: 1, count: 1, index: 0, h: 600, turning: false, anchor: null, cols: 1, colStep: 1, pagesTotal: 1, key: '' };
 
+  // Безопасные отступы экрана (env(safe-area-inset-*)); на компьютере нули.
+  let safeProbe = null;
+  function safeInsets() {
+    if (!safeProbe) {
+      safeProbe = el('div');
+      safeProbe.style.cssText =
+        'position:fixed;visibility:hidden;pointer-events:none;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)';
+      document.body.append(safeProbe);
+    }
+    const cs = getComputedStyle(safeProbe);
+    return { top: parseFloat(cs.paddingTop) || 0, bottom: parseFloat(cs.paddingBottom) || 0 };
+  }
+
   function layoutPages() {
     if (!paged()) return;
     const sw = ui.scroller.clientWidth || window.innerWidth;
-    const top = 48 + 10;
-    const bottom = 46 + 12;
+    // на iPhone добавляются вырез сверху и полоска «домой» снизу
+    const safe = safeInsets();
+    const top = 48 + 10 + safe.top;
+    const bottom = 46 + 12 + safe.bottom;
     const h = Math.max(240, window.innerHeight - top - bottom);
     const cols = settings.pageCols === 2 && sw >= 900 ? 2 : 1;
-    const avail = sw - 80;
+    // на узком экране поля по бокам меньше
+    const avail = sw - (sw < 600 ? 36 : 80);
     const colW = Math.max(280, Math.min(settings.width, cols === 2 ? (avail - PAGE_GAP) / 2 : avail));
     const w = Math.round(cols * colW + (cols - 1) * PAGE_GAP);
     root.style.setProperty('--page-w', w + 'px');
@@ -2033,7 +2054,11 @@
     const h = ui.selBar.offsetHeight;
     const left = clamp(r.rect.left + r.rect.width / 2 - w / 2, 12, window.innerWidth - w - 12);
     let top = r.rect.top - h - 10;
-    if (top < 60) top = r.rect.bottom + 10;
+    // на телефоне над выделением — системное меню iOS, поэтому панель под ним
+    if (coarsePointer()) {
+      top = r.rect.bottom + 14;
+      if (top + h > window.innerHeight - 70) top = r.rect.top - h - 56;
+    } else if (top < 60) top = r.rect.bottom + 10;
     ui.selBar.style.left = left + 'px';
     ui.selBar.style.top = top + 'px';
   }
@@ -2365,6 +2390,7 @@
     const sel = $('#page-anim');
     sel.replaceChildren();
     for (const [id, key] of [['curl', 'animCurl'], ['slide', 'animSlide'], ['fade', 'animFade'], ['flip', 'animFlip'], ['none', 'animNone']]) {
+      if (id === 'curl' && !features.curl) continue;
       const o = el('option', null, t(key));
       o.value = id;
       sel.append(o);
@@ -2810,11 +2836,16 @@
   // --- «Хочу прочитать»: перетаскивание ---
 
   function makeDraggable(card, b) {
-    card.draggable = true;
+    card.dataset.id = b.id;
     for (const img of card.querySelectorAll('img')) img.draggable = false;
     const clearMarks = () => {
       for (const c of document.querySelectorAll('.drop-before, .drop-after')) c.classList.remove('drop-before', 'drop-after');
     };
+    if (coarsePointer()) {
+      makeTouchDraggable(card, b, clearMarks);
+      return;
+    }
+    card.draggable = true;
     card.addEventListener('dragstart', (e) => {
       dragId = b.id;
       card.classList.add('dragging');
@@ -2849,6 +2880,69 @@
       e.stopPropagation();
       moveWant(dragId, b.id, card.classList.contains('drop-after'));
     });
+  }
+
+  // Сенсорный экран: HTML-перетаскивания там нет — долгое нажатие, и книга едет за пальцем.
+  function makeTouchDraggable(card, b, clearMarks) {
+    let hold = 0;
+    let dragging = false;
+    let start = null;
+    const markAt = (x, y) => {
+      clearMarks();
+      const under = document.elementFromPoint(x, y);
+      const over = under && under.closest('#shelf-grid .card[data-id]');
+      if (!over || over === card) return;
+      const r = over.getBoundingClientRect();
+      over.classList.add(x > r.left + r.width / 2 ? 'drop-after' : 'drop-before');
+    };
+    card.addEventListener(
+      'touchstart',
+      (e) => {
+        if (e.touches.length !== 1) return;
+        start = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        hold = setTimeout(() => {
+          dragging = true;
+          dragId = b.id;
+          card.classList.add('dragging');
+        }, 450);
+      },
+      { passive: true },
+    );
+    card.addEventListener(
+      'touchmove',
+      (e) => {
+        const p = e.touches[0];
+        if (!dragging) {
+          // палец сдвинулся раньше — это прокрутка, а не перетаскивание
+          if (start && Math.hypot(p.clientX - start.x, p.clientY - start.y) > 8) clearTimeout(hold);
+          return;
+        }
+        e.preventDefault();
+        markAt(p.clientX, p.clientY);
+        // у края экрана список прокручивается сам
+        if (p.clientY < 90) ui.home.scrollBy(0, -14);
+        else if (p.clientY > window.innerHeight - 90) ui.home.scrollBy(0, 14);
+      },
+      { passive: false },
+    );
+    const end = (e) => {
+      clearTimeout(hold);
+      if (!dragging) return;
+      // иначе после отпускания пальца откроется окно книги
+      if (e.cancelable) e.preventDefault();
+      dragging = false;
+      const over = document.querySelector('#shelf-grid .drop-before, #shelf-grid .drop-after');
+      card.classList.remove('dragging');
+      dragId = null;
+      if (over) moveWant(b.id, over.dataset.id, over.classList.contains('drop-after'));
+      clearMarks();
+      if (renderAfterDrag) {
+        renderAfterDrag = false;
+        renderShelf();
+      }
+    };
+    card.addEventListener('touchend', end, { passive: false });
+    card.addEventListener('touchcancel', end);
   }
 
   // Ставим книгу перед или после другой; при фильтре по жанру — относительно видимой соседки.
@@ -2993,7 +3087,8 @@
   }
 
   function bookThumb(b, thumb) {
-    const src = thumb || pendingThumbs.get(b) || (b.cover ? 'lampa-cover://c/' + b.cover : '');
+    const coverSrc = (name) => (api.coverUrl ? api.coverUrl(name) : 'lampa-cover://c/' + name);
+    const src = thumb || pendingThumbs.get(b) || (b.cover ? coverSrc(b.cover) : '');
     if (src) {
       const img = el('img', 'thumb');
       img.src = src;
@@ -3377,6 +3472,48 @@
     buildStars();
   }
 
+  // ---------- сенсорный экран ----------
+
+  const coarsePointer = () => matchMedia('(pointer: coarse)').matches;
+
+  function setupTouch() {
+    // страницы листаются свайпом
+    let start = null;
+    ui.scroller.addEventListener(
+      'touchstart',
+      (e) => {
+        const p = e.touches.length === 1 ? e.touches[0] : null;
+        start = p ? { x: p.clientX, y: p.clientY, time: Date.now() } : null;
+      },
+      { passive: true },
+    );
+    ui.scroller.addEventListener(
+      'touchend',
+      (e) => {
+        if (!start || !paged() || !current || !current.ready) return;
+        const p = e.changedTouches[0];
+        const dx = p.clientX - start.x;
+        const dy = p.clientY - start.y;
+        const quick = Date.now() - start.time < 700;
+        start = null;
+        if (!quick || Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.3 || !window.getSelection().isCollapsed) return;
+        pageTurn(dx < 0 ? 1 : -1);
+      },
+      { passive: true },
+    );
+
+    // Выделение пальцем: события mouseup нет — показываем панель, когда выделение перестало меняться.
+    let selTimer = 0;
+    document.addEventListener('selectionchange', () => {
+      if (!coarsePointer()) return;
+      clearTimeout(selTimer);
+      selTimer = setTimeout(() => {
+        const s = window.getSelection();
+        if (!s.isCollapsed && ui.book.contains(s.anchorNode)) showSelBar();
+      }, 450);
+    });
+  }
+
   // ---------- запуск ----------
 
   function bindUI() {
@@ -3533,7 +3670,12 @@ ${sentence}` : translation);
       }
     });
     ui.scroller.addEventListener('click', (e) => {
-      if (!paged() || e.defaultPrevented || e.target.closest('a') || !window.getSelection().isCollapsed) return;
+      if (e.defaultPrevented || e.target.closest('a') || !window.getSelection().isCollapsed) return;
+      // в ленте на сенсорном экране касание показывает и прячет панели (мыши, чтобы их вызвать, нет)
+      if (!paged()) {
+        if (coarsePointer()) setBar(root.dataset.chrome === 'hidden');
+        return;
+      }
       const r = ui.scroller.getBoundingClientRect();
       const x = (e.clientX - r.left) / r.width;
       if (x < 0.3) pageTurn(-1);
@@ -3568,6 +3710,12 @@ ${sentence}` : translation);
       closeNoteEditor();
       savePosition();
     });
+    // телефон: приложение в фоне могут выгрузить без beforeunload
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) savePosition();
+    });
+    setupTouch();
+    if (!features.fullscreen) $('#btn-full').hidden = true;
     window.addEventListener('resize', () => {
       if (paged() && current && current.ready) {
         const a = pg.anchor || blockAtTop();
@@ -3612,6 +3760,8 @@ ${sentence}` : translation);
   }
 
   async function init() {
+    // мобильная версия: папки приложения, восстановление сохранённого состояния
+    if (window.platformReady) await window.platformReady;
     I18n.setLang(settings.lang);
     buildSettingsUI();
     applySettings();

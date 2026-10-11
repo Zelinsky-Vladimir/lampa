@@ -398,6 +398,8 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
   transition: opacity 0.15s;
 }
 .card:hover .remove, .card:focus-within .remove { opacity: 1; }
+/* сенсорный экран: наведения нет, крестик виден всегда */
+@media (hover: none) { .card .remove { opacity: 0.85; } }
 
 /* ---------- мои книги ---------- */
 

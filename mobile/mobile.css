@@ -1,0 +1,54 @@
+/* Мобильная версия: подключается после styles.css только в сборке для телефона. */
+
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body { overscroll-behavior: none; }
+button, .card, .icon-btn, .home-tabs, .seg { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+
+/* вырез экрана сверху и полоска «домой» снизу */
+#bar { height: calc(var(--bar-h) + var(--safe-top)); padding-top: var(--safe-top); }
+#footer { height: calc(46px + var(--safe-bottom)); padding-bottom: var(--safe-bottom); }
+#home { padding: calc(var(--bar-h) + var(--safe-top) + 16px) 16px calc(40px + var(--safe-bottom)); }
+#book { padding-top: calc(var(--bar-h) + var(--safe-top) + 32px); }
+#progress { bottom: var(--safe-bottom); }
+.panel { padding-top: var(--safe-top); padding-bottom: var(--safe-bottom); }
+#update-banner { top: calc(var(--bar-h) + var(--safe-top) + 10px); }
+#toast { bottom: calc(70px + var(--safe-bottom)); }
+#auto-pill { bottom: calc(64px + var(--safe-bottom)); }
+
+/* на телефоне нет мыши, клавиатурных сокращений и перетаскивания файлов */
+.hint, .shortcuts { display: none !important; }
+
+/* верхняя панель: без названия книги и кнопки «открыть» в режиме чтения, кнопки крупнее для пальца */
+@media (max-width: 600px) {
+  #bar { gap: 6px; padding-left: 8px; padding-right: 8px; }
+  #bar-title { display: none; }
+  :root[data-mode="reader"] #btn-open { display: none; }
+  .bar-group { gap: 0; padding: 2px; }
+  .bar-group .icon-btn { width: 38px; height: 38px; }
+  #bar .bar-group:first-child { margin-right: auto; }
+
+  #book { padding-left: 20px; padding-right: 20px; }
+  .hero { padding: 24px 0 8px; }
+  .logo { font-size: 42px; }
+  .section-title { margin-top: 28px; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 22px 16px; }
+
+  /* поиск и кнопка добавления — на всю ширину, выбор сортировки или жанра — под ними */
+  .shelf-tools .search-field { flex-basis: 100%; }
+  #shelf-sort, #shelf-genre { flex: 1 1 auto; }
+  #shelf-add { flex: 1 1 auto; justify-content: center; }
+  #shelf-filter, #book-q, .fld input, .fld textarea, select { font-size: 16px; } /* иначе iOS увеличивает страницу при вводе */
+
+  /* окно книги — во весь экран */
+  #book-dlg { padding: 0; }
+  .dlg-box { width: 100%; max-height: none; height: 100%; border-radius: 0; padding-top: var(--safe-top); padding-bottom: var(--safe-bottom); }
+
+  #footer { gap: 10px; padding-left: 12px; padding-right: 12px; }
+  .panel { width: 100vw; }
+}
