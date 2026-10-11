@@ -39,4 +39,28 @@ jobs:
         run: |
           xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-            CODE_SIGNING_ALLOWED=NO build | tail -40
+            -derivedDataPath build/ios CODE_SIGNING_ALLOWED=NO build | tail -40
+
+      # Запуск в симуляторе iPhone: снимок экрана и журнал приложения — в Artifacts.
+      - name: Run in the simulator
+        run: |
+          DEVICE=$(xcrun simctl list devices available -j | python3 -c "
+          import json, sys
+          d = json.load(sys.stdin)['devices']
+          print(next(x['udid'] for k, v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone')))")
+          xcrun simctl boot "$DEVICE"
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl install "$DEVICE" build/ios/Build/Products/Debug-iphonesimulator/App.app
+          xcrun simctl launch --console-pty "$DEVICE" io.github.zelinskyvladimir.lampa > launch.log 2>&1 &
+          sleep 30
+          xcrun simctl io "$DEVICE" screenshot home.png
+          grep -i "lampa\|error" launch.log | head -40 || true
+          grep -q "\[lampa\] ready" launch.log
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-simulator
+          path: |
+            home.png
+            launch.log

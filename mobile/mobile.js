@@ -428,6 +428,13 @@
     if (!native) return;
     await Filesystem.mkdir({ path: 'covers', directory: DATA, recursive: true }).catch(() => {});
     coversBase = await store.uri('covers');
+    // строка в журнале Xcode: видно, что нативные модули подключились и папка приложения пишется
+    try {
+      await store.writeText('selfcheck.txt', 'ok');
+      console.info(`[lampa] ready: plugins=${Object.keys(P).join(',')} fs=${await store.readText('selfcheck.txt')} covers=${coversBase}`);
+    } catch (e) {
+      console.error('[lampa] storage check failed: ' + (e && e.message));
+    }
     if (App) {
       const launch = await App.getLaunchUrl().catch(() => null);
       if (launch && launch.url) launchPath = await importUrl(launch.url);
