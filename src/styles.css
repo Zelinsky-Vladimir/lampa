@@ -1268,6 +1268,9 @@ kbd {
 .sync-apple + .sync-google { margin-top: 8px; }
 .sync-google { width: 100%; justify-content: center; margin-top: 12px; padding: 10px 16px; font-size: 14px; }
 .sync-google svg { fill: currentColor; stroke: none; }
+.sync-delete { margin-top: 8px; border-color: transparent; color: #c0392b; }
+.sync-delete:hover { color: #c0392b; }
+.sync-delete.confirm { border-color: #c0392b; background: #c0392b; color: #fff; }
 .sync-email { margin-top: 12px; font-size: 13px; }
 .sync-email summary { color: var(--muted); cursor: pointer; }
 .sync-email summary:hover { color: var(--fg); }

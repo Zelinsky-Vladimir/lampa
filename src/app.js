@@ -3862,6 +3862,28 @@
     if (s) Cloud.signOut(s);
   }
 
+  async function deleteAccount() {
+    const btn = $('#sync-delete');
+    if (!btn.classList.contains('confirm')) {
+      btn.classList.add('confirm');
+      btn.textContent = t('deleteConfirm');
+      setSyncMessage(t('syncDeleteHint'));
+      return;
+    }
+    btn.disabled = true;
+    setSyncMessage(t('syncBusy'));
+    try {
+      await Cloud.deleteAccount(await cloudSession());
+      signOutLocal();
+      renderSyncBox();
+      toast(t('syncDeleted'), 4000);
+    } catch (e) {
+      setSyncMessage(t('syncFailed', { e: errorText(e) }));
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   async function signInWith(kind) {
     const email = $('#sync-email').value.trim();
     const password = $('#sync-password').value;
@@ -3954,6 +3976,8 @@
     // без входа через Google почта и пароль — единственный способ, сразу раскрыты
     if (!api.authRedirect) $('.sync-email').open = true;
     if (inside) $('#sync-user').textContent = t('syncAs', { email: cloud.session.user.email || '—' });
+    $('#sync-delete').classList.remove('confirm');
+    $('#sync-delete').textContent = t('syncDelete');
     setSyncMessage('');
     renderSyncStatus();
   }
@@ -3967,6 +3991,7 @@
       if (e.key === 'Enter') signInWith('in');
     });
     $('#sync-now').addEventListener('click', () => syncNow());
+    $('#sync-delete').addEventListener('click', deleteAccount);
     $('#sync-signout').addEventListener('click', () => {
       signOutLocal();
       renderSyncBox();

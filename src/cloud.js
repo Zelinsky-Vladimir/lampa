@@ -147,5 +147,13 @@
     } catch {}
   }
 
-  global.Cloud = { MAX_FILE, signIn, signUp, refresh, signOut, oauthStart, oauthFinish, idTokenSignIn, pull, push, listFiles, upload, download, removeFile };
+  async function deleteAccount(session) {
+    const paths = [...(await listFiles(session))].map((name) => `${session.user.id}/${name}`);
+    for (let i = 0; i < paths.length; i += 500) {
+      await call(`/storage/v1/object/${BUCKET}`, { method: 'DELETE', token: session.access_token, body: { prefixes: paths.slice(i, i + 500) } });
+    }
+    await call('/rest/v1/rpc/delete_account', { method: 'POST', token: session.access_token, body: {} });
+  }
+
+  global.Cloud = { MAX_FILE, signIn, signUp, refresh, signOut, oauthStart, oauthFinish, idTokenSignIn, pull, push, listFiles, upload, download, removeFile, deleteAccount };
 })(window);
