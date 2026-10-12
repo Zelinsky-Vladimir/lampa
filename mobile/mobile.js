@@ -11,6 +11,9 @@
   const P = (Cap && Cap.Plugins) || {};
   const { Filesystem, App, StatusBar, CapacitorHttp: Http } = P;
   const DATA = 'DATA';
+  const AUTH_SCHEME = 'io.github.zelinskyvladimir.lampa';
+  const WebAuth = (native && P.WebAuth) || null;
+  let authCallback = () => {};
 
   const BOOK_EXTS = new Set(['fb2', 'epub', 'txt', 'zip']);
   const MAX_BOOK_SIZE = 300 * 1024 * 1024;
@@ -418,9 +421,14 @@
     readBookFile: (p) => store.read(p),
     saveBookFile: (name, bytes) => importBook(baseName(name), bytes),
     takeAuthCallback: async () => null,
-    onAuthCallback: () => {},
-    // вход через Google на iPhone подключим отдельно; пока — почта и пароль
-    authRedirect: '',
+    onAuthCallback: (cb) => {
+      authCallback = cb;
+    },
+    authRedirect: WebAuth ? AUTH_SCHEME + '://auth-callback' : '',
+    async openAuth(url) {
+      const res = await WebAuth.start({ url, scheme: AUTH_SCHEME });
+      if (res && res.url) authCallback(res.url);
+    },
     cloudUrl: '',
     async forgetBook(p) {
       const m = /^books\/([0-9a-f]{16})\//.exec(String(p));

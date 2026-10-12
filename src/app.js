@@ -3883,6 +3883,7 @@
       const { url, verifier } = await Cloud.oauthStart('google', api.authRedirect);
       cloud.pkce = verifier;
       saveCloud();
+      if (api.openAuth) return await api.openAuth(url);
       api.openExternal(url);
       setSyncMessage(t('syncWaitBrowser'));
     } catch (e) {

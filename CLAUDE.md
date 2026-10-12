@@ -31,6 +31,7 @@ src/cloud.js       Supabase over plain HTTP: auth (password, Google PKCE), recor
 mobile/mobile.js   iOS platform layer: the same window.api on Capacitor (Filesystem, native HTTP, App, StatusBar)
 mobile/mobile.css  phone styles (safe areas, touch)
 ios/               Xcode project (Capacitor 8, Swift Package Manager, no CocoaPods)
+ios/App/App/WebAuth.swift  local plugin `WebAuth.start({url, scheme})` (ASWebAuthenticationSession) + LampaBridgeViewController that registers it
 scripts/build-mobile.js  assembles www/ for Capacitor (src + mobile + fflate + icon), syncs iOS version from package.json
 supabase/schema.sql      database schema (records table + RLS + newer-wins trigger, private `books` bucket)
 ```
@@ -53,12 +54,11 @@ supabase/schema.sql      database schema (records table + RLS + newer-wins trigg
 
 Built on a Mac: `npm ci`, then `npm run ios` (builds www, `cap sync ios`, opens Xcode); pick his Team in Signing & Capabilities and Run on the iPhone. Bundle id `io.github.zelinskyvladimir.lampa`. He is enrolling in the paid Apple Developer Program.
 
-Done: reader on the phone (pages + slide by default, swipes, tap zones, selection bar under the iOS menu, long-press reordering in Want to read, safe areas), books imported via the Files picker and "Open in Lampa" (document types for fb2/epub/txt/zip), covers/lists stored in the app folder, localStorage mirrored to a file, email/password sync. CI builds it for the simulator and checks the log line `[lampa] ready: plugins=…`.
+Done: reader on the phone (pages + slide by default, swipes, tap zones, selection bar under the iOS menu, long-press reordering in Want to read, safe areas), books imported via the Files picker and "Open in Lampa" (document types for fb2/epub/txt/zip), covers/lists stored in the app folder, localStorage mirrored to a file, email/password sync, Google sign-in (`api.openAuth` → `WebAuth` plugin, callback `io.github.zelinskyvladimir.lampa://auth-callback` returned straight to the app, no URL scheme registration; checked in the simulator up to the Google page, a full sign-in still needs his account). CI builds it for the simulator and checks the log line `[lampa] ready: plugins=…`.
 
 Not done yet, roughly in order:
 1. First run on his real iPhone and fix what comes up (gestures, selection, "Open in Lampa", sync).
-2. Google sign-in on iOS: add `@capacitor/browser`, register the URL scheme `io.github.zelinskyvladimir.lampa` (CFBundleURLTypes in `ios/App/App/Info.plist`), open the authorize URL from `Cloud.oauthStart('google', 'io.github.zelinskyvladimir.lampa://auth-callback')`, catch it in `App.addListener('appUrlOpen')`, close the browser, pass the URL to the `onAuthCallback` callback; set `authRedirect` in `mobile/mobile.js`.
-3. Sign in with Apple — required by App Store guideline 4.8 once Google sign-in is offered: enable the Apple provider in Supabase, use a native plugin to get the identity token, exchange it with `POST /auth/v1/token?grant_type=id_token`.
-4. Privacy policy + support page (GitHub Pages on `lampa-releases`), then publish the Google OAuth app and prepare App Store Connect (record, screenshots, privacy labels).
-5. TestFlight: archive in Xcode and upload, or automate later.
-6. For a paid/public release the free Google Translate endpoint should move to an official service behind a server proxy (Microsoft Translator keeps the dictionary).
+2. Sign in with Apple — required by App Store guideline 4.8 once Google sign-in is offered: enable the Apple provider in Supabase, use a native plugin to get the identity token, exchange it with `POST /auth/v1/token?grant_type=id_token`.
+3. Privacy policy + support page (GitHub Pages on `lampa-releases`), then publish the Google OAuth app and prepare App Store Connect (record, screenshots, privacy labels).
+4. TestFlight: archive in Xcode and upload, or automate later.
+5. For a paid/public release the free Google Translate endpoint should move to an official service behind a server proxy (Microsoft Translator keeps the dictionary).
