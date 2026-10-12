@@ -2,17 +2,10 @@ name: iOS
 
 # Проверочная сборка iOS-версии под симулятор, без подписи: ловит ошибки в проекте Xcode и плагинах.
 # Ставить на iPhone — на Mac через Xcode (см. README, раздел про iOS).
+# Только по кнопке в Actions и на релизах: минуты macOS в приватном репозитории считаются за десять.
 on:
   push:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'mobile/**'
-      - 'ios/**'
-      - 'scripts/build-mobile.js'
-      - 'capacitor.config.json'
-      - 'package.json'
-      - '.github/workflows/ios.yml'
+    tags: ['v*']
   workflow_dispatch:
 
 jobs:

@@ -21,14 +21,14 @@
 
 | Система | Файл | Примечание |
 | --- | --- | --- |
-| **Windows** 10 / 11 | [**Lampa-Setup.exe**](https://github.com/Zelinsky-Vladimir/lampa/releases/latest/download/Lampa-Setup.exe) | Установщик. Добавляет ярлыки в «Пуск» и на рабочий стол, открывает `.fb2` / `.epub` и обновляется сам. |
-| Windows без установки | [Lampa-Portable.exe](https://github.com/Zelinsky-Vladimir/lampa/releases/latest/download/Lampa-Portable.exe) | Запускается из любой папки или с флешки. Сам не обновляется. |
-| **macOS**, Apple Silicon (M1–M4) | [Lampa-mac-arm64.dmg](https://github.com/Zelinsky-Vladimir/lampa/releases/latest/download/Lampa-mac-arm64.dmg) | См. [установку на macOS](#macos). |
-| macOS, Intel | [Lampa-mac-x64.dmg](https://github.com/Zelinsky-Vladimir/lampa/releases/latest/download/Lampa-mac-x64.dmg) | |
-| **Linux**, любой дистрибутив | [Lampa-linux-x86_64.AppImage](https://github.com/Zelinsky-Vladimir/lampa/releases/latest/download/Lampa-linux-x86_64.AppImage) | Один файл, обновляется сам. |
-| Linux, Debian / Ubuntu | [Lampa-linux-amd64.deb](https://github.com/Zelinsky-Vladimir/lampa/releases/latest/download/Lampa-linux-amd64.deb) | |
+| **Windows** 10 / 11 | [**Lampa-Setup.exe**](https://github.com/Zelinsky-Vladimir/lampa-releases/releases/latest/download/Lampa-Setup.exe) | Установщик. Добавляет ярлыки в «Пуск» и на рабочий стол, открывает `.fb2` / `.epub` и обновляется сам. |
+| Windows без установки | [Lampa-Portable.exe](https://github.com/Zelinsky-Vladimir/lampa-releases/releases/latest/download/Lampa-Portable.exe) | Запускается из любой папки или с флешки. Сам не обновляется. |
+| **macOS**, Apple Silicon (M1–M4) | [Lampa-mac-arm64.dmg](https://github.com/Zelinsky-Vladimir/lampa-releases/releases/latest/download/Lampa-mac-arm64.dmg) | См. [установку на macOS](#macos). |
+| macOS, Intel | [Lampa-mac-x64.dmg](https://github.com/Zelinsky-Vladimir/lampa-releases/releases/latest/download/Lampa-mac-x64.dmg) | |
+| **Linux**, любой дистрибутив | [Lampa-linux-x86_64.AppImage](https://github.com/Zelinsky-Vladimir/lampa-releases/releases/latest/download/Lampa-linux-x86_64.AppImage) | Один файл, обновляется сам. |
+| Linux, Debian / Ubuntu | [Lampa-linux-amd64.deb](https://github.com/Zelinsky-Vladimir/lampa-releases/releases/latest/download/Lampa-linux-amd64.deb) | |
 
-Все версии и списки изменений лежат на странице [Releases](https://github.com/Zelinsky-Vladimir/lampa/releases).
+Все версии и списки изменений лежат на странице [Releases](https://github.com/Zelinsky-Vladimir/lampa-releases/releases).
 
 ## Возможности
 
@@ -122,7 +122,7 @@ npm run ios
 
 ## Обновления
 
-Установленная версия для Windows и AppImage для Linux при запуске проверяют [Releases](https://github.com/Zelinsky-Vladimir/lampa/releases). Новая версия скачивается в фоне. Нажмите «Перезапустить» на появившейся плашке, или она установится сама при закрытии Lampa. Переносной `.exe`, `.deb` и версия для macOS сами не обновляются, их нужно скачивать заново.
+Установленная версия для Windows и AppImage для Linux при запуске проверяют [Releases](https://github.com/Zelinsky-Vladimir/lampa-releases/releases). Новая версия скачивается в фоне. Нажмите «Перезапустить» на появившейся плашке, или она установится сама при закрытии Lampa. Переносной `.exe`, `.deb` и версия для macOS сами не обновляются, их нужно скачивать заново.
 
 ## Клавиши
 

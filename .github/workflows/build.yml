@@ -59,3 +59,16 @@ jobs:
         with:
           files: artifacts/*
           generate_release_notes: true
+
+      # Публичные установщики и обновления — в отдельном репозитории lampa-releases (код здесь закрыт).
+      # Нужен секрет RELEASES_TOKEN: токен с правом записи только в lampa-releases.
+      - name: Publish to lampa-releases
+        if: env.RELEASES_TOKEN != ''
+        env:
+          RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: Zelinsky-Vladimir/lampa-releases
+          token: ${{ secrets.RELEASES_TOKEN }}
+          files: artifacts/*
+          body: Lampa ${{ github.ref_name }}

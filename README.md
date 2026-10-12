@@ -10,8 +10,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Zelinsky-Vladimir/lampa/releases/latest"><img src="https://img.shields.io/github/v/release/Zelinsky-Vladimir/lampa?label=download&color=9a5b2e" alt="Latest release"></a>
-  <a href="https://github.com/Zelinsky-Vladimir/lampa/releases"><img src="https://img.shields.io/github/downloads/Zelinsky-Vladimir/lampa/total?color=5b4636" alt="Downloads"></a>
+  <a href="https://github.com/Zelinsky-Vladimir/lampa-releases/releases/latest"><img src="https://img.shields.io/github/v/release/Zelinsky-Vladimir/lampa-releases?label=download&color=9a5b2e" alt="Latest release"></a>
+  <a href="https://github.com/Zelinsky-Vladimir/lampa-releases/releases"><img src="https://img.shields.io/github/downloads/Zelinsky-Vladimir/lampa-releases/total?color=5b4636" alt="Downloads"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Zelinsky-Vladimir/lampa?color=7a3f1d" alt="License"></a>
 </p>
 
@@ -27,14 +27,14 @@
 
 | System | File | Notes |
 | --- | --- | --- |
-| **Windows** 10 / 11 | [**Lampa-Setup.exe**](https://github.com/Zelinsky-Vladimir/lampa/releases/latest/download/Lampa-Setup.exe) | Installer. Adds Start menu and desktop shortcuts, opens `.fb2` / `.epub`, and updates itself. |
-| Windows, no install | [Lampa-Portable.exe](https://github.com/Zelinsky-Vladimir/lampa/releases/latest/download/Lampa-Portable.exe) | Runs from any folder or USB stick. Doesn't update itself. |
-| **macOS**, Apple Silicon (M1–M4) | [Lampa-mac-arm64.dmg](https://github.com/Zelinsky-Vladimir/lampa/releases/latest/download/Lampa-mac-arm64.dmg) | See [macOS notes](#macos). |
-| macOS, Intel | [Lampa-mac-x64.dmg](https://github.com/Zelinsky-Vladimir/lampa/releases/latest/download/Lampa-mac-x64.dmg) | |
-| **Linux**, any distro | [Lampa-linux-x86_64.AppImage](https://github.com/Zelinsky-Vladimir/lampa/releases/latest/download/Lampa-linux-x86_64.AppImage) | Single file that updates itself. |
-| Linux, Debian / Ubuntu | [Lampa-linux-amd64.deb](https://github.com/Zelinsky-Vladimir/lampa/releases/latest/download/Lampa-linux-amd64.deb) | |
+| **Windows** 10 / 11 | [**Lampa-Setup.exe**](https://github.com/Zelinsky-Vladimir/lampa-releases/releases/latest/download/Lampa-Setup.exe) | Installer. Adds Start menu and desktop shortcuts, opens `.fb2` / `.epub`, and updates itself. |
+| Windows, no install | [Lampa-Portable.exe](https://github.com/Zelinsky-Vladimir/lampa-releases/releases/latest/download/Lampa-Portable.exe) | Runs from any folder or USB stick. Doesn't update itself. |
+| **macOS**, Apple Silicon (M1–M4) | [Lampa-mac-arm64.dmg](https://github.com/Zelinsky-Vladimir/lampa-releases/releases/latest/download/Lampa-mac-arm64.dmg) | See [macOS notes](#macos). |
+| macOS, Intel | [Lampa-mac-x64.dmg](https://github.com/Zelinsky-Vladimir/lampa-releases/releases/latest/download/Lampa-mac-x64.dmg) | |
+| **Linux**, any distro | [Lampa-linux-x86_64.AppImage](https://github.com/Zelinsky-Vladimir/lampa-releases/releases/latest/download/Lampa-linux-x86_64.AppImage) | Single file that updates itself. |
+| Linux, Debian / Ubuntu | [Lampa-linux-amd64.deb](https://github.com/Zelinsky-Vladimir/lampa-releases/releases/latest/download/Lampa-linux-amd64.deb) | |
 
-All versions and change notes are on the [Releases](https://github.com/Zelinsky-Vladimir/lampa/releases) page.
+All versions and change notes are on the [Releases](https://github.com/Zelinsky-Vladimir/lampa-releases/releases) page.
 
 ## Features
 
@@ -136,7 +136,7 @@ To update: `git pull && npm ci && npm run ios`, then **Run**.
 
 ## Updates
 
-The installed Windows app and the Linux AppImage check [Releases](https://github.com/Zelinsky-Vladimir/lampa/releases) on start. A new version downloads in the background; click **Restart** in the banner, or it installs the next time you close Lampa. The portable `.exe`, the `.deb` and the macOS build don't update themselves, so download them again to update.
+The installed Windows app and the Linux AppImage check [Releases](https://github.com/Zelinsky-Vladimir/lampa-releases/releases) on start. A new version downloads in the background; click **Restart** in the banner, or it installs the next time you close Lampa. The portable `.exe`, the `.deb` and the macOS build don't update themselves, so download them again to update.
 
 ## Keyboard shortcuts
 
