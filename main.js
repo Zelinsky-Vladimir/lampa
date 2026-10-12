@@ -31,10 +31,12 @@ function storedBookDir(p) {
   return path.dirname(dir) === booksDir() && /^[0-9a-f]{16}$/.test(path.basename(dir)) ? dir : null;
 }
 
+// Отпечаток книги — одинаковый на всех устройствах (мобильная версия считает так же): по нему её узнаёт синхронизация.
+const bookHash = (buf) => crypto.createHash('sha256').update(buf).digest('hex').slice(0, 16);
+
 async function storeBook(p, buf) {
   if (storedBookDir(p)) return p;
-  const hash = crypto.createHash('sha256').update(buf).digest('hex').slice(0, 16);
-  const dir = path.join(booksDir(), hash);
+  const dir = path.join(booksDir(), bookHash(buf));
   const target = path.join(dir, path.basename(p));
   try {
     const st = await fsp.stat(target);
@@ -318,7 +320,7 @@ function registerIpc() {
     if (st.size > MAX_BOOK_SIZE) throw new Error('TOO_LARGE');
     const buf = await fsp.readFile(p);
     const ext = extOf(p);
-    const out = { path: p, name: path.basename(p), size: st.size, ext };
+    const out = { path: p, name: path.basename(p), size: st.size, ext, hash: bookHash(buf) };
     // Архивы распаковываем здесь, чтобы окну не нужен был доступ к Node.
     if (ext === 'epub' || ext === 'zip') out.entries = unzipSync(new Uint8Array(buf));
     else out.bytes = buf;

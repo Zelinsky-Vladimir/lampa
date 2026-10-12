@@ -188,8 +188,15 @@
   if (!marks || typeof marks !== 'object' || Array.isArray(marks)) marks = {};
 
   const saveSettings = () => saveJSON(LS.settings, settings);
-  const saveLibrary = () => saveJSON(LS.library, library);
-  const saveMarks = () => saveJSON(LS.marks, marks);
+  // после каждого сохранения — отметить изменения для синхронизации
+  const saveLibrary = () => {
+    saveJSON(LS.library, library);
+    scheduleStamp();
+  };
+  const saveMarks = () => {
+    saveJSON(LS.marks, marks);
+    scheduleStamp();
+  };
 
   // { key, path, urls, blocks, starts, index, pages, toc, tocStarts, page, ratio, ready }
   let current = null;
@@ -1397,7 +1404,16 @@
     if (entry) library.splice(library.indexOf(entry), 1);
     else entry = { key, progress: 0, pos: null };
     if (entry.path && entry.path !== data.path && !library.some((x) => x.path === entry.path)) api.forgetBook(entry.path);
-    Object.assign(entry, { path: data.path, source: data.source || entry.source, title: book.title, author: book.author, openedAt: Date.now() });
+    Object.assign(entry, {
+      path: data.path,
+      source: data.source || entry.source,
+      // отпечаток содержимого и имя файла — по ним книга найдётся в облаке на другом устройстве
+      hash: data.hash || entry.hash,
+      name: data.name || entry.name,
+      title: book.title,
+      author: book.author,
+      openedAt: Date.now(),
+    });
     library.unshift(entry);
     library.length = Math.min(library.length, LIBRARY_LIMIT);
     saveLibrary();
@@ -2655,6 +2671,7 @@
 
   function saveShelf() {
     if (!shelfReady) return;
+    scheduleStamp();
     api.shelfSave(shelf).catch((e) => toast(t('shelfSaveFailed', { e: errorText(e) }), 5000));
   }
 
@@ -2674,6 +2691,7 @@
     }
     renderHomeTabs();
     renderShelf();
+    scheduleStamp();
     enrichShelf();
   }
 
@@ -3389,6 +3407,8 @@
       const name = await api.shelfCover(url);
       if (!shelf.includes(entry)) return;
       entry.cover = name;
+      // откуда обложка — другое устройство скачает её себе по этому адресу
+      entry.coverSrc = url;
       saveShelf();
     } catch {
       // нет сети — останется заглушка с буквой
@@ -3468,6 +3488,59 @@
       });
     }
     buildStars();
+  }
+
+  // ---------- синхронизация: что из локальных данных уходит в облако ----------
+  // Записи: книга в библиотеке (по ключу размер|название|автор — тот же на всех устройствах),
+  // закладка и заметка (по id), книга в списках «Прочитано / Хочу прочитать» (по id).
+  // Без того, что у каждого устройства своё: путь к файлу, миниатюра и файл обложки.
+
+  const hashFromPath = (p) => (/[\\/]([0-9a-f]{16})[\\/][^\\/]+$/.exec(p || '') || [])[1] || '';
+
+  function syncRecords() {
+    const lib = {};
+    for (const e of library) {
+      if (!e.key) continue;
+      lib[e.key] = {
+        title: e.title || '',
+        author: e.author || '',
+        hash: e.hash || hashFromPath(e.path),
+        name: e.name || '',
+        openedAt: e.openedAt || 0,
+        pos: e.pos || null,
+        progress: e.progress || 0,
+        page: e.page || 0,
+        pages: e.pages || 0,
+      };
+    }
+    const mark = {};
+    for (const [book, bm] of Object.entries(marks)) {
+      for (const b of bm.bookmarks || []) mark[b.id] = { book, type: 'bookmark', pos: b.pos, created: b.created || 0 };
+      for (const n of bm.notes || []) {
+        mark[n.id] = { book, type: 'note', start: n.start, end: n.end, quote: n.quote || '', color: n.color || '', text: n.text || '', created: n.created || 0 };
+      }
+    }
+    const lists = {};
+    for (const b of shelf) {
+      const { id, cover, ...rest } = b;
+      lists[id] = rest;
+    }
+    return { lib, mark, lists };
+  }
+
+  let stampTimer = 0;
+  function scheduleStamp() {
+    clearTimeout(stampTimer);
+    stampTimer = setTimeout(stampNow, 800);
+  }
+
+  function stampNow() {
+    clearTimeout(stampTimer);
+    const r = syncRecords();
+    Stamps.stamp('lib', r.lib);
+    Stamps.stamp('mark', r.mark);
+    // список не прочитался — иначе все его книги ушли бы в облако как удалённые
+    if (shelfReady) Stamps.stamp('shelf', r.lists);
   }
 
   // ---------- сенсорный экран ----------
@@ -3710,7 +3783,9 @@ ${sentence}` : translation);
     });
     // телефон: приложение в фоне могут выгрузить без beforeunload
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) savePosition();
+      if (!document.hidden) return;
+      savePosition();
+      stampNow();
     });
     setupTouch();
     if (!features.fullscreen) $('#btn-full').hidden = true;
@@ -3770,6 +3845,11 @@ ${sentence}` : translation);
     if (!localStorage.getItem(LS.library)) saveLibrary();
     if (!localStorage.getItem(LS.marks)) saveMarks();
     adoptOldBooks();
+    // книги, открытые до появления отпечатков: он есть в пути копии Books/<отпечаток>/<файл>
+    for (const e of library) {
+      const m = !e.hash && /[\\/]([0-9a-f]{16})[\\/]([^\\/]+)$/.exec(e.path || '');
+      if (m) Object.assign(e, { hash: m[1], name: e.name || m[2] });
+    }
     loadShelf();
     api.onOpenPath(openPath);
     const initial = await api.takeInitialPath();
