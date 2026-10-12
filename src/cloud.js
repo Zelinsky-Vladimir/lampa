@@ -76,6 +76,9 @@
     return { url, verifier };
   }
 
+  const idTokenSignIn = async (provider, idToken, nonce) =>
+    toSession(await call('/auth/v1/token?grant_type=id_token', { method: 'POST', body: { provider, id_token: idToken, nonce } }));
+
   const oauthFinish = async (code, verifier) =>
     toSession(await call('/auth/v1/token?grant_type=pkce', { method: 'POST', body: { auth_code: code, code_verifier: verifier } }));
 
@@ -144,5 +147,5 @@
     } catch {}
   }
 
-  global.Cloud = { MAX_FILE, signIn, signUp, refresh, signOut, oauthStart, oauthFinish, pull, push, listFiles, upload, download, removeFile };
+  global.Cloud = { MAX_FILE, signIn, signUp, refresh, signOut, oauthStart, oauthFinish, idTokenSignIn, pull, push, listFiles, upload, download, removeFile };
 })(window);

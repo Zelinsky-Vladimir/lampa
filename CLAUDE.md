@@ -31,7 +31,8 @@ src/cloud.js       Supabase over plain HTTP: auth (password, Google PKCE), recor
 mobile/mobile.js   iOS platform layer: the same window.api on Capacitor (Filesystem, native HTTP, App, StatusBar)
 mobile/mobile.css  phone styles (safe areas, touch)
 ios/               Xcode project (Capacitor 8, Swift Package Manager, no CocoaPods)
-ios/App/App/WebAuth.swift  local plugin `WebAuth.start({url, scheme})` (ASWebAuthenticationSession) + LampaBridgeViewController that registers it
+ios/App/App/WebAuth.swift  local plugin `WebAuth.start({url, scheme})` (ASWebAuthenticationSession) + LampaBridgeViewController that registers the local plugins
+ios/App/App/AppleSignIn.swift  local plugin `AppleSignIn.authorize({nonce})` → `{idToken}` (sends SHA-256 of the nonce to Apple); App.entitlements enables Sign in with Apple
 scripts/build-mobile.js  assembles www/ for Capacitor (src + mobile + fflate + icon), syncs iOS version from package.json
 supabase/schema.sql      database schema (records table + RLS + newer-wins trigger, private `books` bucket)
 ```
@@ -58,7 +59,9 @@ Done: reader on the phone (pages + slide by default, swipes, tap zones, selectio
 
 Not done yet, roughly in order:
 1. First run on his real iPhone and fix what comes up (gestures, selection, "Open in Lampa", sync).
-2. Sign in with Apple — required by App Store guideline 4.8 once Google sign-in is offered: enable the Apple provider in Supabase, use a native plugin to get the identity token, exchange it with `POST /auth/v1/token?grant_type=id_token`.
+2. Sign in with Apple — code is done (`api.signInApple` → `Cloud.idTokenSignIn('apple', idToken, rawNonce)`, button shown only on iOS, closing the sheet counts as cancel). Still to do: Supabase → Apple provider enabled with Client IDs `io.github.zelinskyvladimir.lampa` (no secret needed for native-only), a build with his paid team, a real-device test.
+   Until the paid team is active, device builds with the Personal Team need `CODE_SIGN_ENTITLEMENTS=` on the xcodebuild command line (personal teams can't sign the Sign in with Apple capability).
+   App Store guideline 5.1.1(v) also requires deleting the account from inside the app — not done yet.
 3. Privacy policy + support page (GitHub Pages on `lampa-releases`), then publish the Google OAuth app and prepare App Store Connect (record, screenshots, privacy labels).
 4. TestFlight: archive in Xcode and upload, or automate later.
 5. For a paid/public release the free Google Translate endpoint should move to an official service behind a server proxy (Microsoft Translator keeps the dictionary).

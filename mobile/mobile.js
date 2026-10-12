@@ -13,6 +13,7 @@
   const DATA = 'DATA';
   const AUTH_SCHEME = 'io.github.zelinskyvladimir.lampa';
   const WebAuth = (native && P.WebAuth) || null;
+  const AppleSignIn = (native && P.AppleSignIn) || null;
   let authCallback = () => {};
 
   const BOOK_EXTS = new Set(['fb2', 'epub', 'txt', 'zip']);
@@ -425,6 +426,12 @@
       authCallback = cb;
     },
     authRedirect: WebAuth ? AUTH_SCHEME + '://auth-callback' : '',
+    signInApple: AppleSignIn
+      ? async (nonce) => {
+          const res = await AppleSignIn.authorize({ nonce });
+          return (res && res.idToken) || null;
+        }
+      : null,
     async openAuth(url) {
       const res = await WebAuth.start({ url, scheme: AUTH_SCHEME });
       if (res && res.url) authCallback(res.url);

@@ -7,6 +7,7 @@
     en: {
       syncTitle: 'Sync',
       syncPitch: 'Sign in to keep your library, reading progress, notes and book lists the same on all your devices.',
+      syncApple: 'Sign in with Apple',
       syncGoogle: 'Sign in with Google',
       syncEmailToggle: 'Use email and password',
       syncEmail: 'Email',
@@ -280,6 +281,7 @@
     ru: {
       syncTitle: 'Синхронизация',
       syncPitch: 'Войдите, чтобы библиотека, место чтения, заметки и списки книг были одинаковыми на всех ваших устройствах.',
+      syncApple: 'Войти через Apple',
       syncGoogle: 'Войти через Google',
       syncEmailToggle: 'Войти по почте и паролю',
       syncEmail: 'Почта',
@@ -553,6 +555,7 @@
     fr: {
       syncTitle: 'Synchronisation',
       syncPitch: 'Connectez-vous pour retrouver votre bibliothèque, votre progression, vos notes et vos listes sur tous vos appareils.',
+      syncApple: 'Se connecter avec Apple',
       syncGoogle: 'Se connecter avec Google',
       syncEmailToggle: 'Utiliser un e-mail et un mot de passe',
       syncEmail: 'E-mail',
@@ -826,6 +829,7 @@
     de: {
       syncTitle: 'Synchronisierung',
       syncPitch: 'Melden Sie sich an, damit Bibliothek, Lesefortschritt, Notizen und Bücherlisten auf allen Geräten gleich sind.',
+      syncApple: 'Mit Apple anmelden',
       syncGoogle: 'Mit Google anmelden',
       syncEmailToggle: 'Mit E-Mail und Passwort',
       syncEmail: 'E-Mail',
@@ -1099,6 +1103,7 @@
     es: {
       syncTitle: 'Sincronización',
       syncPitch: 'Inicie sesión para tener la biblioteca, el progreso, las notas y las listas iguales en todos sus dispositivos.',
+      syncApple: 'Iniciar sesión con Apple',
       syncGoogle: 'Iniciar sesión con Google',
       syncEmailToggle: 'Usar correo y contraseña',
       syncEmail: 'Correo',

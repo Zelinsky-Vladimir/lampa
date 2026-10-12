@@ -3891,6 +3891,18 @@
     }
   }
 
+  async function signInApple() {
+    try {
+      const nonce = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
+      const idToken = await api.signInApple(nonce);
+      if (!idToken) return;
+      setSyncMessage(t('syncBusy'));
+      await afterSignIn(await Cloud.idTokenSignIn('apple', idToken, nonce));
+    } catch (e) {
+      setSyncMessage(t('syncSignInFailed', { e: errorText(e) }));
+    }
+  }
+
   async function onAuthCallback(url) {
     let params;
     try {
@@ -3937,6 +3949,7 @@
     const inside = signedIn();
     $('#sync-out').hidden = inside;
     $('#sync-in').hidden = !inside;
+    $('#sync-apple').hidden = !api.signInApple;
     $('#sync-google').hidden = !api.authRedirect;
     // без входа через Google почта и пароль — единственный способ, сразу раскрыты
     if (!api.authRedirect) $('.sync-email').open = true;
@@ -3946,6 +3959,7 @@
   }
 
   function bindSync() {
+    $('#sync-apple').addEventListener('click', signInApple);
     $('#sync-google').addEventListener('click', signInGoogle);
     $('#sync-signin').addEventListener('click', () => signInWith('in'));
     $('#sync-signup').addEventListener('click', () => signInWith('up'));

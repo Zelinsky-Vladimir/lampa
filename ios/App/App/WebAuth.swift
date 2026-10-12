@@ -52,5 +52,6 @@ public class WebAuthPlugin: CAPPlugin, CAPBridgedPlugin, ASWebAuthenticationPres
 class LampaBridgeViewController: CAPBridgeViewController {
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(WebAuthPlugin())
+        bridge?.registerPluginInstance(AppleSignInPlugin())
     }
 }

@@ -1263,6 +1263,9 @@ kbd {
 
 .sync-box { padding-bottom: 18px; border-bottom: 1px solid var(--faint); }
 .sync-box .setting-hint:empty { display: none; }
+.sync-apple { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; margin-top: 12px; padding: 10px 16px; border: 1px solid #000; border-radius: 11px; background: #000; color: #fff; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.sync-apple svg { width: 18px; height: 18px; fill: currentColor; stroke: none; }
+.sync-apple + .sync-google { margin-top: 8px; }
 .sync-google { width: 100%; justify-content: center; margin-top: 12px; padding: 10px 16px; font-size: 14px; }
 .sync-google svg { fill: currentColor; stroke: none; }
 .sync-email { margin-top: 12px; font-size: 13px; }
