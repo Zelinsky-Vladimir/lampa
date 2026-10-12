@@ -55,6 +55,23 @@ function bookFromArgv(argv, cwd = process.cwd()) {
   return arg ? path.resolve(cwd, arg) : null;
 }
 
+// ---------- вход через браузер: lampa://auth-callback?code=… ----------
+
+const AUTH_SCHEME = 'lampa';
+let pendingAuth = null;
+const authFromArgv = (argv) => argv.find((a) => typeof a === 'string' && a.startsWith(AUTH_SCHEME + '://')) || null;
+
+function deliverAuth(url) {
+  if (!url) return;
+  if (win && rendererReady) {
+    win.webContents.send('auth-callback', url);
+    if (win.isMinimized()) win.restore();
+    win.focus();
+  } else {
+    pendingAuth = url;
+  }
+}
+
 function openInRenderer(p) {
   if (win && rendererReady) {
     win.webContents.send('open-path', p);
@@ -421,6 +438,29 @@ function registerIpc() {
     }
   });
 
+  ipcMain.handle('app:take-auth', () => {
+    const url = pendingAuth;
+    pendingAuth = null;
+    return url;
+  });
+
+  // Для синхронизации: исходный файл книги (загрузить в облако) и книга из облака (положить в библиотеку).
+  ipcMain.handle('book:read-raw', async (_e, p) => {
+    if (!isBookPath(p)) throw new Error('UNSUPPORTED');
+    return fsp.readFile(p);
+  });
+  ipcMain.handle('book:save', async (_e, req) => {
+    const name = req && typeof req.name === 'string' ? path.basename(req.name) : '';
+    const bytes = req && req.bytes;
+    if (!isBookPath(name) || !(bytes instanceof Uint8Array) || bytes.length > MAX_BOOK_SIZE) throw new Error('BAD_REQUEST');
+    return storeBook(name, Buffer.from(bytes.buffer, bytes.byteOffset, bytes.length));
+  });
+
+  // Разработка: Supabase на этом компьютере (supabase start) вместо облачного проекта.
+  ipcMain.on('dev:cloud-url', (e) => {
+    e.returnValue = process.env.LAMPA_CLOUD_URL || '';
+  });
+
   ipcMain.on('app:open-external', (_e, url) => {
     if (typeof url === 'string' && /^(https?:|mailto:)/i.test(url)) shell.openExternal(url);
   });
@@ -479,10 +519,16 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   pendingPath = bookFromArgv(process.argv);
+  pendingAuth = authFromArgv(process.argv);
+  // Ссылки lampa:// открывают Lampa. Установщик регистрирует их сам; здесь — для переносной версии.
+  // При запуске из исходников не регистрируем, чтобы не подменять установленное приложение.
+  if (app.isPackaged) app.setAsDefaultProtocolClient(AUTH_SCHEME);
 
   app.on('second-instance', (_e, argv, cwd) => {
+    const auth = authFromArgv(argv);
     const p = bookFromArgv(argv, cwd);
-    if (p) openInRenderer(p);
+    if (auth) deliverAuth(auth);
+    else if (p) openInRenderer(p);
     else if (win) {
       if (win.isMinimized()) win.restore();
       win.focus();
@@ -493,6 +539,12 @@ if (!app.requestSingleInstanceLock()) {
   app.on('open-file', (e, p) => {
     e.preventDefault();
     openInRenderer(p);
+  });
+
+  // macOS: ссылка lampa:// из браузера
+  app.on('open-url', (e, url) => {
+    e.preventDefault();
+    deliverAuth(url);
   });
 
   app.whenReady().then(() => {

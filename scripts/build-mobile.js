@@ -25,7 +25,8 @@ function swap(a, b) {
 // весь экран, включая область под вырезом; без масштабирования щипком
 swap('content="width=device-width, initial-scale=1"', 'content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"');
 // обложки из папки приложения (capacitor://) и сеть для предпросмотра в браузере
-swap("img-src 'self' blob: data: lampa-cover:;", "img-src 'self' blob: data: capacitor: https:; connect-src 'self' https:;");
+swap("img-src 'self' blob: data: lampa-cover:;", "img-src 'self' blob: data: capacitor: https:;");
+swap('connect-src https://lxztjateewlladvgzzlj.supabase.co http://127.0.0.1:54321', "connect-src 'self' https:");
 swap('src="../build/icon.png"', 'src="icon.png"');
 swap('<link rel="stylesheet" href="styles.css">', '<link rel="stylesheet" href="styles.css">\n  <link rel="stylesheet" href="mobile.css">');
 swap('<script src="i18n.js"></script>', '<script src="vendor/fflate.js"></script>\n  <script src="online.js"></script>\n  <script src="mobile.js"></script>\n  <script src="i18n.js"></script>');

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob: data: lampa-cover:; font-src 'self'">
+        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob: data: lampa-cover:; font-src 'self'; connect-src https://lxztjateewlladvgzzlj.supabase.co http://127.0.0.1:54321">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Lampa</title>
   <link rel="stylesheet" href="fonts/fonts.css">
@@ -199,6 +199,35 @@
       <button class="icon-btn" data-close data-i18n-title="close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </header>
     <div class="body">
+      <!-- синхронизация между устройствами -->
+      <div class="setting sync-box">
+        <div class="label" data-i18n="syncTitle"></div>
+        <div id="sync-out">
+          <p class="setting-hint" data-i18n="syncPitch"></p>
+          <button class="primary-btn sync-google" id="sync-google">
+            <svg viewBox="0 0 24 24"><path d="M20.5 12.2c0-.6-.1-1.2-.2-1.7H12v3.3h4.8a4.1 4.1 0 0 1-1.8 2.7v2.2h2.9c1.7-1.6 2.6-3.9 2.6-6.5zM12 21c2.4 0 4.4-.8 5.9-2.2l-2.9-2.2c-.8.5-1.8.9-3 .9-2.3 0-4.3-1.6-5-3.7H4v2.3A9 9 0 0 0 12 21zM7 13.8a5.4 5.4 0 0 1 0-3.5V8H4a9 9 0 0 0 0 8.1zM12 6.6c1.3 0 2.5.5 3.4 1.3l2.6-2.6A9 9 0 0 0 4 8l3 2.3c.7-2.1 2.7-3.7 5-3.7z"/></svg>
+            <span data-i18n="syncGoogle"></span>
+          </button>
+          <details class="sync-email">
+            <summary data-i18n="syncEmailToggle"></summary>
+            <input id="sync-email" type="email" autocomplete="username" spellcheck="false" data-i18n-placeholder="syncEmail">
+            <input id="sync-password" type="password" autocomplete="current-password" data-i18n-placeholder="syncPassword">
+            <div class="sync-row">
+              <button class="text-btn" id="sync-signin" data-i18n="syncSignIn"></button>
+              <button class="text-btn" id="sync-signup" data-i18n="syncSignUp"></button>
+            </div>
+          </details>
+        </div>
+        <div id="sync-in" hidden>
+          <div class="sync-user" id="sync-user"></div>
+          <div class="setting-hint" id="sync-status"></div>
+          <div class="sync-row">
+            <button class="text-btn" id="sync-now" data-i18n="syncNow"></button>
+            <button class="text-btn" id="sync-signout" data-i18n="syncSignOut"></button>
+          </div>
+        </div>
+        <p class="setting-hint" id="sync-message"></p>
+      </div>
       <div class="setting">
         <label class="label" for="lang" data-i18n="language"></label>
         <select id="lang"></select>
@@ -398,6 +427,12 @@
   <canvas id="curl" hidden></canvas>
 
   <div id="toast" role="status"></div>
+  <!-- на другом устройстве ушли дальше в этой книге -->
+  <div id="sync-jump" role="status" hidden>
+    <span id="sync-jump-text"></span>
+    <button class="primary-btn" id="sync-jump-go" data-i18n="syncJumpGo"></button>
+    <button class="icon-btn" id="sync-jump-close" data-i18n-title="close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
   <div id="update-banner" role="status" hidden>
     <span id="update-text"></span>
     <button class="primary-btn" id="update-restart" data-i18n="restart"></button>
@@ -408,6 +443,7 @@
   <script src="decode.js"></script>
   <script src="parsers.js"></script>
   <script src="stamps.js"></script>
+  <script src="cloud.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

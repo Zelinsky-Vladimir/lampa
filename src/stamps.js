@@ -34,15 +34,19 @@
     return (h >>> 0).toString(36) + '.' + s.length.toString(36);
   }
 
-  // records: { id: запись }. Новые и изменённые записи получают время now, пропавшие — надгробие.
-  function stamp(kind, records, now = Date.now()) {
+  // records: { id: запись }. Изменённые записи получают время now, пропавшие — надгробие.
+  // Запись, которой здесь ещё не видели, получает своё настоящее время (since(запись): когда открыта,
+  // создана, добавлена): иначе при первом включении синхронизации старые данные этого устройства
+  // выглядели бы новее свежих изменений с другого.
+  function stamp(kind, records, since, now = Date.now()) {
     const table = state[kind] || (state[kind] = {});
     let changed = false;
     for (const id of Object.keys(records)) {
       const h = fingerprint(records[id]);
       const s = table[id];
       if (!s || s.h !== h || s.del) {
-        table[id] = { h, t: now };
+        const t = s ? now : Math.min(now, (since && since(records[id])) || now);
+        table[id] = { h, t };
         changed = true;
       }
     }
@@ -56,21 +60,38 @@
     return changed;
   }
 
-  // Запись пришла с другого устройства: запоминаем её время, чтобы не отправить её обратно как новую.
+  // Запись пришла с другого устройства: запоминаем её время и отпечаток в том виде, как она теперь
+  // лежит здесь, — она не уйдёт обратно как новая, пока её не изменят на этом устройстве (r — «с сервера»).
   function accept(kind, id, rec, t, del) {
     const table = state[kind] || (state[kind] = {});
-    table[id] = del ? { h: '', t, del: true } : { h: fingerprint(rec), t };
+    table[id] = del ? { h: '', t, del: true, r: true } : { h: fingerprint(rec), t, r: true };
     save();
   }
 
   const get = (kind, id) => (state[kind] && state[kind][id]) || null;
   const table = (kind) => state[kind] || {};
 
-  // Изменения после момента since — что отправить в облако.
-  function changedSince(kind, since) {
+  // Что ещё не отправлено в облако (пришедшее с сервера не отправляем).
+  function pending(kind) {
     return Object.entries(table(kind))
-      .filter(([, s]) => s.t > since)
-      .map(([id, s]) => ({ id, t: s.t, del: !!s.del }));
+      .filter(([, s]) => !s.p && !s.r)
+      .map(([id, s]) => ({ id, t: s.t, del: !!s.del, h: s.h }));
+  }
+
+  // Отправлено. Если запись успела измениться, пока шла отправка, — она остаётся в очереди.
+  function markPushed(kind, sent) {
+    const tbl = table(kind);
+    for (const x of sent) {
+      const s = tbl[x.id];
+      if (s && s.t === x.t && s.h === x.h) s.p = true;
+    }
+    save();
+  }
+
+  // Выход из аккаунта: всё снова считается неотправленным — для следующего входа.
+  function resetPushed() {
+    for (const tbl of Object.values(state)) for (const s of Object.values(tbl)) delete s.p;
+    save();
   }
 
   // Постоянный идентификатор этого устройства: видно, откуда пришло изменение.
@@ -85,5 +106,5 @@
     return id;
   }
 
-  global.Stamps = { stamp, accept, get, table, changedSince, deviceId, fingerprint };
+  global.Stamps = { stamp, accept, get, table, pending, markPushed, resetPushed, deviceId, fingerprint };
 })(window);

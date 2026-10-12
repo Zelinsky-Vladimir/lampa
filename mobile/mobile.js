@@ -414,6 +414,14 @@
       return out;
     },
     adoptBooks: async () => [],
+    // синхронизация: исходный файл книги — в облако; книга из облака — в библиотеку
+    readBookFile: (p) => store.read(p),
+    saveBookFile: (name, bytes) => importBook(baseName(name), bytes),
+    takeAuthCallback: async () => null,
+    onAuthCallback: () => {},
+    // вход через Google на iPhone подключим отдельно; пока — почта и пароль
+    authRedirect: '',
+    cloudUrl: '',
     async forgetBook(p) {
       const m = /^books\/([0-9a-f]{16})\//.exec(String(p));
       if (m) await store.removeDir('books/' + m[1]);

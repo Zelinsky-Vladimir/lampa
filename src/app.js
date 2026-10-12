@@ -1352,13 +1352,19 @@
   }
 
   // Библиотека открывает свою копию книги; если копии нет — исходный файл, если он ещё на месте.
+  // Нет и исходного — скачиваем из облака, если книга туда загружена.
   async function loadBookFile(p) {
     try {
       return await api.loadBook(p);
     } catch (e) {
-      const entry = library.find((x) => x.path === p && x.source && x.source !== p);
-      if (!entry) throw e;
-      return api.loadBook(entry.source);
+      const entry = library.find((x) => x.path === p);
+      if (entry && entry.source && entry.source !== p) {
+        try {
+          return await api.loadBook(entry.source);
+        } catch {}
+      }
+      if (entry && entry.hash && entry.name && signedIn()) return api.loadBook(await fetchCloudBook(entry));
+      throw e;
     }
   }
 
@@ -1540,14 +1546,17 @@
         library = library.filter((x) => x !== entry);
         saveLibrary();
         // копию удаляем вместе с карточкой; оригинал пользователя не трогаем
-        if (!library.some((x) => x.path === entry.path)) api.forgetBook(entry.path);
+        if (entry.path && !library.some((x) => x.path === entry.path)) api.forgetBook(entry.path);
+        forgetCloudFile(entry);
         renderHome();
       });
 
-      card.append(thumb, el('div', 't', entry.title), el('div', 'a', entry.author || ' '), bar, el('div', 'pct', readLabel(entry)), remove);
-      card.addEventListener('click', () => openPath(entry.path));
+      // книга с другого устройства, файла здесь ещё нет — скачается при открытии
+      const label = entry.path ? readLabel(entry) : t('syncCloudBook') + (entry.page ? ' · ' + readLabel(entry) : '');
+      card.append(thumb, el('div', 't', entry.title), el('div', 'a', entry.author || ' '), bar, el('div', 'pct', label), remove);
+      card.addEventListener('click', () => openEntry(entry));
       card.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') openPath(entry.path);
+        if (e.key === 'Enter') openEntry(entry);
       });
       ui.recent.append(card);
     }
@@ -2693,6 +2702,8 @@
     renderShelf();
     scheduleStamp();
     enrichShelf();
+    // список прочитан — можно синхронизировать (удаления посчитаются верно)
+    syncNow();
   }
 
   // Перерисовка, которая не ломает перетаскивание.
@@ -3537,10 +3548,436 @@
   function stampNow() {
     clearTimeout(stampTimer);
     const r = syncRecords();
-    Stamps.stamp('lib', r.lib);
-    Stamps.stamp('mark', r.mark);
+    // для записей, которых здесь ещё не видели, — их настоящее время, а не «сейчас»
+    let changed = Stamps.stamp('lib', r.lib, (x) => x.openedAt);
+    changed = Stamps.stamp('mark', r.mark, (x) => x.created) || changed;
     // список не прочитался — иначе все его книги ушли бы в облако как удалённые
-    if (shelfReady) Stamps.stamp('shelf', r.lists);
+    if (shelfReady) changed = Stamps.stamp('shelf', r.lists, (x) => x.added) || changed;
+    if (changed) syncSoon();
+  }
+
+  // ---------- синхронизация с облаком ----------
+  // Порядок: забрать новое с сервера (более позднее изменение побеждает), отправить своё,
+  // потом в фоне загрузить в облако файлы книг. Запускается при старте, при возвращении в окно,
+  // через несколько секунд после изменений и раз в минуту, пока окно открыто.
+
+  const CLOUD_KEY = 'lampa.cloud';
+  // { session, lastPull, uploaded: [отпечатки], syncedAt, pkce }
+  let cloud = loadJSON(CLOUD_KEY, null) || {};
+  const saveCloud = () => saveJSON(CLOUD_KEY, cloud);
+  const signedIn = () => !!(cloud.session && cloud.session.refresh_token);
+  const extOfName = (n) => (/\.([^.\\/]+)$/.exec(n || '') || ['', ''])[1].toLowerCase();
+
+  let syncing = null;
+  let syncAgain = false;
+  let syncTimer = 0;
+  let syncState = { state: 'idle', error: '' };
+
+  function syncSoon(ms = 4000) {
+    if (!signedIn()) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(syncNow, ms);
+  }
+
+  async function cloudSession() {
+    const s = cloud.session;
+    if (!s) throw new Error('SIGNED_OUT');
+    if (s.expires_at - Date.now() > 60000) return s;
+    try {
+      cloud.session = await Cloud.refresh(s);
+      saveCloud();
+      return cloud.session;
+    } catch (e) {
+      // сессию отозвали (вышли на другом устройстве, сменили пароль) — нужно войти заново
+      if (e.status === 400 || e.status === 401) {
+        signOutLocal();
+        toast(t('syncSignedOut'), 5000);
+      }
+      throw e;
+    }
+  }
+
+  async function syncNow() {
+    clearTimeout(syncTimer);
+    // без прочитанного списка книг нельзя: удаления посчитались бы неправильно
+    if (!signedIn() || !shelfReady) return;
+    if (syncing) {
+      syncAgain = true;
+      return syncing;
+    }
+    syncing = (async () => {
+      setSyncState('busy');
+      try {
+        const s = await cloudSession();
+        stampNow();
+        clearTimeout(syncTimer);
+        await pullChanges(s);
+        await pushChanges(s);
+        cloud.syncedAt = Date.now();
+        saveCloud();
+        setSyncState('ok');
+        uploadBooks(s);
+      } catch (e) {
+        if (signedIn()) setSyncState(e.code === 'OFFLINE' ? 'offline' : 'error', errorText(e));
+      }
+    })();
+    try {
+      await syncing;
+    } finally {
+      syncing = null;
+      if (syncAgain) {
+        syncAgain = false;
+        syncSoon(500);
+      }
+    }
+  }
+
+  async function pullChanges(s) {
+    const rows = await Cloud.pull(s.access_token, cloud.lastPull);
+    if (!rows.length) return;
+    const applied = [];
+    const covers = [];
+    let offer = null;
+    for (const row of rows) {
+      const local = Stamps.get(row.kind, row.id);
+      // здесь изменение новее — оно и уйдёт на сервер
+      if (local && local.t >= row.updated_at) continue;
+      if (row.kind === 'lib') offer = applyLib(row) || offer;
+      else if (row.kind === 'mark') applyMark(row);
+      else if (row.kind === 'shelf') applyShelf(row, covers);
+      else continue;
+      applied.push(row);
+    }
+    cloud.lastPull = rows[rows.length - 1].server_at;
+    saveCloud();
+    if (!applied.length) return;
+
+    // сохраняем без новых меток изменений: это пришло с сервера
+    library.sort((a, b) => (b.openedAt || 0) - (a.openedAt || 0));
+    saveJSON(LS.library, library);
+    saveJSON(LS.marks, marks);
+    if (applied.some((r) => r.kind === 'shelf')) api.shelfSave(shelf).catch(() => {});
+    const proj = syncRecords();
+    const byKind = { lib: proj.lib, mark: proj.mark, shelf: proj.lists };
+    for (const row of applied) {
+      const rec = byKind[row.kind][row.id];
+      Stamps.accept(row.kind, row.id, rec, row.updated_at, row.deleted || !rec);
+    }
+
+    if (root.dataset.mode === 'home') renderHome();
+    else {
+      renderHomeTabs();
+      if (current && current.ready) {
+        validateNotes();
+        refreshMarks();
+      }
+    }
+    if (offer) offerJump(offer);
+    // обложки — в фоне, синхронизация их не ждёт
+    (async () => {
+      for (const entry of covers) {
+        if (entry.coverSrc) await setCover(entry, entry.coverSrc);
+        else {
+          // книга добавлена раньше, чем стали запоминать источник обложки, — найдём её поиском
+          await lookupBook(entry, true).catch(() => {});
+          await sleep(1500);
+        }
+      }
+    })();
+  }
+
+  // Книга в библиотеке и место чтения. Открытую сейчас книгу не двигаем — предлагаем перейти.
+  function applyLib(row) {
+    let e = library.find((x) => x.key === row.id);
+    if (row.deleted) {
+      if (e && !(current && current.key === e.key)) {
+        library = library.filter((x) => x !== e);
+        if (e.path && !library.some((x) => x.path === e.path)) api.forgetBook(e.path);
+      }
+      return null;
+    }
+    const d = row.data || {};
+    if (!e) {
+      e = { key: row.id, path: null };
+      library.push(e);
+    }
+    Object.assign(e, { title: d.title, author: d.author, hash: d.hash || e.hash, name: d.name || e.name, openedAt: d.openedAt });
+    const reading = current && current.ready && current.key === row.id;
+    const moved = JSON.stringify(d.pos) !== JSON.stringify(e.pos);
+    if (reading && moved && d.pos) return { key: row.id, pos: d.pos, page: d.page };
+    Object.assign(e, { pos: d.pos, progress: d.progress, page: d.page, pages: d.pages });
+    return null;
+  }
+
+  function applyMark(row) {
+    for (const bm of Object.values(marks)) {
+      bm.bookmarks = (bm.bookmarks || []).filter((x) => x.id !== row.id);
+      bm.notes = (bm.notes || []).filter((x) => x.id !== row.id);
+    }
+    const d = row.data || {};
+    if (row.deleted || !d.book) return;
+    const bm = marks[d.book] || (marks[d.book] = { bookmarks: [], notes: [] });
+    if (d.type === 'bookmark') {
+      bm.bookmarks.push({ id: row.id, pos: d.pos, created: d.created });
+      bm.bookmarks.sort((a, b) => a.pos - b.pos);
+    } else {
+      bm.notes.push({ id: row.id, start: d.start, end: d.end, quote: d.quote, color: d.color, text: d.text, created: d.created });
+      bm.notes.sort((a, b) => a.start - b.start);
+    }
+  }
+
+  function applyShelf(row, covers) {
+    const i = shelf.findIndex((b) => b.id === row.id);
+    if (row.deleted) {
+      if (i >= 0) shelf.splice(i, 1);
+      return;
+    }
+    const prev = i >= 0 ? shelf[i] : null;
+    // обложка — файл этого устройства: оставляем свою, если источник тот же, иначе скачаем
+    const entry = { ...(row.data || {}), id: row.id, cover: prev && prev.coverSrc === (row.data || {}).coverSrc ? prev.cover : null };
+    if (i >= 0) shelf[i] = entry;
+    else shelf.push(entry);
+    if (!entry.cover) covers.push(entry);
+  }
+
+  async function pushChanges(s) {
+    const proj = syncRecords();
+    const byKind = { lib: proj.lib, mark: proj.mark, shelf: proj.lists };
+    const rows = [];
+    const sent = { lib: [], mark: [], shelf: [] };
+    for (const kind of ['lib', 'mark', 'shelf']) {
+      for (const c of Stamps.pending(kind)) {
+        const data = c.del ? null : byKind[kind][c.id];
+        if (!c.del && !data) continue;
+        rows.push({ user_id: s.user.id, kind, id: c.id, data, deleted: c.del, updated_at: c.t, device: Stamps.deviceId() });
+        sent[kind].push(c);
+      }
+    }
+    if (!rows.length) return;
+    await Cloud.push(s.access_token, rows);
+    for (const kind of Object.keys(sent)) Stamps.markPushed(kind, sent[kind]);
+  }
+
+  // Файлы книг — в облако, по одной, в фоне. Книги больше 50 МБ остаются только на этом устройстве.
+  let uploading = false;
+  async function uploadBooks(s) {
+    if (uploading) return;
+    uploading = true;
+    try {
+      const done = new Set(cloud.uploaded || []);
+      const todo = library.filter((e) => e.hash && e.name && e.path && !done.has(e.hash));
+      if (!todo.length) return;
+      const there = await Cloud.listFiles(s);
+      for (const e of todo) {
+        if (!signedIn()) return;
+        const ext = extOfName(e.name);
+        if (!there.has(`${e.hash}.${ext}`)) {
+          let bytes;
+          try {
+            bytes = await api.readBookFile(e.path);
+          } catch {
+            continue; // файла нет на месте — попробуем в другой раз
+          }
+          if (bytes.length <= Cloud.MAX_FILE) await Cloud.upload(s, e.hash, ext, bytes);
+        }
+        done.add(e.hash);
+        cloud.uploaded = [...done];
+        saveCloud();
+      }
+    } catch (e) {
+      console.error('upload failed', e);
+    } finally {
+      uploading = false;
+    }
+  }
+
+  // Книга удалена из библиотеки — убираем и её файл из облака, если он больше ни к чему.
+  async function forgetCloudFile(entry) {
+    if (!signedIn() || !entry.hash || !entry.name || library.some((x) => x.hash === entry.hash)) return;
+    try {
+      const s = await cloudSession();
+      await Cloud.removeFile(s, entry.hash, extOfName(entry.name));
+      cloud.uploaded = (cloud.uploaded || []).filter((h) => h !== entry.hash);
+      saveCloud();
+    } catch {}
+  }
+
+  async function fetchCloudBook(entry) {
+    toast(t('syncDownloading'), 0);
+    const s = await cloudSession();
+    const bytes = await Cloud.download(s, entry.hash, extOfName(entry.name));
+    entry.path = await api.saveBookFile(entry.name, bytes);
+    saveJSON(LS.library, library);
+    return entry.path;
+  }
+
+  // Открыть книгу из библиотеки; если её файла здесь нет — сначала скачать из облака.
+  async function openEntry(entry) {
+    if (entry.path) return openPath(entry.path);
+    if (!entry.hash || !entry.name) return toast(t('syncNoFile'), 5000);
+    if (!signedIn()) return toast(t('syncSignInToGet'), 4000);
+    try {
+      await fetchCloudBook(entry);
+    } catch (e) {
+      toast(t(e.status === 400 || e.status === 404 ? 'syncNoFile' : 'syncDownloadFailed', { e: errorText(e) }), 5000);
+      return;
+    }
+    openPath(entry.path);
+  }
+
+  // На другом устройстве ушли дальше в той же книге — предлагаем перейти туда.
+  function offerJump(o) {
+    const bar = $('#sync-jump');
+    // номер страницы — по раскладке этого экрана, а не того устройства
+    let n = o.page || '?';
+    if (current && current.ready && o.pos && current.starts[o.pos.i] != null) {
+      const start = current.starts[o.pos.i];
+      n = displayPage(start + (o.pos.f || 0) * (blockEnd(o.pos.i) - start));
+    }
+    $('#sync-jump-text').textContent = t('syncJump', { n });
+    bar.hidden = false;
+    bar.dataset.key = o.key;
+    syncJumpTarget = o;
+  }
+  let syncJumpTarget = null;
+
+  // ---------- вход и выход ----------
+
+  async function afterSignIn(session) {
+    cloud = { session, lastPull: null, uploaded: [] };
+    Stamps.resetPushed();
+    saveCloud();
+    renderSyncBox();
+    toast(t('syncAs', { email: session.user.email }), 2500);
+    await syncNow();
+  }
+
+  function signOutLocal() {
+    const s = cloud.session;
+    cloud = {};
+    saveCloud();
+    Stamps.resetPushed();
+    clearTimeout(syncTimer);
+    setSyncState('idle');
+    if (s) Cloud.signOut(s);
+  }
+
+  async function signInWith(kind) {
+    const email = $('#sync-email').value.trim();
+    const password = $('#sync-password').value;
+    if (!email || !password) return setSyncMessage(t('syncFillBoth'));
+    setSyncMessage(t('syncBusy'));
+    try {
+      const session = kind === 'up' ? await Cloud.signUp(email, password) : await Cloud.signIn(email, password);
+      $('#sync-password').value = '';
+      if (!session) return setSyncMessage(t('syncCheckEmail'));
+      await afterSignIn(session);
+    } catch (e) {
+      setSyncMessage(t('syncSignInFailed', { e: errorText(e) }));
+    }
+  }
+
+  // Google: вход в браузере, возврат в приложение по ссылке lampa://auth-callback?code=…
+  async function signInGoogle() {
+    try {
+      const { url, verifier } = await Cloud.oauthStart('google', api.authRedirect);
+      cloud.pkce = verifier;
+      saveCloud();
+      api.openExternal(url);
+      setSyncMessage(t('syncWaitBrowser'));
+    } catch (e) {
+      setSyncMessage(t('syncSignInFailed', { e: errorText(e) }));
+    }
+  }
+
+  async function onAuthCallback(url) {
+    let params;
+    try {
+      const u = new URL(url);
+      params = new URLSearchParams(u.search || u.hash.slice(1));
+    } catch {
+      return;
+    }
+    const code = params.get('code');
+    const error = params.get('error_description') || params.get('error');
+    openPanel(ui.settingsPanel);
+    if (!code || !cloud.pkce) return setSyncMessage(t('syncSignInFailed', { e: error || '—' }));
+    try {
+      const session = await Cloud.oauthFinish(code, cloud.pkce);
+      await afterSignIn(session);
+    } catch (e) {
+      setSyncMessage(t('syncSignInFailed', { e: errorText(e) }));
+    }
+  }
+
+  // ---------- блок «Синхронизация» в настройках ----------
+
+  function setSyncState(state, error = '') {
+    syncState = { state, error };
+    renderSyncStatus();
+  }
+
+  function setSyncMessage(text) {
+    $('#sync-message').textContent = text;
+  }
+
+  function renderSyncStatus() {
+    const el2 = $('#sync-status');
+    if (!el2) return;
+    const { state, error } = syncState;
+    if (state === 'busy') el2.textContent = t('syncBusy');
+    else if (state === 'offline') el2.textContent = t('syncOffline');
+    else if (state === 'error') el2.textContent = t('syncFailed', { e: error });
+    else if (cloud.syncedAt) el2.textContent = t('syncDoneAt', { time: new Date(cloud.syncedAt).toLocaleTimeString(I18n.lang, { hour: '2-digit', minute: '2-digit' }) });
+    else el2.textContent = '';
+  }
+
+  function renderSyncBox() {
+    const inside = signedIn();
+    $('#sync-out').hidden = inside;
+    $('#sync-in').hidden = !inside;
+    $('#sync-google').hidden = !api.authRedirect;
+    // без входа через Google почта и пароль — единственный способ, сразу раскрыты
+    if (!api.authRedirect) $('.sync-email').open = true;
+    if (inside) $('#sync-user').textContent = t('syncAs', { email: cloud.session.user.email || '—' });
+    setSyncMessage('');
+    renderSyncStatus();
+  }
+
+  function bindSync() {
+    $('#sync-google').addEventListener('click', signInGoogle);
+    $('#sync-signin').addEventListener('click', () => signInWith('in'));
+    $('#sync-signup').addEventListener('click', () => signInWith('up'));
+    $('#sync-password').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') signInWith('in');
+    });
+    $('#sync-now').addEventListener('click', () => syncNow());
+    $('#sync-signout').addEventListener('click', () => {
+      signOutLocal();
+      renderSyncBox();
+    });
+    $('#sync-jump-go').addEventListener('click', () => {
+      const o = syncJumpTarget;
+      $('#sync-jump').hidden = true;
+      if (!o || !current || current.key !== o.key) return;
+      pushBack();
+      scrollToAnchor(o.pos);
+      if (paged()) pg.anchor = o.pos;
+      savePosition();
+    });
+    $('#sync-jump-close').addEventListener('click', () => {
+      $('#sync-jump').hidden = true;
+    });
+    api.onAuthCallback(onAuthCallback);
+    api.takeAuthCallback().then((url) => url && onAuthCallback(url));
+    // раз в минуту, пока окно на экране
+    setInterval(() => {
+      if (!document.hidden) syncNow();
+    }, 60000);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) syncNow();
+    });
+    renderSyncBox();
   }
 
   // ---------- сенсорный экран ----------
@@ -3589,6 +4026,7 @@
 
   function bindUI() {
     bindShelf();
+    bindSync();
     $('#btn-open').addEventListener('click', openDialog);
     $('#home-open').addEventListener('click', openDialog);
     $('#btn-home').addEventListener('click', showHome);
@@ -3602,7 +4040,7 @@
     $('#btn-wide').addEventListener('click', () => changeWidth(1));
     $('#btn-narrow').addEventListener('click', () => changeWidth(-1));
     ui.btnBookmark.addEventListener('click', toggleBookmark);
-    ui.homeContinue.addEventListener('click', () => library[0] && openPath(library[0].path));
+    ui.homeContinue.addEventListener('click', () => library[0] && openEntry(library[0]));
     ui.btnAuto.addEventListener('click', () => (auto.on ? stopAuto() : startAuto()));
     $('#auto-stop').addEventListener('click', stopAuto);
     $('#auto-slower').addEventListener('click', () => changeAutoSpeed(-1));
@@ -3786,6 +4224,7 @@ ${sentence}` : translation);
       if (!document.hidden) return;
       savePosition();
       stampNow();
+      syncNow();
     });
     setupTouch();
     if (!features.fullscreen) $('#btn-full').hidden = true;

@@ -52,3 +52,6 @@ button, .card, .icon-btn, .home-tabs, .seg { -webkit-user-select: none; user-sel
   #footer { gap: 10px; padding-left: 12px; padding-right: 12px; }
   .panel { width: 100vw; }
 }
+
+/* синхронизация: плашка «перейти» под вырезом */
+#sync-jump { top: calc(var(--bar-h) + var(--safe-top) + 10px); }
