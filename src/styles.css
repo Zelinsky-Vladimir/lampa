@@ -1239,6 +1239,7 @@ kbd {
   margin: var(--page-top) auto 0;
   padding: 0;
   column-count: var(--page-cols);
+  column-width: var(--page-col-w);
   column-gap: var(--page-gap);
   column-fill: auto;
   overflow: hidden;

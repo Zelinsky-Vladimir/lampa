@@ -635,6 +635,7 @@
     root.style.setProperty('--page-h', h + 'px');
     root.style.setProperty('--page-top', top + 'px');
     root.style.setProperty('--page-cols', String(cols));
+    root.style.setProperty('--page-col-w', (w - (cols - 1) * PAGE_GAP) / cols + 'px');
     root.style.setProperty('--page-gap', PAGE_GAP + 'px');
     ui.scroller.scrollTop = 0;
     pg.step = w + PAGE_GAP;
