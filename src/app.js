@@ -1116,7 +1116,6 @@
     const st = ui.scroller.scrollTop;
     if (!anyPanelOpen() && !gotoOpen() && !chromeHover && performance.now() > quietScrollUntil) {
       if (st > lastScrollTop + 6 && st > 120) setBar(false);
-      else if (st < lastScrollTop - 6) setBar(true);
     }
     lastScrollTop = st;
     if (!ui.notePop.hidden) closeNote();
