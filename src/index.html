@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <div id="sync-bar" hidden></div>
   <header id="bar">
     <!-- навигация -->
     <div class="bar-group reader-only">
@@ -223,13 +224,24 @@
           </details>
         </div>
         <div id="sync-in" hidden>
-          <div class="sync-user" id="sync-user"></div>
-          <div class="setting-hint" id="sync-status"></div>
-          <div class="sync-row">
-            <button class="text-btn" id="sync-now" data-i18n="syncNow"></button>
-            <button class="text-btn" id="sync-signout" data-i18n="syncSignOut"></button>
+          <div class="sync-card">
+            <div class="sync-head">
+              <div class="sync-avatar" id="sync-avatar"></div>
+              <div class="sync-who">
+                <div class="sync-user" id="sync-user"></div>
+                <div class="sync-status" id="sync-status-row"><i class="sync-dot"></i><span id="sync-status"></span></div>
+              </div>
+            </div>
+            <div class="sync-usage" id="sync-usage" hidden>
+              <div class="sync-usage-bar"><i id="sync-usage-fill"></i></div>
+              <div class="sync-usage-text" id="sync-usage-text"></div>
+            </div>
+            <div class="sync-row">
+              <button class="sync-btn sync-now" id="sync-now" data-i18n="syncNow"></button>
+              <button class="sync-btn" id="sync-signout" data-i18n="syncSignOut"></button>
+            </div>
           </div>
-          <button class="text-btn sync-delete" id="sync-delete" data-i18n="syncDelete"></button>
+          <button class="sync-delete" id="sync-delete" data-i18n="syncDelete"></button>
         </div>
         <p class="setting-hint" id="sync-message"></p>
       </div>

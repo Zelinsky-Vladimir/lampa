@@ -125,6 +125,11 @@
     return r;
   }
 
+  async function usage(session) {
+    const { used, quota } = await books(session, { action: 'list' });
+    return { used, quota };
+  }
+
   async function listFiles(session) {
     const { files } = await books(session, { action: 'list' });
     return new Set(files.map((f) => `${f.hash}.${f.ext}`));
@@ -152,5 +157,5 @@
     await call('/rest/v1/rpc/delete_account', { method: 'POST', token: session.access_token, body: {} });
   }
 
-  global.Cloud = { MAX_FILE, signIn, signUp, refresh, signOut, oauthStart, oauthFinish, idTokenSignIn, pull, push, listFiles, upload, download, removeFile, deleteAccount };
+  global.Cloud = { MAX_FILE, signIn, signUp, refresh, signOut, oauthStart, oauthFinish, idTokenSignIn, pull, push, listFiles, usage, upload, download, removeFile, deleteAccount };
 })(window);

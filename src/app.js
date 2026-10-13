@@ -3609,6 +3609,7 @@
     }
     syncing = (async () => {
       setSyncState('busy');
+      syncBusy(true);
       try {
         const s = await cloudSession();
         stampNow();
@@ -3621,6 +3622,8 @@
         uploadBooks(s);
       } catch (e) {
         if (signedIn()) setSyncState(e.code === 'OFFLINE' ? 'offline' : 'error', errorText(e));
+      } finally {
+        syncBusy(false);
       }
     })();
     try {
@@ -3766,10 +3769,13 @@
   async function uploadBooks(s) {
     if (uploading) return;
     uploading = true;
+    let busy = false;
     try {
       const done = new Set(cloud.uploaded || []);
       const todo = library.filter((e) => e.hash && e.name && e.path && !done.has(e.hash));
       if (!todo.length) return;
+      syncBusy(true);
+      busy = true;
       const there = await Cloud.listFiles(s);
       for (const e of todo) {
         if (!signedIn()) return;
@@ -3802,6 +3808,10 @@
       console.error('upload failed', e);
     } finally {
       uploading = false;
+      if (busy) {
+        syncBusy(false);
+        refreshUsage(true);
+      }
     }
   }
 
@@ -3819,7 +3829,13 @@
   async function fetchCloudBook(entry) {
     toast(t('syncDownloading'), 0);
     const s = await cloudSession();
-    const bytes = await Cloud.download(s, entry.hash, extOfName(entry.name));
+    syncBusy(true);
+    let bytes;
+    try {
+      bytes = await Cloud.download(s, entry.hash, extOfName(entry.name));
+    } finally {
+      syncBusy(false);
+    }
     entry.path = await api.saveBookFile(entry.name, bytes);
     saveJSON(LS.library, library);
     return entry.path;
@@ -3872,6 +3888,7 @@
     saveCloud();
     Stamps.resetPushed();
     clearTimeout(syncTimer);
+    usageAt = 0;
     setSyncState('idle');
     if (s) Cloud.signOut(s);
   }
@@ -3979,6 +3996,43 @@
     else if (state === 'error') el2.textContent = t('syncFailed', { e: error });
     else if (cloud.syncedAt) el2.textContent = t('syncDoneAt', { time: new Date(cloud.syncedAt).toLocaleTimeString(I18n.lang, { hour: '2-digit', minute: '2-digit' }) });
     else el2.textContent = '';
+    $('#sync-status-row').dataset.state = state === 'idle' && cloud.syncedAt ? 'ok' : state;
+  }
+
+  const formatMb = (bytes) => {
+    const mb = bytes / 1048576;
+    return mb.toLocaleString(I18n.lang, { maximumFractionDigits: mb < 10 ? 1 : 0 });
+  };
+
+  function renderUsage() {
+    const u = cloud.usage;
+    const box = $('#sync-usage');
+    box.hidden = !u || !u.quota;
+    if (box.hidden) return;
+    const share = Math.min(1, u.used / u.quota);
+    box.classList.toggle('full', share >= 0.95);
+    $('#sync-usage-fill').style.setProperty('--p', (share * 100).toFixed(1) + '%');
+    $('#sync-usage-text').textContent = t('syncUsage', { used: formatMb(u.used), quota: formatMb(u.quota) });
+  }
+
+  let usageAt = 0;
+  async function refreshUsage(force) {
+    if (!signedIn() || (!force && Date.now() - usageAt < 5 * 60000)) return;
+    usageAt = Date.now();
+    try {
+      cloud.usage = await Cloud.usage(await cloudSession());
+      saveCloud();
+      renderUsage();
+    } catch {}
+  }
+
+  let busyCount = 0;
+  let busyTimer = 0;
+  function syncBusy(on) {
+    busyCount = Math.max(0, busyCount + (on ? 1 : -1));
+    clearTimeout(busyTimer);
+    if (busyCount) busyTimer = setTimeout(() => ($('#sync-bar').hidden = false), 300);
+    else $('#sync-bar').hidden = true;
   }
 
   function renderSyncBox() {
@@ -3989,7 +4043,14 @@
     $('#sync-google').hidden = !api.authRedirect;
     // без входа через Google почта и пароль — единственный способ, сразу раскрыты
     if (!api.authRedirect) $('.sync-email').open = true;
-    if (inside) $('#sync-user').textContent = t('syncAs', { email: cloud.session.user.email || '—' });
+    if (inside) {
+      const email = cloud.session.user.email || '—';
+      $('#sync-user').textContent = email;
+      $('#sync-user').title = email;
+      $('#sync-avatar').textContent = email.trim().charAt(0);
+      renderUsage();
+      refreshUsage();
+    }
     $('#sync-delete').classList.remove('confirm');
     $('#sync-delete').textContent = t('syncDelete');
     setSyncMessage('');
