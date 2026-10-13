@@ -3817,12 +3817,16 @@
             try {
               await Cloud.upload(s, e.hash, ext, bytes);
             } catch (err) {
-              if (err.message !== 'QUOTA') throw err;
-              if (!quotaWarned) {
-                quotaWarned = true;
-                toast(t('syncQuotaFull', { mb: Math.round(((err.body && err.body.quota) || 0) / 1048576) }), 8000);
+              if (err.code === 'OFFLINE') throw err;
+              if (err.message === 'QUOTA') {
+                if (!quotaWarned) {
+                  quotaWarned = true;
+                  toast(t('syncQuotaFull', { mb: Math.round(((err.body && err.body.quota) || 0) / 1048576) }), 8000);
+                }
+                return;
               }
-              return;
+              console.error('upload failed', e.name, err);
+              if (err.message !== 'TOO_LARGE') continue;
             }
           }
         }
@@ -4118,6 +4122,7 @@
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) syncNow();
     });
+    window.addEventListener('focus', () => syncSoon(300));
     renderSyncBox();
   }
 

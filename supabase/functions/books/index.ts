@@ -116,10 +116,11 @@ Deno.serve(async (req) => {
       const size = await objectSize(user, hash, ext);
       if (size === null) return json({ error: 'NOT_UPLOADED' }, 409);
       const used = usedBy(await rowsOf(user), hash, false);
-      if (!(size > 0) || size > MAX_FILE || used + size > QUOTA) {
+      const problem = !(size > 0) ? 'EMPTY' : size > MAX_FILE ? 'TOO_LARGE' : used + size > QUOTA ? 'QUOTA' : '';
+      if (problem) {
         await removeObject(user, hash, ext);
         await admin.from('book_files').delete().eq('user_id', user).eq('hash', hash);
-        return json({ error: 'QUOTA', used, quota: QUOTA }, 413);
+        return json({ error: problem, used, quota: QUOTA, max: MAX_FILE }, problem === 'EMPTY' ? 422 : 413);
       }
       const { error } = await admin.from('book_files').update({ size, ext, ready: true }).eq('user_id', user).eq('hash', hash);
       if (error) throw error;
