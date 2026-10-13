@@ -65,8 +65,8 @@ Not done yet, roughly in order:
 4. TestFlight: App Store Connect record "Lampa: Book Reader" (the name "Lampa" is taken; the home-screen name stays Lampa), SKU `lampa-ios`, iPhone only. Upload a build:
    ```
    npm run build:mobile && npx cap sync ios
-   xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS' -archivePath build/Lampa.xcarchive -allowProvisioningUpdates archive
-   xcodebuild -exportArchive -archivePath build/Lampa.xcarchive -exportOptionsPlist ios/release/ExportOptions.plist -exportPath build/export -allowProvisioningUpdates
+   xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS' -archivePath ios/release/out/Lampa.xcarchive -allowProvisioningUpdates archive
+   xcodebuild -exportArchive -archivePath ios/release/out/Lampa.xcarchive -exportOptionsPlist ios/release/ExportOptions.plist -exportPath ios/release/out/export -allowProvisioningUpdates
    ```
    The build number comes from package.json (0.10.1 → 1001), so bump the version before every upload; App Store Connect rejects a repeated build number. First build 0.10.1 (1001) uploaded on 2026-10-13.
 5. For a paid/public release the free Google Translate endpoint should move to an official service behind a server proxy (Microsoft Translator keeps the dictionary).

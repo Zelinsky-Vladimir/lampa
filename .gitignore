@@ -6,3 +6,4 @@ Thumbs.db
 www/
 .claude/
 supabase/.temp/
+ios/release/out/
