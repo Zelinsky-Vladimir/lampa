@@ -1707,6 +1707,14 @@
   const search = { query: '', matches: [], cur: -1, timer: 0, jumped: false, items: [] };
   const hasHighlights = !!(window.CSS && CSS.highlights && window.Highlight);
 
+  function dropHighlight(name) {
+    const hl = CSS.highlights.get(name);
+    if (!hl) return;
+    hl.clear();
+    CSS.highlights.delete(name);
+    ui.book.classList.toggle('hl-repaint');
+  }
+
   // Нижний регистр и ё→е без изменения длины строки, чтобы смещения совпадали с текстом.
   function normalizeText(s) {
     let lower = s.toLowerCase();
@@ -1734,8 +1742,8 @@
 
   function clearHighlights() {
     if (!hasHighlights) return;
-    CSS.highlights.delete('search-hit');
-    CSS.highlights.delete('search-current');
+    dropHighlight('search-hit');
+    dropHighlight('search-current');
   }
 
   function resetSearch() {
@@ -1952,8 +1960,8 @@
 
   function clearNoteHighlights() {
     if (!hasHighlights) return;
-    for (const c of NOTE_COLORS) CSS.highlights.delete('note-' + c);
-    CSS.highlights.delete('note-comment');
+    for (const c of NOTE_COLORS) dropHighlight('note-' + c);
+    dropHighlight('note-comment');
   }
 
   function applyNoteHighlights() {
@@ -2376,7 +2384,7 @@
   function closeTranslate() {
     trState = null;
     ui.trPop.hidden = true;
-    if (hasHighlights) CSS.highlights.delete('tr-current');
+    if (hasHighlights) dropHighlight('tr-current');
   }
 
   // ---------- автопрокрутка ----------

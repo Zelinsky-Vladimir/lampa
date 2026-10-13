@@ -886,7 +886,7 @@ kbd {
 
 #back-btn {
   position: fixed;
-  bottom: 22px;
+  bottom: 58px;
   left: 50%;
   z-index: 22;
   transform: translateX(-50%);
@@ -1339,3 +1339,4 @@ kbd {
   font-size: 13px;
 }
 #sync-jump .primary-btn { padding: 7px 14px; font-size: 13px; }
+#book.hl-repaint { outline: 0 solid transparent; }

@@ -19,6 +19,7 @@ button, .card, .icon-btn, .home-tabs, .seg { -webkit-user-select: none; user-sel
 .panel { padding-top: var(--safe-top); padding-bottom: var(--safe-bottom); }
 #update-banner { top: calc(var(--bar-h) + var(--safe-top) + 10px); }
 #toast { bottom: calc(70px + var(--safe-bottom)); }
+#back-btn { bottom: calc(58px + var(--safe-bottom)); }
 #auto-pill { bottom: calc(64px + var(--safe-bottom)); }
 
 /* на телефоне нет мыши, клавиатурных сокращений и перетаскивания файлов */
