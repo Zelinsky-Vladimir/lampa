@@ -379,6 +379,7 @@
         <label class="label" for="translate-to" data-i18n="translateTo"></label>
         <select id="translate-to"></select>
         <p class="setting-hint" id="translate-privacy" data-i18n="translatePrivacy"></p>
+        <button class="text-btn" id="tr-prepare" hidden></button>
       </div>
 
       <div class="setting about">
@@ -399,6 +400,7 @@
     <div class="tr-head"><span id="tr-src"></span><select id="tr-to" class="tr-to" data-i18n-title="translateTo" data-i18n-aria="translateTo"></select></div>
     <div id="tr-main"></div>
     <div class="tr-actions">
+      <button class="primary-btn" id="tr-download" data-i18n="translateDownload" hidden></button>
       <button class="text-btn" id="tr-copy" data-i18n="copy"></button>
       <button class="text-btn" id="tr-save" data-i18n="saveAsNote"></button>
     </div>
@@ -421,6 +423,9 @@
     </button>
     <button class="sel-btn" id="sel-note" data-i18n-title="addNote">
       <svg viewBox="0 0 24 24"><path d="M5 19h4L19 9l-4-4L5 15zM13 7l4 4"/></svg><span data-i18n="note"></span>
+    </button>
+    <button class="sel-btn" id="sel-remove" data-i18n-title="removeHighlight" hidden>
+      <svg viewBox="0 0 24 24"><path d="M5 7h14M10 11v6M14 11v6M6.5 7l1 12.5h9l1-12.5M9.5 7V4.5h5V7"/></svg><span data-i18n="removeHighlight"></span>
     </button>
     <button class="sel-btn" id="sel-copy" data-i18n-title="copy">
       <svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="12" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg><span data-i18n="copy"></span>

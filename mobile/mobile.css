@@ -125,3 +125,7 @@ button, .card, .icon-btn, .home-tabs, .seg { -webkit-user-select: none; user-sel
   #footer { gap: 12px; }
   #back-btn { bottom: calc(60px + var(--safe-bottom)); }
 }
+@media (max-width: 600px) {
+  #sel-bar { max-width: calc(100vw - 24px); }
+  #sel-bar.on-note .sel-btn:not(#sel-remove) span { display: none; }
+}

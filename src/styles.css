@@ -152,12 +152,16 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 #scrub-ghost { position: absolute; top: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: var(--bg); box-shadow: inset 0 0 0 2px var(--accent); pointer-events: none; }
 #scrub-ticks i {
   position: absolute;
-  top: calc(50% + 6px);
-  width: 1px;
-  height: 5px;
-  background: var(--muted);
-  opacity: 0.55;
+  top: calc(50% - 4px);
+  width: 2px;
+  height: 8px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--fg);
+  opacity: 0;
+  transition: opacity 0.15s;
 }
+.scrub-wrap.scrubbing #scrub-ticks i:not(.bm):not(.nt) { opacity: 0.3; }
 #scrub-tip {
   position: absolute;
   bottom: calc(100% + 6px);

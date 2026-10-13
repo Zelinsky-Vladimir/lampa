@@ -449,6 +449,22 @@
     },
 
     translateOnDevice: !!AppleTranslate,
+    async translateStatus(text, to, from) {
+      if (!AppleTranslate) return null;
+      try {
+        return await AppleTranslate.status({ text: String(text || '').slice(0, 500), to, from: from || '' });
+      } catch {
+        return null;
+      }
+    },
+    async translatePrepare(from, to) {
+      if (!AppleTranslate) return null;
+      try {
+        return await AppleTranslate.prepare({ from, to });
+      } catch {
+        return null;
+      }
+    },
     async translate(text, to) {
       text = String(text || '').trim();
       if (!text || text.length > Online.MAX_TRANSLATE || !Online.isLangCode(to)) throw new Error('BAD_REQUEST');

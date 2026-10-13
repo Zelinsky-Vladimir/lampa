@@ -361,7 +361,10 @@
     const animSel = $('#page-anim');
     animSel.addEventListener('change', () => updateSettings({ pageAnim: animSel.value }));
     const trSel = $('#translate-to');
-    trSel.addEventListener('change', () => updateSettings({ translateTo: trSel.value }));
+    trSel.addEventListener('change', () => {
+      updateSettings({ translateTo: trSel.value });
+      renderPrepare();
+    });
 
     const themes = $('#themes');
     for (const th of THEMES) {
@@ -1792,6 +1795,7 @@
     ui.scrim.classList.add('show');
     setBar(true);
     if (panel === ui.tocPanel) switchTab(tab || leftTab);
+    if (panel === ui.accountPanel) renderPrepare();
     if (isSheet(panel)) panel.animate([{ transform: 'translateY(100%)' }, { transform: 'translateY(0)' }], { duration: 300, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
   }
 
@@ -2369,24 +2373,45 @@
     return end > start ? { start, end, rect: r.getBoundingClientRect() } : null;
   }
 
+  let selNote = null;
+
+  const notesOver = (start, end) => bookMarks().notes.filter((n) => !n.orphan && n.start < end && n.end > start);
+
   function showSelBar() {
     const r = selectionCharRange();
     if (!r) {
       hideSelBar();
       return;
     }
+    const over = notesOver(r.start, r.end);
+    placeSelBar(r.rect, over.length === 1 ? over[0] : null);
+  }
+
+  function showNoteBar(note) {
+    window.getSelection().removeAllRanges();
+    placeSelBar(rangeFor(note.start, note.end).getBoundingClientRect(), note);
+  }
+
+  const selRange = () => (selNote && window.getSelection().isCollapsed ? { start: selNote.start, end: selNote.end } : selectionCharRange());
+
+  function placeSelBar(rect, note) {
+    selNote = note;
+    ui.selBar.classList.toggle('on-note', !!note);
+    $('#sel-remove').hidden = !note;
+    for (const b of ui.selBar.querySelectorAll('.sw')) b.classList.toggle('active', !!note && b.dataset.color === note.color);
     ui.selBar.hidden = false;
     const w = ui.selBar.offsetWidth;
     const h = ui.selBar.offsetHeight;
-    const left = clamp(r.rect.left + r.rect.width / 2 - w / 2, 12, window.innerWidth - w - 12);
-    let top = r.rect.top - h - (coarsePointer() ? 18 : 10);
-    if (top < 60 + safeInsets().top) top = r.rect.bottom + (coarsePointer() ? 26 : 10);
+    const left = clamp(rect.left + rect.width / 2 - w / 2, 12, window.innerWidth - w - 12);
+    let top = rect.top - h - (coarsePointer() ? 18 : 10);
+    if (top < 60 + safeInsets().top) top = rect.bottom + (coarsePointer() ? 26 : 10);
     ui.selBar.style.left = left + 'px';
     ui.selBar.style.top = top + 'px';
   }
 
   function hideSelBar() {
     ui.selBar.hidden = true;
+    selNote = null;
   }
 
   function addNote(range, color, text) {
@@ -2412,7 +2437,7 @@
     bm.notes = bm.notes.filter((x) => x !== note);
     saveMarks();
     refreshMarks();
-    toast(t('noteDeleted'), 1400);
+    toast(t(note.text ? 'noteDeleted' : 'highlightRemoved'), 1400);
   }
 
   function noteAtPoint(x, y) {
@@ -2557,7 +2582,7 @@
 
   async function translateSelection() {
     if (!canTranslate()) return;
-    const r = selectionCharRange();
+    const r = selRange();
     if (!r) return;
     const text = oneLine(fullText().slice(r.start, r.end)).slice(0, 1500);
     const sentence = sentenceAround(r.start, r.end);
@@ -2581,11 +2606,15 @@
     runTranslation(trState);
   }
 
+  const langPair = (from, to) => `${langName(from)} → ${langName(to)}`;
+
   async function runTranslation(state) {
     trOpenedAt = performance.now();
     const main = $('#tr-main');
     main.textContent = t('translating');
     main.classList.add('loading');
+    $('#tr-download').hidden = true;
+    $('#tr-copy').hidden = $('#tr-save').hidden = false;
     $('#tr-src').textContent = '';
     fillTrTo(translateTarget());
     $('#tr-dict').replaceChildren();
@@ -2600,6 +2629,14 @@
     ui.trPop.hidden = false;
     placeTranslate();
 
+    if (api.translateStatus) {
+      const st = await api.translateStatus(state.text, translateTarget());
+      if (trState !== state) return;
+      if (st && st.status === 'supported' && st.src) {
+        main.textContent = t('translateNeedsDownload', { pair: langPair(st.src, translateTarget()) });
+        placeTranslate();
+      }
+    }
     const mainReq = translateText(state.text);
     const ctxReq = state.context ? translateText(state.context) : null;
     try {
@@ -2619,7 +2656,15 @@
     } catch (e) {
       if (trState !== state) return;
       main.classList.remove('loading');
-      const reason = { UNSUPPORTED_LANG: 'translateUnsupported', NEEDS_IOS_18: 'translateNeedsIos' }[e && e.message];
+      const code = e && e.message;
+      if (code === 'NOT_DOWNLOADED') {
+        main.textContent = t('translateNotDownloaded');
+        $('#tr-download').hidden = false;
+        $('#tr-copy').hidden = $('#tr-save').hidden = true;
+        placeTranslate();
+        return;
+      }
+      const reason = { UNSUPPORTED_LANG: 'translateUnsupported', NEEDS_IOS_18: 'translateNeedsIos' }[code];
       main.textContent = t(reason || (api.translateOnDevice ? 'translateFailedDevice' : 'translateFailed'));
     }
     placeTranslate();
@@ -2634,6 +2679,41 @@
       if (trState === state) $('#tr-sentence').textContent = '—';
     }
     placeTranslate();
+  }
+
+  function prepareSource() {
+    const lang = (current && ui.book.lang ? ui.book.lang : '').slice(0, 2).toLowerCase();
+    const to = translateTarget().slice(0, 2);
+    if (lang && lang !== to && TRANSLATE_LANGS.some((c) => c.startsWith(lang))) return lang;
+    return to === 'en' ? 'ru' : 'en';
+  }
+
+  async function renderPrepare() {
+    const btn = $('#tr-prepare');
+    btn.hidden = !api.translatePrepare || !canTranslate();
+    if (btn.hidden) return;
+    const from = prepareSource();
+    const to = translateTarget();
+    const pair = langPair(from, to);
+    btn.dataset.from = from;
+    btn.disabled = false;
+    btn.textContent = t('translatePrepare', { pair });
+    const st = await api.translateStatus('', to, from);
+    if (!st || btn.dataset.from !== from) return;
+    if (st.status === 'installed') {
+      btn.textContent = t('translateReady', { pair });
+      btn.disabled = true;
+    } else if (st.status === 'unsupported') {
+      btn.hidden = true;
+    }
+  }
+
+  async function prepareLanguages() {
+    const btn = $('#tr-prepare');
+    btn.disabled = true;
+    btn.textContent = t('translatePreparing');
+    await api.translatePrepare(btn.dataset.from, translateTarget());
+    renderPrepare();
   }
 
   function changeTranslateLang(code) {
@@ -4457,6 +4537,37 @@
       { passive: true },
     );
 
+    let tap = null;
+    ui.book.addEventListener(
+      'touchstart',
+      (e) => {
+        const p = e.touches.length === 1 ? e.touches[0] : null;
+        tap = p ? { x: p.clientX, y: p.clientY, time: Date.now() } : null;
+      },
+      { passive: true },
+    );
+    ui.book.addEventListener(
+      'touchend',
+      (e) => {
+        const t0 = tap;
+        tap = null;
+        if (!t0 || !current || !current.ready || !window.getSelection().isCollapsed) return;
+        const p = e.changedTouches[0];
+        if (Math.hypot(p.clientX - t0.x, p.clientY - t0.y) > 10 || Date.now() - t0.time > 500 || e.target.closest('a')) return;
+        const note = noteAtPoint(p.clientX, p.clientY);
+        if (!note) {
+          if (selNote) {
+            e.preventDefault();
+            hideSelBar();
+          }
+          return;
+        }
+        e.preventDefault();
+        showNoteBar(note);
+      },
+      { passive: false },
+    );
+
     let selTimer = 0;
     document.addEventListener('selectionchange', () => {
       if (!coarsePointer()) return;
@@ -4511,6 +4622,7 @@
 
     ui.scrub.addEventListener('pointerdown', () => {
       scrubbing = true;
+      ui.scrub.parentElement.classList.add('scrubbing');
       pushBack();
       showScrubTip();
     });
@@ -4523,6 +4635,7 @@
     window.addEventListener('pointerup', () => {
       if (!scrubbing) return;
       scrubbing = false;
+      ui.scrub.parentElement.classList.remove('scrubbing');
       ui.scrubTip.hidden = true;
       ui.scroller.focus({ preventScroll: true });
     });
@@ -4548,19 +4661,41 @@
       if (e.shiftKey) showSelBar();
     });
     document.addEventListener('selectionchange', () => {
-      if (!ui.selBar.hidden && window.getSelection().isCollapsed) hideSelBar();
+      if (!ui.selBar.hidden && !selNote && window.getSelection().isCollapsed) hideSelBar();
     });
     ui.selBar.addEventListener('mousedown', (e) => e.preventDefault());
     for (const b of ui.selBar.querySelectorAll('.sw')) {
       b.addEventListener('click', () => {
-        const r = selectionCharRange();
-        if (!r) return;
-        addNote(r, b.dataset.color, '');
+        const note = selNote;
+        if (note) {
+          if (note.color === b.dataset.color) deleteNote(note);
+          else {
+            note.color = b.dataset.color;
+            saveMarks();
+            refreshMarks();
+          }
+        } else {
+          const r = selectionCharRange();
+          if (!r) return;
+          addNote(r, b.dataset.color, '');
+        }
         window.getSelection().removeAllRanges();
         hideSelBar();
       });
     }
+    $('#sel-remove').addEventListener('click', () => {
+      const note = selNote;
+      window.getSelection().removeAllRanges();
+      hideSelBar();
+      if (note) deleteNote(note);
+    });
     $('#sel-note').addEventListener('click', () => {
+      if (selNote) {
+        const note = selNote;
+        window.getSelection().removeAllRanges();
+        openNoteEditor(note, false);
+        return;
+      }
       const r = selectionCharRange();
       if (!r) return;
       const note = addNote(r, 'yellow', '');
@@ -4568,6 +4703,10 @@
       openNoteEditor(note, true);
     });
     $('#sel-translate').addEventListener('click', translateSelection);
+    $('#tr-prepare').addEventListener('click', prepareLanguages);
+    $('#tr-download').addEventListener('click', () => {
+      if (trState) runTranslation(trState);
+    });
     $('#tr-to').addEventListener('change', (e) => changeTranslateLang(e.target.value));
     $('#tr-copy').addEventListener('click', () => {
       if (trState && trState.translation) navigator.clipboard.writeText(trState.translation).then(() => toast(t('copied'), 1200));
@@ -4582,7 +4721,8 @@ ${sentence}` : translation);
       toast(t('noteSaved'), 1400);
     });
     $('#sel-copy').addEventListener('click', () => {
-      const text = window.getSelection().toString();
+      const r = selRange();
+      const text = r ? fullText().slice(r.start, r.end).trim() : '';
       if (text) navigator.clipboard.writeText(text).then(() => toast(t('copied'), 1200));
       hideSelBar();
     });
@@ -4629,7 +4769,7 @@ ${sentence}` : translation);
       const note = noteAtPoint(e.clientX, e.clientY);
       if (note) {
         e.stopPropagation();
-        openNoteEditor(note, false);
+        showNoteBar(note);
       }
     });
     ui.scroller.addEventListener('click', (e) => {
@@ -4673,6 +4813,7 @@ ${sentence}` : translation);
       if (!ui.annotPop.hidden && !ui.annotPop.contains(e.target)) closeNoteEditor();
       if (gotoOpen() && !ui.gotoPop.contains(e.target) && !e.target.closest('#page-btn')) closeGoto();
       if (!ui.trPop.hidden && !ui.trPop.contains(e.target) && !ui.selBar.contains(e.target)) closeTranslate();
+      if (selNote && !ui.selBar.contains(e.target)) hideSelBar();
     });
     document.addEventListener('mousemove', (e) => {
       if (e.clientY < 56 || e.clientY > window.innerHeight - 56) setBar(true);
