@@ -1456,3 +1456,4 @@ a.about-row:hover { background: var(--faint); }
 .stepper span { min-width: 34px; text-align: center; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .step-row .seg { flex: 0 1 210px; }
 .sync-status[data-state="error"], .sync-status[data-state="offline"] { cursor: pointer; }
+.recent-empty { margin: 0; font-size: 14px; color: var(--muted); }

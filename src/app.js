@@ -78,13 +78,13 @@
     indent: true,
     autoSpeed: 40,
     footerAlways: false,
-    layoutV: 2,
+    layoutV: 3,
     brightness: 1,
     translateTo: 'auto',
     view: 'scroll',
     pageAnim: 'curl',
     curlDefault: true,
-    progressLine: true,
+    progressLine: false,
     ...(api.defaults || {}),
   };
   const features = { curl: true, fullscreen: true, dragDrop: true, ...(api.features || {}) };
@@ -171,9 +171,10 @@
   if (!TOP_FONTS.includes(settings.font)) settings.font = DEFAULTS.font;
   if (savedSettings && !savedSettings.curlDefault) Object.assign(settings, { pageAnim: 'curl', curlDefault: true });
   if (!features.curl && settings.pageAnim === 'curl') settings.pageAnim = 'slide';
-  if (savedSettings && !savedSettings.layoutV) {
-    settings.footerAlways = false;
-    settings.layoutV = 2;
+  if (savedSettings && (savedSettings.layoutV || 0) < 3) {
+    if (!savedSettings.layoutV) settings.footerAlways = false;
+    settings.progressLine = false;
+    settings.layoutV = 3;
     saveJSON(LS.settings, settings);
   }
 
@@ -1021,6 +1022,7 @@
     updateProgress();
     const a = blockAtTop();
     if (a) entry.pos = a;
+    if (entry.progress !== current.ratio) entry.readAt = Date.now();
     entry.progress = current.ratio;
     entry.page = current.shownPage || current.page;
     entry.pages = displayTotal();
@@ -1638,17 +1640,29 @@
   }
 
   const RECENT_MAX = 6;
+  const lastRead = (e) => Math.max(e.readAt || 0, e.openedAt || 0);
+  const byLastRead = () => library.slice().sort((a, b) => lastRead(b) - lastRead(a));
+  const lastBook = () => byLastRead()[0];
+
+  function inProgress(e) {
+    if (!(e.progress > 0 && e.progress < 0.995)) return false;
+    const read = shelfFor(e);
+    return !(read && read.list === 'read');
+  }
 
   function renderHome() {
     renderHomeTabs();
     renderShelf();
     renderAll();
+    const ordered = byLastRead();
+    const recent = ordered.filter(inProgress).slice(0, RECENT_MAX);
     $('#recent-section').hidden = !library.length;
     const more = $('#recent-all');
-    more.hidden = library.length <= RECENT_MAX;
+    more.hidden = library.length <= recent.length;
     more.textContent = t('allN', { n: library.length });
+    $('#recent-empty').hidden = recent.length > 0;
 
-    const last = library[0];
+    const last = ordered[0];
     $('#home-top').hidden = !last;
     $('#home-add').hidden = !last;
     $('#home-empty').hidden = !!last;
@@ -1656,7 +1670,7 @@
       renderContinue(last);
       renderUpNext();
     }
-    ui.recent.replaceChildren(...library.slice(0, RECENT_MAX).map(libraryCard));
+    ui.recent.replaceChildren(...recent.map(libraryCard));
   }
 
   const ALL_SORTS = [['recent', 'sortRecent'], ['reading', 'sortReading'], ['unread', 'sortUnread'], ['title', 'sortTitle']];
@@ -1700,7 +1714,8 @@
       renderAll();
     });
     const q = normText($('#all-filter').value);
-    let items = q ? library.filter((e) => normText(e.title + ' ' + e.author).includes(q)) : library.slice();
+    const ordered = byLastRead();
+    let items = q ? ordered.filter((e) => normText(e.title + ' ' + e.author).includes(q)) : ordered;
     if (allSort === 'reading') items = items.filter((e) => e.progress > 0 && e.progress < 0.995);
     else if (allSort === 'unread') items = items.filter((e) => !e.progress);
     else if (allSort === 'title') {
@@ -3919,6 +3934,7 @@
         hash: e.hash || hashFromPath(e.path),
         name: e.name || '',
         openedAt: e.openedAt || 0,
+        readAt: e.readAt || 0,
         pos: e.pos || null,
         progress: e.progress || 0,
         page: e.page || 0,
@@ -4091,7 +4107,7 @@
       e = { key: row.id, path: null };
       library.push(e);
     }
-    Object.assign(e, { title: d.title, author: d.author, hash: d.hash || e.hash, name: d.name || e.name, openedAt: d.openedAt });
+    Object.assign(e, { title: d.title, author: d.author, hash: d.hash || e.hash, name: d.name || e.name, openedAt: d.openedAt, readAt: d.readAt || e.readAt || 0 });
     const reading = current && current.ready && current.key === row.id;
     const moved = JSON.stringify(d.pos) !== JSON.stringify(e.pos);
     if (reading && moved && d.pos) return { key: row.id, pos: d.pos, page: d.page };
@@ -4565,7 +4581,7 @@
     $('#btn-account').addEventListener('click', () => openPanel(ui.accountPanel));
     $('#btn-full').addEventListener('click', () => api.toggleFullscreen());
     $('#btn-search').addEventListener('click', () => (searchOpen() ? closeSearch() : openSearch()));
-    $('#cont-mark-read').addEventListener('click', () => markLibraryRead(library[0]));
+    $('#cont-mark-read').addEventListener('click', () => markLibraryRead(lastBook()));
     $('#up-next-all').addEventListener('click', () => switchHomeTab('want'));
     for (const a of document.querySelectorAll('a[data-external]')) {
       a.addEventListener('click', (e) => {
@@ -4575,7 +4591,7 @@
     }
     if (api.version) api.version().then((v) => ($('#app-version').textContent = v || '')).catch(() => {});
     ui.btnBookmark.addEventListener('click', toggleBookmark);
-    ui.homeContinue.addEventListener('click', () => library[0] && openEntry(library[0]));
+    ui.homeContinue.addEventListener('click', () => lastBook() && openEntry(lastBook()));
     ui.btnAuto.addEventListener('click', () => (auto.on ? stopAuto() : startAuto()));
     $('#auto-stop').addEventListener('click', stopAuto);
     $('#auto-slower').addEventListener('click', () => changeAutoSpeed(-1));
