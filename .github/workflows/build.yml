@@ -9,7 +9,28 @@ permissions:
   contents: write
 
 jobs:
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+
+      - name: Create in lampa-releases
+        if: env.RELEASES_TOKEN != ''
+        env:
+          RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: Zelinsky-Vladimir/lampa-releases
+          token: ${{ secrets.RELEASES_TOKEN }}
+          tag_name: ${{ github.ref_name }}
+          body: Lampa ${{ github.ref_name }}
+
   build:
+    needs: release
+    if: always() && needs.release.result != 'failure'
     strategy:
       fail-fast: false
       matrix:
@@ -29,41 +50,43 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
         with:
-          name: svitok-${{ runner.os }}
-          path: |
+          files: |
             dist/*.exe
             dist/*.dmg
             dist/*.AppImage
             dist/*.deb
             dist/latest*.yml
             dist/*.blockmap
-          if-no-files-found: error
-          retention-days: 2
 
-  release:
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          merge-multiple: true
-
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: artifacts/*
-          generate_release_notes: true
-
-      - name: Publish to lampa-releases
-        if: env.RELEASES_TOKEN != ''
+      - name: Upload to lampa-releases
+        if: startsWith(github.ref, 'refs/tags/v') && env.RELEASES_TOKEN != ''
         env:
           RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN }}
         uses: softprops/action-gh-release@v2
         with:
           repository: Zelinsky-Vladimir/lampa-releases
           token: ${{ secrets.RELEASES_TOKEN }}
-          files: artifacts/*
-          body: Lampa ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          files: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.AppImage
+            dist/*.deb
+            dist/latest*.yml
+            dist/*.blockmap
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        continue-on-error: true
+        with:
+          name: lampa-${{ runner.os }}
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.AppImage
+            dist/*.deb
+          retention-days: 2
