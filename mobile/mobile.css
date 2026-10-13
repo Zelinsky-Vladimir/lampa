@@ -82,7 +82,8 @@ button, .card, .icon-btn, .home-tabs, .seg { -webkit-user-select: none; user-sel
   #cont-mark-read { display: none; }
   .home-top { margin-top: 18px; }
 
-  #settings-panel { top: auto; left: 0; right: 0; height: min(80vh, 700px); padding-top: 4px; border-radius: 22px 22px 0 0; transform: translateY(105%); }
+  #settings-panel { top: auto; left: 0; right: 0; height: min(80vh, 700px); padding-top: 4px; border-radius: 22px 22px 0 0; transform: translateY(105%); transition: none; }
+  #settings-panel header { touch-action: none; }
   #settings-panel.open { transform: none; }
   #settings-panel header::before { content: ''; position: absolute; left: 50%; top: 8px; width: 40px; height: 5px; margin-left: -20px; border-radius: 3px; background: var(--border); }
   #settings-panel header { position: relative; padding-top: 18px; }

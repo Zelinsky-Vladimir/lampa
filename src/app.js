@@ -1787,17 +1787,105 @@
     closeGoto();
     if (wasOpen && !tab) return;
     stopAuto();
+    if (sheetClose) sheetClose.cancel();
     panel.classList.add('open');
     ui.scrim.classList.add('show');
     setBar(true);
     if (panel === ui.tocPanel) switchTab(tab || leftTab);
+    if (isSheet(panel)) panel.animate([{ transform: 'translateY(100%)' }, { transform: 'translateY(0)' }], { duration: 300, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+  }
+
+  const isSheet = (panel) => panel === ui.settingsPanel && phoneLayout();
+  let sheetClose = null;
+
+  function closeSheet(panel) {
+    const from = panel.style.transform || 'translateY(0)';
+    panel.style.transform = '';
+    const a = panel.animate([{ transform: from }, { transform: 'translateY(100%)' }], { duration: 230, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' });
+    sheetClose = a;
+    a.onfinish = () => {
+      panel.classList.remove('open');
+      a.cancel();
+      sheetClose = null;
+    };
+    a.oncancel = () => {
+      if (sheetClose === a) sheetClose = null;
+    };
   }
 
   function closePanels() {
     ui.tocPanel.classList.remove('open');
-    ui.settingsPanel.classList.remove('open');
+    if (ui.settingsPanel.classList.contains('open') && isSheet(ui.settingsPanel) && !sheetClose) closeSheet(ui.settingsPanel);
+    else if (!sheetClose) ui.settingsPanel.classList.remove('open');
     ui.accountPanel.classList.remove('open');
     ui.scrim.classList.remove('show');
+    ui.scrim.style.opacity = '';
+  }
+
+  function setupSheetDrag() {
+    const panel = ui.settingsPanel;
+    const body = panel.querySelector('.body');
+    let g = null;
+    panel.addEventListener(
+      'touchstart',
+      (e) => {
+        if (!isSheet(panel) || e.touches.length !== 1 || e.target.closest('input[type="range"], select')) return;
+        const p = e.touches[0];
+        g = { x: p.clientX, y: p.clientY, t: performance.now(), head: !!e.target.closest('header'), drag: false, dy: 0 };
+      },
+      { passive: true },
+    );
+    panel.addEventListener(
+      'touchmove',
+      (e) => {
+        if (!g) return;
+        const p = e.touches[0];
+        const dx = p.clientX - g.x;
+        const dy = p.clientY - g.y;
+        if (!g.drag) {
+          if (Math.abs(dy) < 6 && Math.abs(dx) < 6) return;
+          if (dy <= 0 || Math.abs(dx) > Math.abs(dy) || (!g.head && body.scrollTop > 0)) {
+            g = null;
+            return;
+          }
+          g.drag = true;
+          g.y = p.clientY;
+          g.t = performance.now();
+        }
+        e.preventDefault();
+        g.dy = Math.max(0, p.clientY - g.y);
+        panel.style.transform = `translateY(${g.dy}px)`;
+        ui.scrim.style.opacity = String(Math.max(0, 1 - g.dy / panel.offsetHeight));
+      },
+      { passive: false },
+    );
+    const end = () => {
+      const s0 = g;
+      g = null;
+      if (!s0 || !s0.drag) return;
+      const fast = s0.dy / Math.max(1, performance.now() - s0.t) > 0.6;
+      if (s0.dy > panel.offsetHeight * 0.25 || (fast && s0.dy > 30)) {
+        closePanels();
+        return;
+      }
+      const from = panel.style.transform;
+      panel.style.transform = '';
+      ui.scrim.style.opacity = '';
+      panel.animate([{ transform: from }, { transform: 'translateY(0)' }], { duration: 200, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+    };
+    panel.addEventListener('touchend', end);
+    panel.addEventListener('touchcancel', end);
+  }
+
+  function preloadFonts() {
+    if (!document.fonts || !document.fonts.load) return;
+    const ids = [...new Set([settings.font, ...TOP_FONTS])];
+    for (const id of ids) {
+      const f = FONTS.find((x) => x.id === id);
+      if (!f) continue;
+      const family = f.stack.split(',')[0];
+      for (const face of ['400', '700', 'italic 400']) document.fonts.load(`${face} 20px ${family}`, 'АаAa').catch(() => {});
+    }
   }
 
   function highlightToc() {
@@ -4602,6 +4690,8 @@ ${sentence}` : translation);
     });
     setupTouch();
     setupHomeSwipe();
+    setupSheetDrag();
+    setTimeout(preloadFonts, 1200);
     document.addEventListener('focusin', syncEditMenu);
     document.addEventListener('focusout', () => setTimeout(syncEditMenu, 0));
     if (window.visualViewport) {
