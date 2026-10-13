@@ -68,5 +68,5 @@ Not done yet, roughly in order:
    xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS' -archivePath ios/release/out/Lampa.xcarchive -allowProvisioningUpdates archive
    xcodebuild -exportArchive -archivePath ios/release/out/Lampa.xcarchive -exportOptionsPlist ios/release/ExportOptions.plist -exportPath ios/release/out/export -allowProvisioningUpdates
    ```
-   The build number comes from package.json (0.10.1 → 1001), so bump the version before every upload; App Store Connect rejects a repeated build number. First build 0.10.1 (1001) uploaded on 2026-10-13.
+   The build number comes from package.json (0.10.1 → 1001), so bump the version before every upload; App Store Connect rejects a repeated build number. First build 0.10.1 (1001) uploaded on 2026-10-13; internal TestFlight works (he installed it on his iPhone).
 5. For a paid/public release the free Google Translate endpoint should move to an official service behind a server proxy (Microsoft Translator keeps the dictionary).
