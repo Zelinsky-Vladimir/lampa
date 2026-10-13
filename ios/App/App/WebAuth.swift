@@ -1,6 +1,7 @@
 import AuthenticationServices
 import Capacitor
 import UIKit
+import WebKit
 
 @objc(WebAuthPlugin)
 public class WebAuthPlugin: CAPPlugin, CAPBridgedPlugin, ASWebAuthenticationPresentationContextProviding {
@@ -49,7 +50,30 @@ public class WebAuthPlugin: CAPPlugin, CAPBridgedPlugin, ASWebAuthenticationPres
     }
 }
 
+class LampaWebView: WKWebView {
+    override func buildMenu(with builder: UIMenuBuilder) {
+        super.buildMenu(with: builder)
+        builder.replaceChildren(ofMenu: .lookup) { children in
+            children.filter { !Self.isSystemTranslate($0) }
+        }
+    }
+
+    private static func isSystemTranslate(_ element: UIMenuElement) -> Bool {
+        if let command = element as? UICommand {
+            return NSStringFromSelector(command.action).lowercased().contains("translate")
+        }
+        if let action = element as? UIAction {
+            return action.identifier.rawValue.lowercased().contains("translate")
+        }
+        return false
+    }
+}
+
 class LampaBridgeViewController: CAPBridgeViewController {
+    override open func webView(with frame: CGRect, configuration: WKWebViewConfiguration) -> WKWebView {
+        LampaWebView(frame: frame, configuration: configuration)
+    }
+
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(WebAuthPlugin())
         bridge?.registerPluginInstance(AppleSignInPlugin())

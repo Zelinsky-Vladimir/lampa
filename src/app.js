@@ -1457,6 +1457,7 @@
     pg.anchor = entry.pos || null;
     lastScrollTop = ui.scroller.scrollTop;
     current.ready = true;
+    playEnter(ui.book, 'enter-book');
     setBar(true);
     updateProgress();
     if (paged()) refreshPageNumbers();
@@ -1474,6 +1475,13 @@
   }
 
   // ---------- экраны ----------
+
+  function playEnter(node, name) {
+    node.classList.remove('enter-home', 'enter-book');
+    void node.offsetWidth;
+    node.classList.add(name);
+    node.addEventListener('animationend', () => node.classList.remove(name), { once: true });
+  }
 
   function showReader() {
     ui.home.hidden = true;
@@ -1497,6 +1505,7 @@
     setBar(true);
     document.title = 'Lampa';
     renderHome();
+    playEnter(ui.home, 'enter-home');
   }
 
   function readLabel(entry) {
@@ -3909,6 +3918,7 @@
     if (current && current.ready && o.pos && current.starts[o.pos.i] != null) {
       const start = current.starts[o.pos.i];
       n = displayPage(start + (o.pos.f || 0) * (blockEnd(o.pos.i) - start));
+      if (current.shownPage && Math.abs(n - current.shownPage) < 2) return;
     }
     $('#sync-jump-text').textContent = t('syncJump', { n });
     bar.hidden = false;
