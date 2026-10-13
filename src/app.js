@@ -1076,8 +1076,13 @@
   }
 
   let lastChapter = -2;
+  let resizing = false;
+  let resizeTimer = 0;
+
   function updateProgress() {
     if (!readerVisible() || !current.ready) return;
+    if (resizing) return;
+    current.stable = blockAtTop();
     const pos = currentCharPos();
     const total = current.index.total;
     current.ratio = total ? clamp(pos / total, 0, 1) : 0;
@@ -1142,7 +1147,7 @@
     if (!ui.trPop.hidden && performance.now() - trOpenedAt > 400) closeTranslate();
     if (!ui.annotPop.hidden && performance.now() - editorOpenedAt > 400) closeNoteEditor();
     scheduleProgress();
-    scheduleSave();
+    if (!resizing) scheduleSave();
   }
 
   let scrubbing = false;
@@ -4551,15 +4556,26 @@ ${sentence}` : translation);
       else if (x > 0.7) pageTurn(1);
       else setBar(root.dataset.chrome === 'hidden');
     });
-    ui.book.addEventListener('scrollend', () => {
+    const settlePage = () => {
       if (!paged()) return;
       const idx = clamp(Math.round(ui.book.scrollLeft / pg.step), 0, pg.count - 1);
       if (Math.abs(ui.book.scrollLeft - idx * pg.step) > 2) ui.book.scrollTo({ left: idx * pg.step, behavior: 'instant' });
       pg.index = idx;
+      if (resizing) return;
       pg.anchor = blockAtTop();
       scheduleProgress();
       scheduleSave();
-    });
+    };
+    let settleTimer = 0;
+    ui.book.addEventListener('scrollend', settlePage);
+    ui.book.addEventListener(
+      'scroll',
+      () => {
+        clearTimeout(settleTimer);
+        settleTimer = setTimeout(settlePage, 160);
+      },
+      { passive: true },
+    );
     ui.notePop.addEventListener('click', (e) => {
       const a = e.target.closest('a');
       if (a) handleLink(e, a);
@@ -4599,12 +4615,28 @@ ${sentence}` : translation);
     if (!features.fullscreen) $('#btn-full').hidden = true;
     window.addEventListener('resize', () => {
       if (gotoOpen()) placeGoto();
-      if (paged() && current && current.ready) {
-        const a = pg.anchor || blockAtTop();
+      if (!readerVisible() || !current.ready) return;
+      const a = current.stable || pg.anchor || blockAtTop();
+      const restore = () => {
+        quietScroll();
         layoutPages();
         scrollToAnchor(a);
-      }
-      scheduleProgress();
+      };
+      resizing = true;
+      clearTimeout(saveTimer);
+      restore();
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        restore();
+        resizeTimer = setTimeout(() => {
+          restore();
+          resizing = false;
+          if (paged()) pg.anchor = a;
+          updateProgress();
+          current.stable = a;
+          scheduleSave();
+        }, 80);
+      }, 250);
     });
     setupDragDrop();
 
