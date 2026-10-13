@@ -286,6 +286,7 @@
       updateSearchCount();
       lastChapter = -2;
       updateProgress();
+      renderBackBtn();
     }
   }
 
@@ -1538,6 +1539,7 @@
   }
 
   function showReader() {
+    closeContextMenu();
     ui.home.hidden = true;
     ui.scroller.hidden = false;
     root.dataset.mode = 'reader';
@@ -1821,8 +1823,12 @@
   }
 
   function shelfMenu(b) {
+    const back = b.lib && b.lib.until > Date.now()
+      ? [{ icon: 'up', label: t('ctxBackToLibrary'), sub: t('ctxKeptUntil', { date: new Date(b.lib.until).toLocaleDateString(I18n.lang, { day: 'numeric', month: 'long' }) }), run: () => restoreToLibrary(b) }]
+      : [];
     if (b.list === 'want') {
       return [
+        ...back,
         { icon: 'check', label: t('markReadShort'), run: () => openBookEditor({ ...b, list: 'read', finished: b.finished || today() }) },
         {
           icon: 'up',
@@ -1837,9 +1843,6 @@
         { icon: 'trash', label: t('ctxRemoveWant'), danger: true, run: () => confirmRemoveShelf(b) },
       ];
     }
-    const back = b.lib && b.lib.until > Date.now()
-      ? [{ icon: 'up', label: t('ctxBackToLibrary'), sub: t('ctxKeptUntil', { date: new Date(b.lib.until).toLocaleDateString(I18n.lang, { day: 'numeric', month: 'long' }) }), run: () => restoreToLibrary(b) }]
-      : [];
     return [
       ...back,
       { icon: 'star', label: t('ctxRating'), run: () => openBookEditor(b) },
@@ -2055,7 +2058,7 @@
     withMenu(card, () => libraryMenu(entry));
     card.addEventListener('click', () => openEntry(entry));
     card.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') openEntry(entry);
+      if (e.key === 'Enter' && e.target === card) openEntry(entry);
     });
     return card;
   }
@@ -2985,7 +2988,11 @@
     btn.disabled = false;
     btn.textContent = t('translatePrepare', { pair });
     const st = await api.translateStatus('', to, from);
-    if (!st || btn.dataset.from !== from) return;
+    if (btn.dataset.from !== from) return;
+    if (!st) {
+      btn.hidden = true;
+      return;
+    }
     if (st.status === 'installed') {
       btn.textContent = t('translateReady', { pair });
       btn.disabled = true;
@@ -3996,7 +4003,7 @@
 
   const KEEP_DAYS = 7;
   const PURGE_KEY = 'lampa.purge';
-  const purgeList = () => loadJSON(PURGE_KEY, []).filter((x) => x && x.hash);
+  const purgeList = () => loadJSON(PURGE_KEY, []).filter((x) => x && (x.key || x.hash));
 
   function retireFromLibrary(key, book) {
     const e = library.find((x) => x.key === key);
@@ -4006,11 +4013,9 @@
     saveLibrary();
     book.lib = { key: e.key, title: e.title || '', author: e.author || '', hash: e.hash || '', name: e.name || '', pos: e.pos || null, progress: e.progress || 0, page: e.page || 0, pages: e.pages || 0, openedAt: e.openedAt || 0, readAt: e.readAt || 0, until };
     saveShelf();
-    if (e.hash) {
-      const list = purgeList().filter((x) => x.hash !== e.hash);
-      list.push({ hash: e.hash, name: e.name || '', path: e.path || null, source: e.source || null, thumb: e.thumb || null, at: until });
-      saveJSON(PURGE_KEY, list);
-    }
+    const list = purgeList().filter((x) => x.key !== e.key);
+    list.push({ key: e.key, hash: e.hash || '', name: e.name || '', path: e.path || null, source: e.source || null, thumb: e.thumb || null, at: until });
+    saveJSON(PURGE_KEY, list);
     refreshHome();
     showUndo(t('movedToReadUndo', { title: book.title }), () => restoreToLibrary(book));
   }
@@ -4019,12 +4024,12 @@
     const l = book.lib;
     if (!l) return;
     if (!library.some((x) => x.key === l.key)) {
-      const kept = purgeList().find((x) => x.hash === l.hash) || {};
+      const kept = purgeList().find((x) => x.key === l.key || (l.hash && x.hash === l.hash)) || {};
       const { until, ...data } = l;
       library.push({ ...data, path: kept.path || null, source: kept.source || null, thumb: kept.thumb || null });
       saveLibrary();
     }
-    saveJSON(PURGE_KEY, purgeList().filter((x) => x.hash !== l.hash));
+    saveJSON(PURGE_KEY, purgeList().filter((x) => x.key !== l.key && !(l.hash && x.hash === l.hash)));
     delete book.lib;
     saveShelf();
     refreshHome();
@@ -4040,9 +4045,13 @@
         keep.push(x);
         continue;
       }
-      if (library.some((e) => e.hash === x.hash)) continue;
+      if (library.some((e) => e.key === x.key || (x.hash && e.hash === x.hash))) continue;
+      if (signedIn() && x.hash && !(cloud.syncedAt > x.at)) {
+        keep.push(x);
+        continue;
+      }
       if (x.path && !library.some((e) => e.path === x.path)) api.forgetBook(x.path);
-      if (signedIn() && x.name) {
+      if (signedIn() && x.hash && x.name) {
         try {
           await Cloud.removeFile(await cloudSession(), x.hash, extOfName(x.name));
           cloud.uploaded = (cloud.uploaded || []).filter((h) => h !== x.hash);
@@ -4415,6 +4424,7 @@
         await pullChanges(s);
         await pushChanges(s);
         cloud.syncedAt = Date.now();
+        setTimeout(() => purgeOldFiles().catch(() => {}), 0);
         saveCloud();
         setSyncState('ok');
         uploadBooks(s);
@@ -5003,13 +5013,19 @@
       stepMatch(e.shiftKey ? -1 : 1);
     });
 
+    let scrubStart = null;
     ui.scrub.addEventListener('pointerdown', () => {
       scrubbing = true;
       ui.scrub.parentElement.classList.add('scrubbing');
-      pushBack();
+      scrubStart = { anchor: blockAtTop(), page: current.shownPage || current.page, pos: currentCharPos() };
       showScrubTip();
     });
     ui.scrub.addEventListener('input', () => {
+      if (scrubStart) {
+        backStack.push(scrubStart);
+        scrubStart = null;
+        renderBackBtn();
+      }
       scrubFill();
       if (paged()) showPage(Number(ui.scrub.value) - 1, 0);
       else jumpToPage(Number(ui.scrub.value), false);
@@ -5018,6 +5034,7 @@
     window.addEventListener('pointerup', () => {
       if (!scrubbing) return;
       scrubbing = false;
+      scrubStart = null;
       ui.scrub.parentElement.classList.remove('scrubbing');
       ui.scrubTip.hidden = true;
       ui.scroller.focus({ preventScroll: true });
@@ -5039,7 +5056,11 @@
     $('#end-save').addEventListener('click', () => closeEndCard(true));
     $('#end-later').addEventListener('click', () => closeEndCard(false));
 
-    ui.book.addEventListener('mouseup', () => setTimeout(showSelBar, 0));
+    ui.book.addEventListener('mouseup', () =>
+      setTimeout(() => {
+        if (!window.getSelection().isCollapsed) showSelBar();
+      }, 0),
+    );
     ui.book.addEventListener('keyup', (e) => {
       if (e.shiftKey) showSelBar();
     });
