@@ -1477,7 +1477,7 @@
   // ---------- экраны ----------
 
   function playEnter(node, name) {
-    node.classList.remove('enter-home', 'enter-book');
+    node.classList.remove('enter-home', 'enter-book', 'enter-left', 'enter-right', 'enter-fade-in');
     void node.offsetWidth;
     node.classList.add(name);
     node.addEventListener('animationend', () => node.classList.remove(name), { once: true });
@@ -2837,11 +2837,47 @@
     $('#shelf-view').hidden = homeTab === 'library';
   }
 
-  function switchHomeTab(tab) {
+  const HOME_TABS = ['library', 'read', 'want'];
+
+  function switchHomeTab(tab, dir) {
+    if (tab === homeTab) return;
     homeTab = tab;
     saveJSON('lampa.homeTab', tab);
     // запрос остаётся: нашли книгу на одной вкладке — можно добавить её на другой
     refreshHome();
+    const view = tab === 'library' ? $('#home-library') : $('#shelf-view');
+    playEnter(view, dir > 0 ? 'enter-left' : dir < 0 ? 'enter-right' : 'enter-fade-in');
+  }
+
+  function setupHomeSwipe() {
+    let start = null;
+    ui.home.addEventListener(
+      'touchstart',
+      (e) => {
+        const tgt = e.target;
+        start =
+          e.touches.length === 1 && !tgt.closest('input, select, textarea, .home-tabs, .shelf-tools, #book-dlg')
+            ? { x: e.touches[0].clientX, y: e.touches[0].clientY, t: performance.now() }
+            : null;
+      },
+      { passive: true },
+    );
+    ui.home.addEventListener(
+      'touchend',
+      (e) => {
+        const s0 = start;
+        start = null;
+        if (!s0 || dragId || window.getSelection().toString()) return;
+        const p = e.changedTouches[0];
+        const dx = p.clientX - s0.x;
+        const dy = p.clientY - s0.y;
+        if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5 || performance.now() - s0.t > 700) return;
+        const i = HOME_TABS.indexOf(homeTab) + (dx < 0 ? 1 : -1);
+        if (i < 0 || i >= HOME_TABS.length) return;
+        switchHomeTab(HOME_TABS[i], dx < 0 ? 1 : -1);
+      },
+      { passive: true },
+    );
   }
 
   function sortedShelf(list) {
@@ -3531,7 +3567,7 @@
   }
 
   function bindShelf() {
-    for (const b of document.querySelectorAll('#home-tabs [data-tab]')) b.addEventListener('click', () => switchHomeTab(b.dataset.tab));
+    for (const b of document.querySelectorAll('#home-tabs [data-tab]')) b.addEventListener('click', () => switchHomeTab(b.dataset.tab, Math.sign(HOME_TABS.indexOf(b.dataset.tab) - HOME_TABS.indexOf(homeTab))));
     $('#shelf-add').addEventListener('click', startAddBook);
     const filter = $('#shelf-filter');
     filter.addEventListener('input', () => {
@@ -4458,6 +4494,7 @@ ${sentence}` : translation);
       syncNow();
     });
     setupTouch();
+    setupHomeSwipe();
     if (!features.fullscreen) $('#btn-full').hidden = true;
     window.addEventListener('resize', () => {
       if (paged() && current && current.ready) {

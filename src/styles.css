@@ -1345,8 +1345,13 @@ kbd {
 @keyframes enter-fade { from { opacity: 0; } }
 .enter-home { animation: enter-home 0.26s cubic-bezier(0.2, 0.7, 0.3, 1); transform-origin: 50% 30%; }
 .enter-book { animation: enter-book 0.3s cubic-bezier(0.2, 0.7, 0.3, 1); }
+@keyframes enter-left { from { opacity: 0; transform: translateX(28px); } }
+@keyframes enter-right { from { opacity: 0; transform: translateX(-28px); } }
+.enter-left { animation: enter-left 0.24s cubic-bezier(0.2, 0.7, 0.3, 1); }
+.enter-right { animation: enter-right 0.24s cubic-bezier(0.2, 0.7, 0.3, 1); }
+.enter-fade-in { animation: enter-fade 0.18s ease-out; }
 @media (prefers-reduced-motion: reduce) {
-  .enter-home, .enter-book { animation-name: enter-fade; }
+  .enter-home, .enter-book, .enter-left, .enter-right { animation-name: enter-fade; }
 }
 
 .bar-brand { padding-left: 6px; font: 700 22px Georgia, 'Times New Roman', serif; letter-spacing: -0.01em; color: var(--fg); }
@@ -1421,3 +1426,4 @@ kbd {
 a.about-row:hover { background: var(--faint); }
 .about-row svg { width: 16px; height: 16px; color: var(--muted); }
 #home-library { max-width: 1160px; margin: 0 auto; }
+#home { overflow-x: hidden; }
