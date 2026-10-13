@@ -53,5 +53,6 @@ class LampaBridgeViewController: CAPBridgeViewController {
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(WebAuthPlugin())
         bridge?.registerPluginInstance(AppleSignInPlugin())
+        bridge?.registerPluginInstance(AppleTranslatePlugin())
     }
 }

@@ -14,6 +14,7 @@
   const AUTH_SCHEME = 'io.github.zelinskyvladimir.lampa';
   const WebAuth = (native && P.WebAuth) || null;
   const AppleSignIn = (native && P.AppleSignIn) || null;
+  const AppleTranslate = (native && P.AppleTranslate) || null;
   let authCallback = () => {};
 
   const BOOK_EXTS = new Set(['fb2', 'epub', 'txt', 'zip']);
@@ -473,9 +474,19 @@
     installUpdate: () => {},
     setUiLang: () => {},
 
+    translateOnDevice: !!AppleTranslate,
     async translate(text, to) {
       text = String(text || '').trim();
       if (!text || text.length > Online.MAX_TRANSLATE || !Online.isLangCode(to)) throw new Error('BAD_REQUEST');
+      if (AppleTranslate) {
+        let res;
+        try {
+          res = await AppleTranslate.translate({ text, to });
+        } catch (e) {
+          throw new Error(e && e.code ? e.code : 'TRANSLATE_FAILED');
+        }
+        return { text: res.text || '', src: res.src || '', dict: [] };
+      }
       try {
         return await Online.translate(text, to, getJson);
       } catch {

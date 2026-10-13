@@ -291,6 +291,7 @@
 
   // Перерисовать всё, что содержит переведённые строки.
   function applyLanguage() {
+    if (api.translateOnDevice) $('#translate-privacy').dataset.i18n = 'translatePrivacyDevice';
     I18n.setLang(settings.lang);
     I18n.apply();
     api.setUiLang(I18n.lang);
@@ -2316,10 +2317,11 @@
         row.append(el('span', null, d.terms.slice(0, 6).join(', ')));
         $('#tr-dict').append(row);
       }
-    } catch {
+    } catch (e) {
       if (trState !== state) return;
       main.classList.remove('loading');
-      main.textContent = t('translateFailed');
+      const reason = { UNSUPPORTED_LANG: 'translateUnsupported', NEEDS_IOS_18: 'translateNeedsIos' }[e && e.message];
+      main.textContent = t(reason || (api.translateOnDevice ? 'translateFailedDevice' : 'translateFailed'));
     }
     placeTranslate();
     if (!ctxReq) return;
