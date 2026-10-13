@@ -264,8 +264,7 @@
     I18n.setLang(settings.lang);
     I18n.apply();
     api.setUiLang(I18n.lang);
-    const langSel = $('#lang');
-    langSel.options[0].textContent = t('langAuto');
+    $('#lang').value = I18n.lang;
     buildFontChips();
     fillTranslateSelect();
     fillAnimSelect();
@@ -336,8 +335,6 @@
 
   function buildSettingsUI() {
     const langSel = $('#lang');
-    langSel.append(el('option', null, t('langAuto')));
-    langSel.options[0].value = 'auto';
     for (const l of I18n.LANGS) {
       const o = el('option', null, l.name);
       o.value = l.id;
@@ -396,7 +393,7 @@
       b.style.setProperty('--sw-fg', c.fg);
       b.classList.toggle('active', b.dataset.theme === settings.theme);
     }
-    $('#lang').value = settings.lang;
+    $('#lang').value = I18n.lang;
     syncColorControls();
     for (const b of document.querySelectorAll('#font-chips button')) b.classList.toggle('active', b.dataset.font === settings.font);
     for (const v of document.querySelectorAll('.size-val')) v.textContent = settings.fontSize;
@@ -2079,7 +2076,7 @@
     setBar(true);
     if (panel === ui.tocPanel) switchTab(tab || leftTab);
     if (panel === ui.accountPanel) renderPrepare();
-    if (isSheet(panel)) panel.animate([{ transform: 'translateY(100%)' }, { transform: 'translateY(0)' }], { duration: 300, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+    if (isSheet(panel)) panel.animate([{ transform: 'translateY(100%)' }, { transform: 'translateY(0)' }], { duration: 380, easing: 'cubic-bezier(0.25, 0.8, 0.3, 1)' });
   }
 
   const isSheet = (panel) => panel === ui.settingsPanel && phoneLayout();
@@ -2088,7 +2085,7 @@
   function closeSheet(panel) {
     const from = panel.style.transform || 'translateY(0)';
     panel.style.transform = '';
-    const a = panel.animate([{ transform: from }, { transform: 'translateY(100%)' }], { duration: 230, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' });
+    const a = panel.animate([{ transform: from }, { transform: 'translateY(100%)' }], { duration: 280, easing: 'cubic-bezier(0.4, 0, 0.6, 1)', fill: 'forwards' });
     sheetClose = a;
     a.onfinish = () => {
       panel.classList.remove('open');
@@ -2158,7 +2155,7 @@
       const from = panel.style.transform;
       panel.style.transform = '';
       ui.scrim.style.opacity = '';
-      panel.animate([{ transform: from }, { transform: 'translateY(0)' }], { duration: 200, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+      panel.animate([{ transform: from }, { transform: 'translateY(0)' }], { duration: 260, easing: 'cubic-bezier(0.25, 0.8, 0.3, 1)' });
     };
     panel.addEventListener('touchend', end);
     panel.addEventListener('touchcancel', end);
@@ -2798,15 +2795,12 @@
   function fillTranslateSelect() {
     const sel = $('#translate-to');
     sel.replaceChildren();
-    const auto = el('option', null, t('langInterface'));
-    auto.value = 'auto';
-    sel.append(auto);
     for (const code of TRANSLATE_LANGS) {
       const o = el('option', null, langName(code));
       o.value = code;
       sel.append(o);
     }
-    sel.value = settings.translateTo;
+    sel.value = TRANSLATE_LANGS.includes(translateTarget()) ? translateTarget() : 'en';
   }
 
   const translateTarget = () => (settings.translateTo === 'auto' ? I18n.lang : settings.translateTo);
