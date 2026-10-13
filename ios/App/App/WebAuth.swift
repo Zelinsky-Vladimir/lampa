@@ -51,8 +51,15 @@ public class WebAuthPlugin: CAPPlugin, CAPBridgedPlugin, ASWebAuthenticationPres
 }
 
 class LampaWebView: WKWebView {
+    static var hideEditMenu = false
+
     override func buildMenu(with builder: UIMenuBuilder) {
         super.buildMenu(with: builder)
+        if Self.hideEditMenu {
+            let menus: [UIMenu.Identifier] = [.standardEdit, .lookup, .share, .replace, .format, .learn, .find, .spelling, .speech, .textStyle, .writingDirection, .substitutions, .transformations]
+            menus.forEach { builder.remove(menu: $0) }
+            return
+        }
         builder.replaceChildren(ofMenu: .lookup) { children in
             children.filter { !Self.isSystemTranslate($0) }
         }
@@ -69,6 +76,26 @@ class LampaWebView: WKWebView {
     }
 }
 
+@objc(ReaderMenuPlugin)
+public class ReaderMenuPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "ReaderMenuPlugin"
+    public let jsName = "ReaderMenu"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "set", returnType: CAPPluginReturnPromise)
+    ]
+
+    @objc func set(_ call: CAPPluginCall) {
+        let off = call.getBool("off") ?? false
+        DispatchQueue.main.async {
+            if LampaWebView.hideEditMenu != off {
+                LampaWebView.hideEditMenu = off
+                UIMenuSystem.context.setNeedsRebuild()
+            }
+            call.resolve()
+        }
+    }
+}
+
 class LampaBridgeViewController: CAPBridgeViewController {
     override open func webView(with frame: CGRect, configuration: WKWebViewConfiguration) -> WKWebView {
         LampaWebView(frame: frame, configuration: configuration)
@@ -78,5 +105,6 @@ class LampaBridgeViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(WebAuthPlugin())
         bridge?.registerPluginInstance(AppleSignInPlugin())
         bridge?.registerPluginInstance(AppleTranslatePlugin())
+        bridge?.registerPluginInstance(ReaderMenuPlugin())
     }
 }

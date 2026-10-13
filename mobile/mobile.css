@@ -1,8 +1,8 @@
-/* Мобильная версия: подключается после styles.css только в сборке для телефона. */
-
 :root {
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
 }
@@ -10,24 +10,23 @@
 html, body { overscroll-behavior: none; }
 button, .card, .icon-btn, .home-tabs, .seg { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 
-/* вырез экрана сверху и полоска «домой» снизу */
-#bar { height: calc(var(--bar-h) + var(--safe-top)); padding-top: var(--safe-top); }
-#footer { height: calc(46px + var(--safe-bottom)); padding-bottom: var(--safe-bottom); }
-#home { padding: calc(var(--bar-h) + var(--safe-top) + 16px) 16px calc(40px + var(--safe-bottom)); }
+#bar { height: calc(var(--bar-h) + var(--safe-top)); padding: var(--safe-top) calc(12px + var(--safe-right)) 0 calc(12px + var(--safe-left)); }
+#footer { padding: 8px calc(16px + var(--safe-right)) calc(8px + var(--safe-bottom)) calc(16px + var(--safe-left)); }
+#home { padding: calc(var(--bar-h) + var(--safe-top) + 16px) calc(16px + var(--safe-right)) calc(40px + var(--safe-bottom)) calc(16px + var(--safe-left)); }
 #book { padding-top: calc(var(--bar-h) + var(--safe-top) + 32px); }
+:root:not([data-view="pages"]) #book { padding-left: calc(18px + max(var(--safe-left), var(--safe-right))); padding-right: calc(18px + max(var(--safe-left), var(--safe-right))); }
+#mini-page { right: calc(14px + var(--safe-right)); }
 #progress { bottom: var(--safe-bottom); }
 .panel { padding-top: var(--safe-top); padding-bottom: var(--safe-bottom); }
 #update-banner { top: calc(var(--bar-h) + var(--safe-top) + 10px); }
 #toast { bottom: calc(70px + var(--safe-bottom)); }
-#back-btn { bottom: calc(58px + var(--safe-bottom)); }
-#auto-pill { bottom: calc(64px + var(--safe-bottom)); }
+#back-btn { bottom: calc(66px + var(--safe-bottom)); }
+#auto-pill { bottom: calc(70px + var(--safe-bottom)); }
 
-/* на телефоне нет мыши, клавиатурных сокращений и перетаскивания файлов */
 .hint, .shortcuts { display: none !important; }
 
-/* верхняя панель: без названия книги и кнопки «открыть» в режиме чтения, кнопки крупнее для пальца */
 @media (max-width: 600px) {
-  #bar { gap: 6px; padding-left: 8px; padding-right: 8px; }
+  #bar { gap: 4px; padding-left: 8px; padding-right: 8px; }
   .bar-group { gap: 0; padding: 0; }
   .bar-group .icon-btn { width: 40px; height: 40px; }
   #bar .bar-brand { margin-right: auto; }
@@ -36,10 +35,43 @@ button, .card, .icon-btn, .home-tabs, .seg { -webkit-user-select: none; user-sel
   #bar-chapter { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; }
   #bar-chapter::before { content: none !important; }
   #nav-group { order: 0; }
-  #toc-group { order: 2; }
-  #bar > .bar-group:last-child { order: 3; }
-  :root[data-mode="reader"] .wide-actions, :root[data-mode="reader"] #btn-account { display: none !important; }
-  :root[data-mode="reader"] .phone-only { display: inline-grid !important; }
+  #bar .wide-actions { order: 2; }
+  #toc-group { order: 3; }
+  #bar > .bar-group:last-child { order: 4; }
+  :root[data-mode="reader"] #btn-account, #btn-full { display: none !important; }
+
+  #footer { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "scrub scrub scrub" "size info page"; align-items: center; gap: 8px 12px; padding-top: 10px; padding-bottom: calc(10px + var(--safe-bottom)); }
+  #footer .scrub-wrap { grid-area: scrub; }
+  #foot-size { grid-area: size; height: 42px; border-radius: 21px; }
+  #foot-size button { width: 44px; }
+  #foot-info { grid-area: info; display: flex; justify-content: flex-end; gap: 4px; min-width: 0; white-space: nowrap; font-size: 13px; color: var(--muted); }
+  #fi-ch { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  #fi-pct { flex: none; }
+  #fi-ch:not(:empty) + #fi-pct::before { content: '· '; }
+  #page-btn { grid-area: page; height: 38px; }
+  #back-btn { bottom: calc(118px + var(--safe-bottom)); }
+  :root[data-chrome="hidden"][data-footer="auto"] #back-btn { bottom: calc(30px + var(--safe-bottom)); }
+
+  #end-card { top: auto; bottom: calc(24px + var(--safe-bottom)); left: 12px; right: 12px; width: auto; transform: none; }
+
+  .sort-btn { display: grid; }
+  #shelf-chips { display: none; }
+  .shelf-tools .search-field { flex: 1 1 0; min-width: 0; }
+  #all-view .shelf-tools .search-field { flex-basis: 100%; }
+  .home-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+  .home-tabs button { padding: 9px 4px; overflow: hidden; text-overflow: ellipsis; }
+  #all-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 12px; }
+  #all-chips { flex-wrap: nowrap; overflow-x: auto; margin: 0 -16px; padding: 0 16px; scrollbar-width: none; }
+  #shelf-grid:not(.list) { grid-template-columns: 1fr; gap: 10px; }
+  #shelf-grid:not(.list) .card { display: grid; grid-template-columns: 54px minmax(0, 1fr); grid-template-rows: auto auto 1fr; column-gap: 12px; padding: 10px; border-radius: 16px; background: var(--panel-2); }
+  #shelf-grid:not(.list) .card .thumb { grid-row: 1 / span 3; width: 54px; border-radius: 6px; }
+  #shelf-grid:not(.list) .card .thumb.ph { font-size: 24px; }
+  #shelf-grid:not(.list) .card .t { margin-top: 0; font-size: 15px; }
+  #shelf-grid:not(.list) .card .rate { align-self: end; }
+  #shelf-grid:not(.list) .card:hover .thumb { transform: none; }
+  .want-row .num { display: none; }
+  #shelf-view .card.want-row { gap: 10px; padding-right: 10px; }
+  .card.want-row .mark-read { padding: 0 10px; font-size: 13px; }
 
   .cont-card { flex-wrap: wrap; gap: 16px; padding: 16px; border-radius: 20px; }
   .cont-cover { width: 84px; }
@@ -55,27 +87,23 @@ button, .card, .icon-btn, .home-tabs, .seg { -webkit-user-select: none; user-sel
   #settings-panel header::before { content: ''; position: absolute; left: 50%; top: 8px; width: 40px; height: 5px; margin-left: -20px; border-radius: 3px; background: var(--border); }
   #settings-panel header { position: relative; padding-top: 18px; }
 
-  #book { padding-left: 20px; padding-right: 20px; }
+  :root:not([data-view="pages"]) #book { padding-left: 20px; padding-right: 20px; }
   .hero { padding: 24px 0 8px; }
   .logo { font-size: 42px; }
   .section-title { margin-top: 28px; }
   .grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 22px 16px; }
 
-  /* поиск и кнопка добавления — на всю ширину, выбор сортировки или жанра — под ними */
-  .shelf-tools .search-field { flex-basis: 100%; }
-  #shelf-sort, #shelf-genre { flex: 1 1 auto; }
-  #shelf-add { flex: 1 1 auto; justify-content: center; }
-  #shelf-filter, #book-q, .fld input, .fld textarea, select { font-size: 16px; } /* иначе iOS увеличивает страницу при вводе */
+  #shelf-genre { flex: 1 1 100%; }
+  #shelf-filter, #all-filter, #page-input, #book-q, .fld input, .fld textarea, select { font-size: 16px; }
+  #page-input { font-size: 22px; }
 
-  /* окно книги — во весь экран */
-  #book-dlg { padding: 0; }
+    #book-dlg { padding: 0; }
   .dlg-box { width: 100%; max-height: none; height: 100%; border-radius: 0; padding-top: var(--safe-top); padding-bottom: var(--safe-bottom); }
 
   #footer { gap: 10px; padding-left: 12px; padding-right: 12px; }
   .panel { width: 100vw; }
 }
 
-/* синхронизация: плашка «перейти» под вырезом */
 #sync-jump { top: calc(var(--bar-h) + var(--safe-top) + 10px); }
 @media (max-width: 600px) {
   #settings-panel .themes { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 6px; scrollbar-width: none; }
@@ -84,4 +112,15 @@ button, .card, .icon-btn, .home-tabs, .seg { -webkit-user-select: none; user-sel
   #settings-panel .theme-swatch.active { box-shadow: none; color: var(--fg); font-weight: 700; }
   #settings-panel .theme-swatch.active .aa { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent); }
   #settings-panel .theme-swatch .nm { font-size: 11px; color: inherit; opacity: 1; }
+}
+
+@media (orientation: landscape) and (max-height: 520px) {
+  #home { padding-top: calc(var(--bar-h) + 10px); }
+  .home-top { margin-top: 12px; }
+  .cont-card { padding: 14px; gap: 16px; }
+  .cont-cover { width: 76px; }
+  .cont-title { font-size: 19px; }
+  .cont-actions .primary-btn { padding: 10px 22px; }
+  #footer { gap: 12px; }
+  #back-btn { bottom: calc(60px + var(--safe-bottom)); }
 }

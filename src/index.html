@@ -26,20 +26,6 @@
     <div id="bar-title" class="reader-only"><span id="bar-book"></span><span id="bar-chapter"></span></div>
     <div class="spacer home-only"></div>
 
-    <div class="bar-group reader-only wide-only">
-      <select id="bar-font" class="bar-select" data-i18n-title="font"></select>
-      <span class="bar-sep"></span>
-      <button class="icon-btn txt" id="btn-zoom-out" data-i18n-title="zoomOut">A−</button>
-      <button class="icon-btn txt" id="btn-zoom-in" data-i18n-title="zoomIn">A+</button>
-      <span class="bar-sep"></span>
-      <button class="icon-btn" id="btn-narrow" data-i18n-title="narrower">
-        <svg viewBox="0 0 24 24"><path d="M3 12h5M6 9.5 8.5 12 6 14.5M21 12h-5M18 9.5 15.5 12l2.5 2.5M12 5v14"/></svg>
-      </button>
-      <button class="icon-btn" id="btn-wide" data-i18n-title="wider">
-        <svg viewBox="0 0 24 24"><path d="M3.5 12h6M6 9.5 3.5 12 6 14.5M20.5 12h-6M18 9.5l2.5 2.5-2.5 2.5M12 5v14"/></svg>
-      </button>
-    </div>
-
     <div class="bar-group reader-only wide-actions">
       <button class="icon-btn" id="btn-search" data-i18n-title="searchBtn">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
@@ -47,10 +33,7 @@
       <button class="icon-btn" id="btn-bookmark" data-i18n-title="bookmarkBtn">
         <svg viewBox="0 0 24 24"><path d="M7 4.5h10v15.5l-5-3.8-5 3.8z"/></svg>
       </button>
-      <button class="icon-btn" id="btn-mark-read" data-i18n-title="markReadTitle">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="m8.3 12.3 2.6 2.6 5-5.3"/></svg>
-      </button>
-      <button class="icon-btn" id="btn-auto" data-i18n-title="autoBtn">
+      <button class="icon-btn no-phone" id="btn-auto" data-i18n-title="autoBtn">
         <svg viewBox="0 0 24 24"><path d="M12 4v14M6.5 12.5 12 18l5.5-5.5M6 21h12"/></svg>
       </button>
     </div>
@@ -59,12 +42,11 @@
       <button class="icon-btn reader-only wide-actions" id="btn-full" data-i18n-title="fullBtn">
         <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
       </button>
-      <button class="icon-btn txt aa-btn reader-only" id="btn-settings" data-i18n-title="settingsBtn">Aa</button>
-      <button class="icon-btn reader-only phone-only" id="btn-more" data-i18n-title="moreBtn" aria-haspopup="menu">
-        <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg>
-      </button>
-      <button class="icon-btn home-only" id="btn-open" data-i18n-title="openBtn">
-        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+      <div class="size-step reader-only wide-only" id="bar-size" role="group" data-i18n-aria="size">
+        <button class="size-down" data-i18n-title="sizeDown">A</button><span class="size-val"></span><button class="size-up" data-i18n-title="sizeUp">A</button>
+      </div>
+      <button class="icon-btn eye-btn reader-only" id="btn-settings" data-i18n-title="settingsBtn">
+        <svg viewBox="0 0 24 24"><path d="M2.8 13c2.3-3.4 5.5-5.2 9.2-5.2s6.9 1.8 9.2 5.2c-2.3 3.4-5.5 5.2-9.2 5.2S5.1 16.4 2.8 13z"/><circle cx="12" cy="13" r="2.7"/><path d="M12 2.4v2.3M5.4 4.3l1.3 1.8M18.6 4.3l-1.3 1.8M1.8 7.6l1.9 1.1M22.2 7.6l-1.9 1.1M7.4 20.6l-.7 1.3M16.6 20.6l.7 1.3"/></svg>
       </button>
       <button class="icon-btn account-btn" id="btn-account" data-i18n-title="accountTitle">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.6"/><path d="M5 19.5c1.3-3.4 3.8-5.1 7-5.1s5.7 1.7 7 5.1"/></svg>
@@ -120,30 +102,50 @@
         </div>
         <p class="hint" data-i18n="dropHint"></p>
       </section>
+      <button class="add-book" id="home-add" hidden>
+        <span class="add-icon"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+        <span class="add-text"><b data-i18n="addBook"></b><span data-i18n="addBookFormats"></span></span>
+      </button>
       <section id="recent-section" hidden>
-        <h2 class="section-title"><span data-i18n="recent"></span> <span class="count" id="recent-count"></span></h2>
+        <div class="section-head">
+          <h2 class="section-title" data-i18n="recent"></h2>
+          <button class="link-btn" id="recent-all" hidden></button>
+        </div>
         <div class="grid" id="recent"></div>
       </section>
       </div>
 
-      <!-- прочитанные и «хочу прочитать»: список ведётся вручную -->
+      <section id="all-view" hidden>
+        <div class="all-head">
+          <button class="icon-btn" id="all-back" data-i18n-title="library"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+          <h1><span data-i18n="allBooks"></span> <span class="count" id="all-count"></span></h1>
+        </div>
+        <div class="shelf-tools">
+          <div class="search-field">
+            <input id="all-filter" type="search" autocomplete="off" spellcheck="false" data-i18n-placeholder="allFilter">
+          </div>
+          <div class="chips" id="all-chips" role="group"></div>
+        </div>
+        <div class="grid" id="all-grid"></div>
+        <p class="shelf-empty" id="all-empty" hidden></p>
+      </section>
+
       <section id="shelf-view" hidden>
         <div class="shelf-tools">
           <div class="search-field">
             <input id="shelf-filter" type="search" autocomplete="off" spellcheck="false" data-i18n-placeholder="shelfFilter">
             <div class="search-progress"></div>
           </div>
-          <select id="shelf-sort"></select>
+          <label class="sort-btn" id="sort-btn" data-i18n-title="sortOrder">
+            <svg viewBox="0 0 24 24"><path d="M4 7h16M7 12h10M10 17h4"/></svg>
+            <select id="shelf-sort"></select>
+          </label>
+          <div class="chips" id="shelf-chips" role="group"></div>
           <select id="shelf-genre" hidden></select>
-          <button class="primary-btn" id="shelf-add">
-            <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-            <span data-i18n="shelfAdd"></span>
-          </button>
         </div>
         <div class="shelf-stats" id="shelf-stats"></div>
         <div class="grid" id="shelf-grid"></div>
         <p class="shelf-empty" id="shelf-empty" hidden></p>
-        <!-- при поиске: совпадения из другого списка и книги из интернета -->
         <div id="shelf-other" hidden>
           <h2 class="section-title" id="shelf-other-title"></h2>
           <div class="grid" id="shelf-other-grid"></div>
@@ -168,19 +170,44 @@
   <div id="mini-page" class="reader-only"></div>
 
   <footer id="footer" class="reader-only">
+    <div class="size-step" id="foot-size" role="group" data-i18n-aria="size">
+      <button class="size-down" data-i18n-title="sizeDown">A</button><span class="size-val"></span><button class="size-up" data-i18n-title="sizeUp">A</button>
+    </div>
     <div id="foot-chapter"></div>
     <div class="scrub-wrap">
       <div id="scrub-ticks"></div>
+      <i id="scrub-ghost" hidden></i>
       <input type="range" id="scrub" min="1" max="1" step="1" value="1" data-i18n-aria="progressAria">
-      <div id="scrub-tip" hidden></div>
+      <div id="scrub-tip" hidden><b id="scrub-tip-page"></b><span id="scrub-tip-info"></span></div>
     </div>
-    <div class="page-box" data-i18n-title="pageInputTitle">
-      <span class="muted" data-i18n="pageLabel"></span>
-      <input id="page-input" type="text" inputmode="numeric" autocomplete="off" data-i18n-aria="pageLabel">
-      <span class="muted" id="page-total"></span>
-      <span id="page-pct"></span>
-    </div>
+    <div id="foot-info"><span id="fi-ch"></span><span id="fi-pct"></span></div>
+    <button class="page-btn" id="page-btn" data-i18n-title="pageInputTitle">
+      <span id="page-label"></span><svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>
+    </button>
   </footer>
+
+  <div id="goto-pop" role="dialog" hidden>
+    <div class="goto-head"><span data-i18n="gotoTitle"></span><button class="link-btn" id="goto-cancel" data-i18n="cancel"></button></div>
+    <div class="goto-row">
+      <input id="page-input" type="text" inputmode="numeric" autocomplete="off" enterkeyhint="go" data-i18n-aria="pageLabel">
+      <span class="muted" id="page-total"></span>
+      <button class="primary-btn" id="goto-go" data-i18n="gotoGo"></button>
+    </div>
+    <div class="goto-info" id="goto-info"></div>
+    <div class="goto-hint" id="goto-hint"></div>
+  </div>
+
+  <section id="end-card" role="dialog" hidden>
+    <div class="end-over" data-i18n="endOver"></div>
+    <div class="end-title" id="end-title"></div>
+    <div class="end-ask" data-i18n="endAsk"></div>
+    <div class="end-stars" id="end-stars" role="radiogroup"></div>
+    <div class="end-val" id="end-val"></div>
+    <div class="end-actions">
+      <button class="ghost-btn" id="end-later" data-i18n="endLater"></button>
+      <button class="primary-btn" id="end-save" data-i18n="endSave"></button>
+    </div>
+  </section>
 
   <div id="scrim"></div>
 
@@ -226,26 +253,29 @@
         <div class="themes" id="themes"></div>
       </div>
       <div class="setting">
-        <label class="label" for="font" data-i18n="font"></label>
-        <select id="font"></select>
+        <div class="label" data-i18n="font"></div>
+        <div class="font-chips" id="font-chips"></div>
       </div>
-      <div class="setting">
-        <label class="label" for="font-size"><span data-i18n="size"></span> <span id="font-size-val"></span></label>
-        <input type="range" id="font-size" min="12" max="44" step="1">
-      </div>
-      <div class="setting">
-        <label class="label" for="line-height"><span data-i18n="lineHeight"></span> <span id="line-height-val"></span></label>
-        <input type="range" id="line-height" min="1.1" max="2.4" step="0.05">
-      </div>
-      <div class="setting">
-        <div class="label" data-i18n="readingMode"></div>
-        <div class="seg" data-key="view">
-          <button data-value="scroll" data-i18n="modeScroll"></button>
-          <button data-value="pages" data-i18n="modePages"></button>
+      <div class="setting steps">
+        <div class="step-row"><span data-i18n="size"></span>
+          <div class="stepper" id="size-stepper"><button class="size-down" data-i18n-title="sizeDown">A−</button><span class="size-val"></span><button class="size-up" data-i18n-title="sizeUp">A+</button></div>
+        </div>
+        <div class="step-row"><span data-i18n="lineHeight"></span>
+          <div class="stepper"><button id="lh-down" data-i18n-title="lhDown">−</button><span id="line-height-val"></span><button id="lh-up" data-i18n-title="lhUp">+</button></div>
+        </div>
+        <div class="step-row"><span data-i18n="readingMode"></span>
+          <div class="seg" data-key="view">
+            <button data-value="pages" data-i18n="modePages"></button>
+            <button data-value="scroll" data-i18n="modeScroll"></button>
+          </div>
         </div>
       </div>
       <details class="ap-more">
         <summary data-i18n="moreAppearance"></summary>
+        <div class="setting">
+          <label class="label" for="font" data-i18n="allFonts"></label>
+          <select id="font"></select>
+        </div>
         <div class="setting color-controls" id="settings-colors"></div>
       <div class="setting">
         <label class="label" for="width"><span data-i18n="columnWidth"></span> <span id="width-val"></span></label>
@@ -269,13 +299,6 @@
         <div class="label" data-i18n="pageAnim"></div>
         <select id="page-anim"></select>
       </div>
-      <div class="setting pages-only">
-        <div class="label" data-i18n="pagesPerScreen"></div>
-        <div class="seg" data-key="pageCols">
-          <button data-value="1">1</button>
-          <button data-value="2">2</button>
-        </div>
-      </div>
       <div class="setting">
         <div class="label" data-i18n="footerBar"></div>
         <div class="seg" data-key="footerAlways">
@@ -284,6 +307,13 @@
         </div>
       </div>
       <div class="setting">
+        <div class="label" data-i18n="progressLine"></div>
+        <div class="seg" data-key="progressLine">
+          <button data-value="true" data-i18n="progressShow"></button>
+          <button data-value="false" data-i18n="progressHide"></button>
+        </div>
+      </div>
+      <div class="setting no-phone">
         <label class="label" for="auto-speed"><span data-i18n="autoSpeed"></span> <span id="auto-speed-val"></span></label>
         <input type="range" id="auto-speed" min="10" max="300" step="5">
       </div>
@@ -326,7 +356,7 @@
               <div class="sync-avatar" id="sync-avatar"></div>
               <div class="sync-who">
                 <div class="sync-user" id="sync-user"></div>
-                <div class="sync-status" id="sync-status-row"><i class="sync-dot"></i><span id="sync-status"></span></div>
+                <div class="sync-status" id="sync-status-row" role="button" tabindex="-1"><i class="sync-dot"></i><span id="sync-status"></span></div>
               </div>
             </div>
             <div class="sync-usage" id="sync-usage" hidden>
@@ -334,7 +364,6 @@
               <div class="sync-usage-text" id="sync-usage-text"></div>
             </div>
             <div class="sync-row">
-              <button class="sync-btn sync-now" id="sync-now" data-i18n="syncNow"></button>
               <button class="sync-btn" id="sync-signout" data-i18n="syncSignOut"></button>
             </div>
           </div>
@@ -394,7 +423,7 @@
       <svg viewBox="0 0 24 24"><path d="M5 19h4L19 9l-4-4L5 15zM13 7l4 4"/></svg><span data-i18n="note"></span>
     </button>
     <button class="sel-btn" id="sel-copy" data-i18n-title="copy">
-      <svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="12" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg>
+      <svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="12" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg><span data-i18n="copy"></span>
     </button>
   </div>
 
@@ -473,18 +502,10 @@
   </div>
 
   <div id="drop-overlay" data-i18n="dropHere"></div>
-  <div id="more-pop" class="menu-pop" role="menu" hidden>
-    <button role="menuitem" data-act="btn-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg><span data-i18n="menuSearch"></span></button>
-    <button role="menuitem" data-act="btn-bookmark"><svg viewBox="0 0 24 24"><path d="M7 4.5h10v15.5l-5-3.8-5 3.8z"/></svg><span data-i18n="menuBookmark"></span></button>
-    <button role="menuitem" data-act="btn-mark-read"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="m8.3 12.3 2.6 2.6 5-5.3"/></svg><span data-i18n="markReadTitle"></span></button>
-    <button role="menuitem" data-act="btn-auto"><svg viewBox="0 0 24 24"><path d="M12 4v14M6.5 12.5 12 18l5.5-5.5M6 21h12"/></svg><span data-i18n="menuAuto"></span></button>
-  </div>
-  <!-- затемнение поверх всего окна: «яркость» внутри приложения -->
   <div id="dim"></div>
   <canvas id="curl" hidden></canvas>
 
   <div id="toast" role="status"></div>
-  <!-- на другом устройстве ушли дальше в этой книге -->
   <div id="sync-jump" role="status" hidden>
     <span id="sync-jump-text"></span>
     <button class="primary-btn" id="sync-jump-go" data-i18n="syncJumpGo"></button>

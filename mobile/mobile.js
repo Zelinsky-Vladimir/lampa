@@ -1,10 +1,6 @@
-// Мобильная версия (Capacitor, iOS): та же window.api, что даёт preload.js в Electron.
-// Книги, список «Прочитано / Хочу прочитать» и обложки лежат в папке приложения (Directory.Data),
-// сеть идёт через нативный HTTP Capacitor — без ограничений CORS.
-// В обычном браузере (предпросмотр при разработке) всё хранится в памяти.
 (function () {
   'use strict';
-  if (window.api) return; // Electron
+  if (window.api) return;
 
   const Cap = window.Capacitor;
   const native = !!(Cap && Cap.isNativePlatform && Cap.isNativePlatform());
@@ -15,14 +11,13 @@
   const WebAuth = (native && P.WebAuth) || null;
   const AppleSignIn = (native && P.AppleSignIn) || null;
   const AppleTranslate = (native && P.AppleTranslate) || null;
+  const ReaderMenu = (native && P.ReaderMenu) || null;
   let authCallback = () => {};
 
   const BOOK_EXTS = new Set(['fb2', 'epub', 'txt', 'zip']);
   const MAX_BOOK_SIZE = 300 * 1024 * 1024;
   const extOf = (p) => (String(p).match(/\.([^./\\]+)$/) || ['', ''])[1].toLowerCase();
   const baseName = (p) => String(p).split(/[\\/]/).pop();
-
-  // ---------- байты и base64 ----------
 
   function b64ToBytes(b64) {
     const bin = atob(b64);
@@ -37,19 +32,16 @@
     return btoa(s);
   }
 
-  // Отпечаток книги — первые 16 знаков SHA-256, как в настольной версии: по нему синхронизация узнаёт
-  // одну и ту же книгу на всех устройствах, и в библиотеку она кладётся один раз.
   async function hash16(u8) {
     let digest;
     try {
       digest = new Uint8Array(await crypto.subtle.digest('SHA-256', u8));
     } catch {
-      digest = sha256(u8); // crypto.subtle есть не везде
+      digest = sha256(u8);
     }
     return Array.from(digest.subarray(0, 8), (b) => b.toString(16).padStart(2, '0')).join('');
   }
 
-  // SHA-256 на чистом JS — запасной путь для hash16.
   function sha256(bytes) {
     const K = new Uint32Array([
       0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01,
@@ -107,8 +99,6 @@
 
   const randomHex = () => Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => b.toString(16).padStart(2, '0')).join('');
 
-  // ---------- файлы ----------
-
   const notFound = () => Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
 
   const store = native
@@ -153,7 +143,6 @@
       }
     : memoryStore();
 
-  // Предпросмотр в браузере: файлы в памяти, текстовые — ещё и в localStorage, чтобы пережить перезагрузку.
   function memoryStore() {
     const files = new Map();
     const LS = 'lampa.dev-fs:';
@@ -196,15 +185,12 @@
     };
   }
 
-  // ---------- сеть ----------
-
   async function getJson(url) {
     if (!native) {
       const r = await fetch(url);
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
     }
-    // Google отвечает на перевод, только если запрос похож на браузерный
     const r = await Http.request({
       url,
       method: 'GET',
@@ -229,7 +215,6 @@
     return typeof r.data === 'string' ? b64ToBytes(r.data) : new Uint8Array(r.data);
   }
 
-  // Уменьшенная копия картинки в JPEG — для обложек и миниатюр.
   async function toJpeg(bytes, maxWidth, quality) {
     const bmp = await createImageBitmap(new Blob([bytes]));
     if (bmp.width < 10) throw new Error('NOT_IMAGE');
@@ -244,18 +229,14 @@
     return new Uint8Array(await blob.arrayBuffer());
   }
 
-  // ---------- книги ----------
-
-  // Книга копируется в books/<отпечаток>/<имя файла>; библиотека открывает эту копию.
   async function importBook(name, bytes) {
-    if (!BOOK_EXTS.has(extOf(name))) return name; // loadBook ответит «формат не поддерживается»
+    if (!BOOK_EXTS.has(extOf(name))) return name;
     if (bytes.length > MAX_BOOK_SIZE) throw new Error('TOO_LARGE');
     const path = `books/${await hash16(bytes)}/${name.replace(/[\\/:*?"<>|]/g, '_')}`;
     if (!(await store.exists(path))) await store.write(path, bytes);
     return path;
   }
 
-  // Файл, открытый через «Открыть в Lampa» из Файлов, Telegram, почты: iOS кладёт копию в Documents/Inbox.
   async function importUrl(url) {
     if (!url || !/^file:/i.test(url)) return null;
     try {
@@ -269,13 +250,10 @@
     }
   }
 
-  // ---------- «Прочитано» и «Хочу прочитать» ----------
-
   const COVER_NAME = /^[0-9a-f]{16}\.jpg$/;
   let coversBase = '';
 
   async function readShelf() {
-    // shelf.json мог не успеть записаться — тогда берём прошлую версию
     for (const f of ['shelf.json', 'shelf.json.bak']) {
       if (!(await store.exists(f))) continue;
       try {
@@ -323,9 +301,6 @@
     return name;
   }
 
-  // ---------- состояние окна: localStorage дублируется в файл ----------
-  // iOS может очистить данные веб-просмотра при нехватке места; закладки и заметки так не потеряются.
-
   const STATE_FILE = 'local-storage.json';
   let stateTimer = 0;
 
@@ -348,7 +323,6 @@
       return;
     }
     for (const [k, v] of Object.entries(saved)) localStorage.setItem(k, v);
-    // app.js уже прочитал пустое хранилище — перезапускаем страницу с восстановленным
     location.reload();
     await new Promise(() => {});
   }
@@ -362,13 +336,10 @@
         stateTimer = setTimeout(dumpState, 1500);
       }
     };
-    // приложение уходит в фон — iOS может его выгрузить, сохраняем сразу
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) dumpState();
     });
   }
-
-  // ---------- window.api ----------
 
   const updateCallbacks = [];
   let openCallback = null;
@@ -376,11 +347,9 @@
 
   window.api = {
     platform: native ? Cap.getPlatform() : 'web',
-    // чего здесь нет: снимок окна для «загиба», полноэкранный режим, автообновление, перетаскивание файлов
     features: { curl: false, fullscreen: false, updates: false, dragDrop: false },
     defaults: { view: 'pages', pageAnim: 'slide' },
 
-    // Выбор файла системным окном (приложение «Файлы»); книга сразу копируется в библиотеку.
     openDialog() {
       return new Promise((resolve) => {
         const input = document.createElement('input');
@@ -412,7 +381,6 @@
       if (!BOOK_EXTS.has(ext)) throw new Error('UNSUPPORTED');
       const bytes = await store.read(p);
       if (bytes.length > MAX_BOOK_SIZE) throw new Error('TOO_LARGE');
-      // отпечаток уже в пути: books/<отпечаток>/<имя>
       const m = /^books\/([0-9a-f]{16})\//.exec(p);
       const out = { path: p, name: baseName(p), size: bytes.length, ext, hash: m ? m[1] : await hash16(bytes) };
       if (ext === 'epub' || ext === 'zip') out.entries = fflate.unzipSync(bytes);
@@ -420,7 +388,6 @@
       return out;
     },
     adoptBooks: async () => [],
-    // синхронизация: исходный файл книги — в облако; книга из облака — в библиотеку
     readBookFile: (p) => store.read(p),
     async version() {
       if (!App || !App.getInfo) return '';
@@ -449,7 +416,6 @@
       if (m) await store.removeDir('books/' + m[1]);
     },
 
-    // Открыть книгу, полученную не через окно выбора файла (например, «Поделиться»).
     async importAndOpen(name, bytes) {
       const p = await importBook(name, bytes);
       if (openCallback) openCallback(p);
@@ -471,13 +437,16 @@
       if (!native || !StatusBar) return;
       const n = parseInt(String(color).slice(1), 16);
       const lum = 0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255);
-      // DARK — светлый текст строки состояния для тёмного фона
       StatusBar.setStyle({ style: lum < 115 ? 'DARK' : 'LIGHT' }).catch(() => {});
     },
     rendered: () => {},
     onUpdateReady: (cb) => updateCallbacks.push(cb),
     installUpdate: () => {},
     setUiLang: () => {},
+
+    setEditMenu(on) {
+      if (ReaderMenu) ReaderMenu.set({ off: !on }).catch(() => {});
+    },
 
     translateOnDevice: !!AppleTranslate,
     async translate(text, to) {
@@ -523,7 +492,6 @@
     coverUrl: (name) => (native ? Cap.convertFileSrc(coversBase + '/' + name) : devCovers.get(name) || ''),
   };
 
-  // app.js ждёт этого перед запуском: папки, восстановление состояния, книга из «Открыть в Lampa».
   window.platformReady = (async () => {
     document.documentElement.dataset.platform = window.api.platform;
     await restoreState();
@@ -531,7 +499,6 @@
     if (!native) return;
     await Filesystem.mkdir({ path: 'covers', directory: DATA, recursive: true }).catch(() => {});
     coversBase = await store.uri('covers');
-    // строка в журнале Xcode: видно, что нативные модули подключились и папка приложения пишется
     try {
       await store.writeText('selfcheck.txt', 'ok');
       console.info(`[lampa] ready: plugins=${Object.keys(P).join(',')} fs=${await store.readText('selfcheck.txt')} covers=${coversBase}`);
