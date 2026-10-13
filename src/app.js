@@ -3080,112 +3080,108 @@
     return box;
   }
 
-  function makeDraggable(card, b) {
-    card.dataset.id = b.id;
-    for (const img of card.querySelectorAll('img')) img.draggable = false;
-    const clearMarks = () => {
-      for (const c of document.querySelectorAll('.drop-before, .drop-after')) c.classList.remove('drop-before', 'drop-after');
-    };
-    if (coarsePointer()) {
-      makeTouchDraggable(card, b, clearMarks);
-      return;
-    }
-    card.draggable = true;
-    card.addEventListener('dragstart', (e) => {
+  let dragEndedAt = 0;
+
+  function makeDraggable(row, b) {
+    row.dataset.id = b.id;
+    for (const img of row.querySelectorAll('img')) img.draggable = false;
+    let hold = 0;
+    let start = null;
+    let drag = null;
+
+    const begin = (y) => {
+      const rows = [...$('#shelf-grid').querySelectorAll('.want-row')];
+      const from = rows.indexOf(row);
+      const step = rows.length > 1 ? rows[1].getBoundingClientRect().top - rows[0].getBoundingClientRect().top : row.offsetHeight + 10;
+      drag = { rows, from, to: from, step, y0: y, scroll0: ui.home.scrollTop, y };
       dragId = b.id;
-      card.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('application/x-lampa-book', b.id);
-    });
-    card.addEventListener('dragend', () => {
+      row.classList.add('dragging');
+      for (const r of rows) if (r !== row) r.classList.add('shifting');
+      if (navigator.vibrate) navigator.vibrate(10);
+    };
+
+    const move = (y) => {
+      drag.y = y;
+      if (y < 110) ui.home.scrollBy(0, -12);
+      else if (y > window.innerHeight - 110) ui.home.scrollBy(0, 12);
+      const dy = y - drag.y0 + (ui.home.scrollTop - drag.scroll0);
+      row.style.transform = `translateY(${dy}px)`;
+      const to = clamp(drag.from + Math.round(dy / drag.step), 0, drag.rows.length - 1);
+      if (to === drag.to) return;
+      drag.to = to;
+      drag.rows.forEach((r, i) => {
+        if (r === row) return;
+        let shift = 0;
+        if (drag.from < to && i > drag.from && i <= to) shift = -drag.step;
+        else if (drag.from > to && i >= to && i < drag.from) shift = drag.step;
+        r.style.transform = shift ? `translateY(${shift}px)` : '';
+      });
+    };
+
+    const finish = () => {
+      const { rows, from, to } = drag;
+      drag = null;
       dragId = null;
-      card.classList.remove('dragging');
-      clearMarks();
+      dragEndedAt = performance.now();
+      row.classList.remove('dragging');
+      for (const r of rows) {
+        r.classList.remove('shifting');
+        r.style.transform = '';
+      }
+      if (to !== from) moveWant(b.id, rows[to].dataset.id, to > from);
       if (renderAfterDrag) {
         renderAfterDrag = false;
         renderShelf();
       }
-    });
-    card.addEventListener('dragover', (e) => {
-      if (!dragId || dragId === b.id) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      const r = card.getBoundingClientRect();
-      const after = e.clientY > r.top + r.height / 2;
-      if (card.classList.contains(after ? 'drop-after' : 'drop-before')) return;
-      clearMarks();
-      card.classList.add(after ? 'drop-after' : 'drop-before');
-    });
-    card.addEventListener('dragleave', (e) => {
-      if (!card.contains(e.relatedTarget)) card.classList.remove('drop-before', 'drop-after');
-    });
-    card.addEventListener('drop', (e) => {
-      if (!dragId || dragId === b.id) return;
-      e.preventDefault();
-      e.stopPropagation();
-      moveWant(dragId, b.id, card.classList.contains('drop-after'));
-    });
-  }
-
-  function makeTouchDraggable(card, b, clearMarks) {
-    let hold = 0;
-    let dragging = false;
-    let start = null;
-    const markAt = (x, y) => {
-      clearMarks();
-      const under = document.elementFromPoint(x, y);
-      const over = under && under.closest('#shelf-grid .card[data-id]');
-      if (!over || over === card) return;
-      const r = over.getBoundingClientRect();
-      over.classList.add(y > r.top + r.height / 2 ? 'drop-after' : 'drop-before');
     };
-    card.addEventListener(
+
+    row.addEventListener(
       'touchstart',
       (e) => {
-        if (e.touches.length !== 1) return;
-        start = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-        const grab = () => {
-          dragging = true;
-          dragId = b.id;
-          card.classList.add('dragging');
-        };
-        if (e.target.closest('.grip')) grab();
-        else hold = setTimeout(grab, 450);
+        if (e.touches.length !== 1 || drag) return;
+        const p = e.touches[0];
+        start = { x: p.clientX, y: p.clientY };
+        if (e.target.closest('.grip')) begin(p.clientY);
+        else hold = setTimeout(() => begin(start.y), 450);
       },
       { passive: true },
     );
-    card.addEventListener(
+    row.addEventListener(
       'touchmove',
       (e) => {
         const p = e.touches[0];
-        if (!dragging) {
+        if (!drag) {
           if (start && Math.hypot(p.clientX - start.x, p.clientY - start.y) > 8) clearTimeout(hold);
           return;
         }
         e.preventDefault();
-        markAt(p.clientX, p.clientY);
-        if (p.clientY < 90) ui.home.scrollBy(0, -14);
-        else if (p.clientY > window.innerHeight - 90) ui.home.scrollBy(0, 14);
+        move(p.clientY);
       },
       { passive: false },
     );
-    const end = (e) => {
+    const touchEnd = (e) => {
       clearTimeout(hold);
-      if (!dragging) return;
+      start = null;
+      if (!drag) return;
       if (e.cancelable) e.preventDefault();
-      dragging = false;
-      const over = document.querySelector('#shelf-grid .drop-before, #shelf-grid .drop-after');
-      card.classList.remove('dragging');
-      dragId = null;
-      if (over) moveWant(b.id, over.dataset.id, over.classList.contains('drop-after'));
-      clearMarks();
-      if (renderAfterDrag) {
-        renderAfterDrag = false;
-        renderShelf();
-      }
+      finish();
     };
-    card.addEventListener('touchend', end, { passive: false });
-    card.addEventListener('touchcancel', end);
+    row.addEventListener('touchend', touchEnd, { passive: false });
+    row.addEventListener('touchcancel', touchEnd);
+
+    row.querySelector('.grip').addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'mouse' || e.button !== 0) return;
+      e.preventDefault();
+      begin(e.clientY);
+      const onMove = (ev) => move(ev.clientY);
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        if (drag) finish();
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    });
   }
 
   function moveWant(id, targetId, after) {
@@ -3378,7 +3374,9 @@
     });
     row.append(grip, el('span', 'num', String(n)), bookThumb(b), info, done, del);
     if (!$('#shelf-filter').value.trim()) makeDraggable(row, b);
-    row.addEventListener('click', () => openBookEditor(b));
+    row.addEventListener('click', () => {
+      if (performance.now() - dragEndedAt > 350) openBookEditor(b);
+    });
     row.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && e.target === row) openBookEditor(b);
     });

@@ -477,20 +477,6 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .ed-world { display: flex; align-items: center; gap: 6px; margin-top: -4px; font-size: 12.5px; color: var(--muted); }
 .ed-world svg { width: 14px; height: 14px; }
 
-.card[draggable="true"] { cursor: grab; }
-.card.dragging { opacity: 0.35; }
-.card.drop-before::before, .card.drop-after::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  border-radius: 2px;
-  background: var(--accent);
-}
-.card.drop-before::before { left: -12px; }
-.card.drop-after::after { right: -12px; }
-#shelf-add { padding: 9px 18px; }
 .shelf-stats { min-height: 1.3em; margin: 16px 0 18px; font-size: 13px; color: var(--muted); }
 .shelf-empty { max-width: 440px; margin: 40px auto; text-align: center; font-size: 14.5px; line-height: 1.5; color: var(--muted); }
 
@@ -1447,11 +1433,10 @@ a.about-row:hover { background: var(--faint); }
 .row-del:hover { background: var(--faint); color: var(--fg); }
 .row-del.confirm { background: #c0392b; color: #fff; font-weight: 600; }
 @media (hover: none) { .row-del:not(.confirm) { display: none; } }
-.card.want-row.dragging { opacity: 1; background: color-mix(in srgb, var(--bg) 70%, #fff); box-shadow: 0 10px 24px rgb(0 0 0 / 0.22); transform: rotate(-0.6deg); z-index: 2; }
+.card.want-row.dragging { opacity: 1; background: color-mix(in srgb, var(--bg) 70%, #fff); box-shadow: 0 14px 30px rgb(0 0 0 / 0.25); z-index: 3; cursor: grabbing; }
 .card.want-row.dragging .grip { color: var(--accent); }
-.card.want-row.drop-before::before, .card.want-row.drop-after::after { left: 10px; right: 10px; width: auto; height: 4px; }
-.card.want-row.drop-before::before { top: -7px; bottom: auto; }
-.card.want-row.drop-after::after { top: auto; bottom: -7px; }
+.card.want-row.shifting { transition: transform 0.2s cubic-bezier(0.2, 0.7, 0.3, 1); }
+#shelf-grid:has(.dragging) { user-select: none; -webkit-user-select: none; }
 
 .font-chips { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
 .font-chips button { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; padding: 8px 4px 7px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); color: var(--fg); cursor: pointer; }
