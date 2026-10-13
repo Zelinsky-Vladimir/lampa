@@ -445,10 +445,6 @@
     installUpdate: () => {},
     setUiLang: () => {},
 
-    setStatusBar(show) {
-      if (!native || !StatusBar) return;
-      (show ? StatusBar.show({ animation: 'FADE' }) : StatusBar.hide({ animation: 'FADE' })).catch(() => {});
-    },
     setEditMenu(on) {
       if (ReaderMenu) ReaderMenu.set({ off: !on }).catch(() => {});
     },
@@ -518,6 +514,7 @@
     await restoreState();
     watchState();
     if (!native) return;
+    if (StatusBar) StatusBar.hide().catch(() => {});
     await Filesystem.mkdir({ path: 'covers', directory: DATA, recursive: true }).catch(() => {});
     coversBase = await store.uri('covers');
     try {

@@ -1553,3 +1553,4 @@ kbd {
   .danger-btn:hover { filter: brightness(1.08); }
 }
 select:focus, select:focus-visible { outline: none; border-color: var(--accent); }
+#safe-top { position: fixed; inset: 0 0 auto 0; z-index: 16; height: env(safe-area-inset-top, 0px); background: var(--bg); pointer-events: none; }
