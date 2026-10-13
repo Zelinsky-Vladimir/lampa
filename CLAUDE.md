@@ -45,6 +45,12 @@ supabase/functions/books Edge Function for book files in Cloudflare R2: list / u
 - macOS minutes count 10× in a private repo, so the iOS check workflow runs only on tags or by hand.
 - Dev hooks (env vars): `LAMPA_USER_DATA` (separate profile), `LAMPA_SCREENSHOT=out.png` (screenshot after load, then quit), `LAMPA_EVAL` (JS to run before the screenshot), `LAMPA_SHOT_DELAY`, `LAMPA_CLOUD_URL` (point sync at a local Supabase, e.g. `supabase start` on 127.0.0.1:54321 — allowed by the desktop CSP).
 
+## Layout (redesign 0.12, design canvas https://claude.ai/artifact/PwZvFqxpLde6kkPy9RXEEb)
+
+- Home: brand + "+" (open book) + account button (initial and sync-status dot) in the bar; `#home-top` = "Continue reading" card (`#cont-card`) and, ≥900px, "Up next" from Want to read (`#up-next`); `#home-empty` hero only when the library is empty; recent cards have the progress bar on the cover.
+- Reader bar: back, TOC, title + chapter, then search/bookmark/mark-read/auto/fullscreen (`.wide-actions`, hidden on phones and replaced by the `#btn-more` menu `#more-pop`), `Aa` (`#btn-settings`).
+- `#settings-panel` = Appearance (reader only; a bottom sheet on phones): brightness (`#settings-bright`), themes, font, size, spacing, mode; colours, width, layout and reset are under `.ap-more`. `#account-panel` = sync, interface language, translate-to, support/privacy/version (`api.version()`), shortcuts. The old `#display-pop` is gone.
+
 ## Cloud sync (Supabase)
 
 - Project ref `lxztjateewlladvgzzlj` ("Lampa Server", Frankfurt). URL and the publishable key are in `src/cloud.js` (public by design). Never use or ask for the service-role/secret key or the database password.

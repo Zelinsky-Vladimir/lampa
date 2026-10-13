@@ -138,6 +138,7 @@
     searchCount: $('#search-count'),
     searchResults: $('#search-results'),
     settingsPanel: $('#settings-panel'),
+    accountPanel: $('#account-panel'),
     notePop: $('#note-pop'),
     selBar: $('#sel-bar'),
     annotPop: $('#annot-pop'),
@@ -442,7 +443,6 @@
     $('#auto-speed').value = settings.autoSpeed;
     $('#auto-speed-val').textContent = t('pxs', { n: settings.autoSpeed });
     ui.autoSpeedLabel.textContent = t('pxs', { n: settings.autoSpeed });
-    $('#btn-view').classList.toggle('active', paged());
     $('#page-anim').value = settings.pageAnim;
     for (const seg of document.querySelectorAll('.seg')) {
       for (const b of seg.children) b.classList.toggle('active', b.dataset.value === String(settings[seg.dataset.key]));
@@ -451,18 +451,19 @@
 
   // ---------- цвета фона и текста, яркость ----------
 
-  // Одни и те же элементы стоят в быстром окошке «☀» и в панели оформления.
-  const colorBoxes = () => [$('#quick-colors'), $('#settings-colors')];
+  const colorBoxes = () => [$('#settings-colors')];
 
   function buildColorControls() {
+    const bright = $('#settings-bright');
+    bright.replaceChildren();
+    const bLabel = el('div', 'cc-label');
+    bLabel.append(el('span', null, t('brightness')), el('span', 'cc-bright-val'));
+    const range = el('input', 'cc-bright');
+    Object.assign(range, { type: 'range', min: '0.3', max: '1', step: '0.05' });
+    range.addEventListener('input', () => updateSettings({ brightness: Number(range.value) }));
+    bright.append(bLabel, range);
     for (const box of colorBoxes()) {
       box.replaceChildren();
-      const bLabel = el('div', 'cc-label');
-      bLabel.append(el('span', null, t('brightness')), el('span', 'cc-bright-val'));
-      const range = el('input', 'cc-bright');
-      Object.assign(range, { type: 'range', min: '0.3', max: '1', step: '0.05' });
-      range.addEventListener('input', () => updateSettings({ brightness: Number(range.value) }));
-      box.append(bLabel, range);
 
       for (const [kind, list, label] of [['bg', BG_SWATCHES, 'customBg'], ['fg', FG_SWATCHES, 'customFg']]) {
         const row = el('div', 'cc-row');
@@ -516,11 +517,13 @@
   function syncColorControls() {
     const { bg, fg } = themeColors(settings.theme);
     const ratio = contrastRatio(bg, fg);
-    for (const box of colorBoxes()) {
-      const range = box.querySelector('.cc-bright');
-      if (!range) continue;
+    const range = $('#settings-bright .cc-bright');
+    if (range) {
       range.value = settings.brightness;
-      box.querySelector('.cc-bright-val').textContent = Math.round(settings.brightness * 100) + '%';
+      $('#settings-bright .cc-bright-val').textContent = Math.round(settings.brightness * 100) + '%';
+    }
+    for (const box of colorBoxes()) {
+      if (!box.querySelector('.cc-row')) continue;
       for (const row of box.querySelectorAll('.cc-row')) {
         const value = row.dataset.kind === 'bg' ? bg : fg;
         for (const b of row.querySelectorAll('button.cc-sw')) b.classList.toggle('active', b.dataset.color.toLowerCase() === value.toLowerCase());
@@ -532,27 +535,24 @@
     }
   }
 
-  const displayOpen = () => !$('#display-pop').hidden;
+  const moreOpen = () => !$('#more-pop').hidden;
 
-  function toggleDisplayPop() {
-    const pop = $('#display-pop');
-    if (displayOpen()) {
-      closeDisplayPop();
-      return;
-    }
+  function toggleMore() {
+    const pop = $('#more-pop');
+    if (moreOpen()) return closeMore();
     closePanels();
     closeSearch();
     setBar(true);
     pop.hidden = false;
-    $('#btn-display').classList.add('active');
-    const r = $('#btn-display').getBoundingClientRect();
+    $('#btn-more').classList.add('active');
+    const r = $('#btn-more').getBoundingClientRect();
     pop.style.top = r.bottom + 8 + 'px';
-    pop.style.left = clamp(r.right - pop.offsetWidth, 12, window.innerWidth - pop.offsetWidth - 12) + 'px';
+    pop.style.right = Math.max(12, window.innerWidth - r.right) + 'px';
   }
 
-  function closeDisplayPop() {
-    $('#display-pop').hidden = true;
-    $('#btn-display').classList.remove('active');
+  function closeMore() {
+    $('#more-pop').hidden = true;
+    $('#btn-more').classList.remove('active');
   }
 
   // ---------- место чтения ----------
@@ -868,7 +868,7 @@
     closeNote();
     hideSelBar();
     if (!ui.trPop.hidden) closeTranslate();
-    if (dir > 0 && !chromeHover && !anyPanelOpen() && !displayOpen()) setBar(false);
+    if (dir > 0 && !chromeHover && !anyPanelOpen() && !moreOpen()) setBar(false);
   }
 
   function showPage(n, dir) {
@@ -1157,7 +1157,7 @@
     if (ci !== lastChapter) {
       lastChapter = ci;
       const text = ci >= 0 ? current.toc[ci].text : '';
-      ui.barChapter.textContent = text ? ' · ' + text : '';
+      ui.barChapter.textContent = text || '';
       ui.footChapter.textContent = text;
       ui.footChapter.title = text;
     }
@@ -1190,7 +1190,7 @@
   let editorOpenedAt = 0;
   function onScroll() {
     const st = ui.scroller.scrollTop;
-    if (!anyPanelOpen() && !displayOpen() && !chromeHover && performance.now() > quietScrollUntil) {
+    if (!anyPanelOpen() && !moreOpen() && !chromeHover && performance.now() > quietScrollUntil) {
       if (st > lastScrollTop + 6 && st > 120) setBar(false);
       else if (st < lastScrollTop - 6) setBar(true);
     }
@@ -1522,39 +1522,82 @@
     }
   }
 
+  function libraryThumb(entry) {
+    if (entry.thumb) {
+      const img = el('img', 'thumb');
+      img.src = entry.thumb;
+      img.alt = '';
+      return img;
+    }
+    const ph = el('div', 'thumb ph', (entry.title || '?').trim().charAt(0).toUpperCase());
+    ph.style.setProperty('--h', hue(entry.title));
+    return ph;
+  }
+
+  function libraryStatus(entry) {
+    const read = shelfFor(entry);
+    if (read && read.list === 'read') return (read.rating ? '★ ' + read.rating + '/10 · ' : '') + t('tabRead');
+    if (!entry.path) return t('syncCloudBook') + (entry.page ? ' · ' + readLabel(entry) : '');
+    return readLabel(entry);
+  }
+
+  function renderContinue(last) {
+    $('#cont-cover').replaceChildren(libraryThumb(last));
+    $('#cont-title').textContent = last.title || '';
+    $('#cont-author').textContent = last.author || '';
+    $('#cont-fill').style.setProperty('--p', last.progress || 0);
+    $('#cont-page').textContent = last.page ? t('pageOf', { n: last.page, total: last.pages }) : last.path ? t('notStarted') : t('syncCloudBook');
+    $('#cont-pct').textContent = Math.round((last.progress || 0) * 100) + '%';
+    ui.homeContinue.title = last.source || last.path || '';
+    const read = shelfFor(last);
+    $('#cont-mark-read').hidden = !!read && read.list === 'read';
+  }
+
+  function renderUpNext() {
+    const want = sortedShelf('want');
+    const box = $('#up-next');
+    box.hidden = !want.length;
+    if (!want.length) return;
+    const list = $('#up-next-list');
+    list.replaceChildren();
+    for (const b of want.slice(0, 3)) {
+      const row = el('button', 'up-row');
+      row.append(bookThumb(b), el('span', 'up-text'));
+      row.lastChild.append(el('span', 'up-title', b.title), el('span', 'up-author', b.author || ''));
+      row.addEventListener('click', () => openBookEditor(b));
+      list.append(row);
+    }
+    $('#up-next-all').textContent = t('upNextAll', { n: want.length });
+  }
+
   function renderHome() {
     renderHomeTabs();
     renderShelf();
     ui.recent.replaceChildren();
     $('#recent-section').hidden = !library.length;
+    $('#recent-count').textContent = library.length > 1 ? String(library.length) : '';
 
     const last = library[0];
-    ui.homeContinue.hidden = !last;
+    $('#home-top').hidden = !last;
+    $('#home-empty').hidden = !!last;
     if (last) {
-      $('#home-continue-text').textContent = t('continueBook', { title: last.title }) + (last.page > 1 ? ' · ' + t('pageShort', { n: last.page }) : '');
-      ui.homeContinue.title = last.source || last.path;
+      renderContinue(last);
+      renderUpNext();
     }
 
     for (const entry of library) {
       const card = el('div', 'card');
       card.tabIndex = 0;
       card.setAttribute('role', 'button');
-      card.title = entry.source || entry.path;
+      card.title = entry.source || entry.path || '';
 
-      let thumb;
-      if (entry.thumb) {
-        thumb = el('img', 'thumb');
-        thumb.src = entry.thumb;
-        thumb.alt = '';
-      } else {
-        thumb = el('div', 'thumb ph', (entry.title || '?').trim().charAt(0).toUpperCase());
-        thumb.style.setProperty('--h', hue(entry.title));
-      }
-
+      const cover = el('div', 'cover');
       const bar = el('div', 'pbar');
       const fill = el('i');
       fill.style.setProperty('--p', entry.progress || 0);
       bar.append(fill);
+      cover.append(libraryThumb(entry));
+      if (entry.progress > 0 && entry.progress < 0.995) cover.append(bar);
 
       const remove = el('button', 'remove', '×');
       remove.title = t('removeFromList');
@@ -1562,24 +1605,12 @@
         e.stopPropagation();
         library = library.filter((x) => x !== entry);
         saveLibrary();
-        // копию удаляем вместе с карточкой; оригинал пользователя не трогаем
         if (entry.path && !library.some((x) => x.path === entry.path)) api.forgetBook(entry.path);
         forgetCloudFile(entry);
         renderHome();
       });
 
-      // книга с другого устройства, файла здесь ещё нет — скачается при открытии
-      const label = entry.path ? readLabel(entry) : t('syncCloudBook') + (entry.page ? ' · ' + readLabel(entry) : '');
-      const read = shelfFor(entry);
-      const isRead = !!read && read.list === 'read';
-      const done = el('button', isRead ? 'mark-read done' : 'mark-read');
-      if (isRead) done.append(svgIcon(STAR_PATH), el('span', null, read.rating ? read.rating + '/10' : t('inReadShort')));
-      else done.append(svgIcon('M5 12.5l4.5 4.5L19 7.5'), el('span', null, t('markRead')));
-      done.addEventListener('click', (e) => {
-        e.stopPropagation();
-        markLibraryRead(entry);
-      });
-      card.append(thumb, el('div', 't', entry.title), el('div', 'a', entry.author || ' '), bar, el('div', 'pct', label), done, remove);
+      card.append(cover, el('div', 't', entry.title), el('div', 'a', entry.author || '\u00a0'), el('div', 'pct', libraryStatus(entry)), remove);
       card.addEventListener('click', () => openEntry(entry));
       card.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') openEntry(entry);
@@ -1590,7 +1621,7 @@
 
   // ---------- боковые панели ----------
 
-  const anyPanelOpen = () => ui.tocPanel.classList.contains('open') || ui.settingsPanel.classList.contains('open');
+  const anyPanelOpen = () => [ui.tocPanel, ui.settingsPanel, ui.accountPanel].some((p) => p.classList.contains('open'));
   let leftTab = 'toc';
 
   function switchTab(name) {
@@ -1604,7 +1635,7 @@
     const wasOpen = panel.classList.contains('open');
     closePanels();
     closeSearch();
-    closeDisplayPop();
+    closeMore();
     if (wasOpen && !tab) return;
     stopAuto();
     panel.classList.add('open');
@@ -1616,6 +1647,7 @@
   function closePanels() {
     ui.tocPanel.classList.remove('open');
     ui.settingsPanel.classList.remove('open');
+    ui.accountPanel.classList.remove('open');
     ui.scrim.classList.remove('show');
   }
 
@@ -2591,7 +2623,7 @@
       return;
     }
     if (e.key === 'Escape') {
-      if (displayOpen()) closeDisplayPop();
+      if (moreOpen()) closeMore();
       else if (!ui.trPop.hidden) closeTranslate();
       else if (!ui.notePop.hidden) closeNote();
       else if (!ui.selBar.hidden) hideSelBar();
@@ -4022,7 +4054,7 @@
     }
     const code = params.get('code');
     const error = params.get('error_description') || params.get('error');
-    openPanel(ui.settingsPanel);
+    openPanel(ui.accountPanel);
     if (!code || !cloud.pkce) return setSyncMessage(t('syncSignInFailed', { e: error || '—' }));
     try {
       const session = await Cloud.oauthFinish(code, cloud.pkce);
@@ -4053,6 +4085,7 @@
     else if (cloud.syncedAt) el2.textContent = t('syncDoneAt', { time: new Date(cloud.syncedAt).toLocaleTimeString(I18n.lang, { hour: '2-digit', minute: '2-digit' }) });
     else el2.textContent = '';
     $('#sync-status-row').dataset.state = state === 'idle' && cloud.syncedAt ? 'ok' : state;
+    renderAccountButton();
   }
 
   const formatMb = (bytes) => {
@@ -4091,6 +4124,14 @@
     else $('#sync-bar').hidden = true;
   }
 
+  function renderAccountButton() {
+    const btn = $('#btn-account');
+    const inside = signedIn();
+    btn.classList.toggle('signed', inside);
+    btn.querySelector('.acct-initial').textContent = inside ? (cloud.session.user.email || '?').trim().charAt(0) : '';
+    btn.dataset.state = inside ? (syncState.state === 'idle' && cloud.syncedAt ? 'ok' : syncState.state) : '';
+  }
+
   function renderSyncBox() {
     const inside = signedIn();
     $('#sync-out').hidden = inside;
@@ -4110,6 +4151,7 @@
     $('#sync-delete').classList.remove('confirm');
     $('#sync-delete').textContent = t('syncDelete');
     applyTranslateAccess();
+    renderAccountButton();
     setSyncMessage('');
     renderSyncStatus();
   }
@@ -4205,9 +4247,25 @@
     $('#btn-home').addEventListener('click', showHome);
     $('#btn-toc').addEventListener('click', () => openPanel(ui.tocPanel));
     $('#btn-settings').addEventListener('click', () => openPanel(ui.settingsPanel));
+    $('#btn-account').addEventListener('click', () => openPanel(ui.accountPanel));
     $('#btn-full').addEventListener('click', () => api.toggleFullscreen());
     $('#btn-search').addEventListener('click', () => (searchOpen() ? closeSearch() : openSearch()));
-    $('#btn-display').addEventListener('click', toggleDisplayPop);
+    $('#btn-more').addEventListener('click', toggleMore);
+    for (const b of $('#more-pop').querySelectorAll('[data-act]')) {
+      b.addEventListener('click', () => {
+        closeMore();
+        $('#' + b.dataset.act).click();
+      });
+    }
+    $('#cont-mark-read').addEventListener('click', () => markLibraryRead(library[0]));
+    $('#up-next-all').addEventListener('click', () => switchHomeTab('want'));
+    for (const a of document.querySelectorAll('a[data-external]')) {
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        api.openExternal(a.href);
+      });
+    }
+    if (api.version) api.version().then((v) => ($('#app-version').textContent = v || '')).catch(() => {});
     $('#btn-zoom-in').addEventListener('click', () => zoom(1));
     $('#btn-zoom-out').addEventListener('click', () => zoom(-1));
     $('#btn-wide').addEventListener('click', () => changeWidth(1));
@@ -4374,7 +4432,6 @@ ${sentence}` : translation);
       scheduleProgress();
       scheduleSave();
     });
-    $('#btn-view').addEventListener('click', toggleView);
     ui.notePop.addEventListener('click', (e) => {
       const a = e.target.closest('a');
       if (a) handleLink(e, a);
@@ -4382,7 +4439,7 @@ ${sentence}` : translation);
     document.addEventListener('mousedown', (e) => {
       if (!ui.notePop.hidden && !ui.notePop.contains(e.target) && !e.target.closest('a')) closeNote();
       if (!ui.annotPop.hidden && !ui.annotPop.contains(e.target)) closeNoteEditor();
-      if (displayOpen() && !$('#display-pop').contains(e.target) && !e.target.closest('#btn-display')) closeDisplayPop();
+      if (moreOpen() && !$('#more-pop').contains(e.target) && !e.target.closest('#btn-more')) closeMore();
       if (!ui.trPop.hidden && !ui.trPop.contains(e.target) && !ui.selBar.contains(e.target)) closeTranslate();
     });
     document.addEventListener('mousemove', (e) => {

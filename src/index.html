@@ -12,11 +12,13 @@
 <body>
   <div id="sync-bar" hidden></div>
   <header id="bar">
-    <!-- навигация -->
-    <div class="bar-group reader-only">
+    <div class="bar-brand home-only">Lampa</div>
+    <div class="bar-group reader-only" id="nav-group">
       <button class="icon-btn" id="btn-home" data-i18n-title="library">
-        <svg viewBox="0 0 24 24"><path d="M5 4h3v16H5zM10 4h3v16h-3zM15.2 5.1l2.9-.8 3.6 15-2.9.8z"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
       </button>
+    </div>
+    <div class="bar-group reader-only" id="toc-group">
       <button class="icon-btn" id="btn-toc" data-i18n-title="tocBtn">
         <svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></svg>
       </button>
@@ -24,7 +26,6 @@
     <div id="bar-title" class="reader-only"><span id="bar-book"></span><span id="bar-chapter"></span></div>
     <div class="spacer home-only"></div>
 
-    <!-- текст: шрифт, размер, ширина колонки -->
     <div class="bar-group reader-only wide-only">
       <select id="bar-font" class="bar-select" data-i18n-title="font"></select>
       <span class="bar-sep"></span>
@@ -39,8 +40,7 @@
       </button>
     </div>
 
-    <!-- чтение -->
-    <div class="bar-group reader-only">
+    <div class="bar-group reader-only wide-actions">
       <button class="icon-btn" id="btn-search" data-i18n-title="searchBtn">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
       </button>
@@ -55,26 +55,20 @@
       </button>
     </div>
 
-    <!-- вид -->
     <div class="bar-group">
-      <button class="icon-btn reader-only" id="btn-view" data-i18n-title="viewBtn">
-        <svg viewBox="0 0 24 24"><path d="M3 5.5c3-1 6-.8 9 1.2 3-2 6-2.2 9-1.2v13c-3-1-6-.8-9 1.2-3-2-6-2.2-9-1.2zM12 6.7v13"/></svg>
-      </button>
-      <button class="icon-btn" id="btn-display" data-i18n-title="displayBtn">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>
-      </button>
-      <button class="icon-btn" id="btn-full" data-i18n-title="fullBtn">
+      <button class="icon-btn reader-only wide-actions" id="btn-full" data-i18n-title="fullBtn">
         <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
       </button>
-    </div>
-
-    <!-- приложение -->
-    <div class="bar-group">
-      <button class="icon-btn" id="btn-settings" data-i18n-title="settingsBtn">
-        <svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17" r="2"/></svg>
+      <button class="icon-btn txt aa-btn reader-only" id="btn-settings" data-i18n-title="settingsBtn">Aa</button>
+      <button class="icon-btn reader-only phone-only" id="btn-more" data-i18n-title="moreBtn" aria-haspopup="menu">
+        <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg>
       </button>
-      <button class="icon-btn" id="btn-open" data-i18n-title="openBtn">
-        <svg viewBox="0 0 24 24"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></svg>
+      <button class="icon-btn home-only" id="btn-open" data-i18n-title="openBtn">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+      <button class="icon-btn account-btn" id="btn-account" data-i18n-title="accountTitle">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.6"/><path d="M5 19.5c1.3-3.4 3.8-5.1 7-5.1s5.7 1.7 7 5.1"/></svg>
+        <span class="acct-initial"></span><i class="acct-dot"></i>
       </button>
     </div>
   </header>
@@ -87,15 +81,38 @@
         <button data-tab="want"><span data-i18n="tabWant"></span><span class="count"></span></button>
       </nav>
       <div id="home-library">
-      <section class="hero">
+      <div class="home-top" id="home-top" hidden>
+        <section class="cont-card" id="cont-card">
+          <div class="cont-cover" id="cont-cover"></div>
+          <div class="cont-info">
+            <div class="cont-over" data-i18n="continueReading"></div>
+            <div class="cont-title" id="cont-title"></div>
+            <div class="cont-author" id="cont-author"></div>
+            <div class="cont-bar"><i id="cont-fill"></i></div>
+            <div class="cont-meta"><span id="cont-page"></span><span id="cont-pct"></span></div>
+            <div class="cont-actions">
+              <button class="primary-btn" id="home-continue">
+                <svg viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z"/></svg>
+                <span data-i18n="continueBtn"></span>
+              </button>
+              <button class="ghost-btn" id="cont-mark-read">
+                <svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+                <span data-i18n="markRead"></span>
+              </button>
+            </div>
+          </div>
+        </section>
+        <aside class="up-next" id="up-next" hidden>
+          <h2 data-i18n="upNext"></h2>
+          <div id="up-next-list"></div>
+          <button class="link-btn" id="up-next-all"></button>
+        </aside>
+      </div>
+      <section class="hero" id="home-empty">
         <img class="logo-icon" src="../build/icon.png" alt="">
         <div class="logo">Lampa</div>
         <p class="tagline" data-i18n="tagline"></p>
         <div class="hero-actions">
-          <button class="primary-btn" id="home-continue" hidden>
-            <svg viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z"/></svg>
-            <span id="home-continue-text"></span>
-          </button>
           <button class="primary-btn" id="home-open">
             <svg viewBox="0 0 24 24"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></svg>
             <span data-i18n="openBook"></span>
@@ -104,7 +121,7 @@
         <p class="hint" data-i18n="dropHint"></p>
       </section>
       <section id="recent-section" hidden>
-        <h2 class="section-title" data-i18n="recent"></h2>
+        <h2 class="section-title"><span data-i18n="recent"></span> <span class="count" id="recent-count"></span></h2>
         <div class="grid" id="recent"></div>
       </section>
       </div>
@@ -203,7 +220,84 @@
       <button class="icon-btn" data-close data-i18n-title="close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </header>
     <div class="body">
-      <!-- синхронизация между устройствами -->
+      <div class="setting color-controls" id="settings-bright"></div>
+      <div class="setting">
+        <div class="label" data-i18n="theme"></div>
+        <div class="themes" id="themes"></div>
+      </div>
+      <div class="setting">
+        <label class="label" for="font" data-i18n="font"></label>
+        <select id="font"></select>
+      </div>
+      <div class="setting">
+        <label class="label" for="font-size"><span data-i18n="size"></span> <span id="font-size-val"></span></label>
+        <input type="range" id="font-size" min="12" max="44" step="1">
+      </div>
+      <div class="setting">
+        <label class="label" for="line-height"><span data-i18n="lineHeight"></span> <span id="line-height-val"></span></label>
+        <input type="range" id="line-height" min="1.1" max="2.4" step="0.05">
+      </div>
+      <div class="setting">
+        <div class="label" data-i18n="readingMode"></div>
+        <div class="seg" data-key="view">
+          <button data-value="scroll" data-i18n="modeScroll"></button>
+          <button data-value="pages" data-i18n="modePages"></button>
+        </div>
+      </div>
+      <details class="ap-more">
+        <summary data-i18n="moreAppearance"></summary>
+        <div class="setting color-controls" id="settings-colors"></div>
+      <div class="setting">
+        <label class="label" for="width"><span data-i18n="columnWidth"></span> <span id="width-val"></span></label>
+        <input type="range" id="width" min="480" max="2400" step="20">
+      </div>
+      <div class="setting">
+        <div class="label" data-i18n="alignment"></div>
+        <div class="seg" data-key="justify">
+          <button data-value="true" data-i18n="justify"></button>
+          <button data-value="false" data-i18n="alignLeft"></button>
+        </div>
+      </div>
+      <div class="setting">
+        <div class="label" data-i18n="paragraphs"></div>
+        <div class="seg" data-key="indent">
+          <button data-value="true" data-i18n="indent"></button>
+          <button data-value="false" data-i18n="spacing"></button>
+        </div>
+      </div>
+      <div class="setting pages-only">
+        <div class="label" data-i18n="pageAnim"></div>
+        <select id="page-anim"></select>
+      </div>
+      <div class="setting pages-only">
+        <div class="label" data-i18n="pagesPerScreen"></div>
+        <div class="seg" data-key="pageCols">
+          <button data-value="1">1</button>
+          <button data-value="2">2</button>
+        </div>
+      </div>
+      <div class="setting">
+        <div class="label" data-i18n="footerBar"></div>
+        <div class="seg" data-key="footerAlways">
+          <button data-value="true" data-i18n="alwaysVisible"></button>
+          <button data-value="false" data-i18n="hideWhileReading"></button>
+        </div>
+      </div>
+      <div class="setting">
+        <label class="label" for="auto-speed"><span data-i18n="autoSpeed"></span> <span id="auto-speed-val"></span></label>
+        <input type="range" id="auto-speed" min="10" max="300" step="5">
+      </div>
+        <button class="text-btn" id="reset-settings" data-i18n="reset"></button>
+      </details>
+    </div>
+  </aside>
+
+  <aside class="panel right" id="account-panel">
+    <header>
+      <h3 data-i18n="accountTitle"></h3>
+      <button class="icon-btn" data-close data-i18n-title="close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </header>
+    <div class="body">
       <div class="setting sync-box">
         <div class="label" data-i18n="syncTitle"></div>
         <div id="sync-out">
@@ -257,72 +351,12 @@
         <select id="translate-to"></select>
         <p class="setting-hint" id="translate-privacy" data-i18n="translatePrivacy"></p>
       </div>
-      <div class="setting">
-        <div class="label" data-i18n="theme"></div>
-        <div class="themes" id="themes"></div>
-        <div class="color-controls" id="settings-colors"></div>
-      </div>
-      <div class="setting">
-        <label class="label" for="font" data-i18n="font"></label>
-        <select id="font"></select>
-      </div>
-      <div class="setting">
-        <label class="label" for="font-size"><span data-i18n="size"></span> <span id="font-size-val"></span></label>
-        <input type="range" id="font-size" min="12" max="44" step="1">
-      </div>
-      <div class="setting">
-        <label class="label" for="line-height"><span data-i18n="lineHeight"></span> <span id="line-height-val"></span></label>
-        <input type="range" id="line-height" min="1.1" max="2.4" step="0.05">
-      </div>
-      <div class="setting">
-        <label class="label" for="width"><span data-i18n="columnWidth"></span> <span id="width-val"></span></label>
-        <input type="range" id="width" min="480" max="2400" step="20">
-      </div>
-      <div class="setting">
-        <div class="label" data-i18n="alignment"></div>
-        <div class="seg" data-key="justify">
-          <button data-value="true" data-i18n="justify"></button>
-          <button data-value="false" data-i18n="alignLeft"></button>
-        </div>
-      </div>
-      <div class="setting">
-        <div class="label" data-i18n="paragraphs"></div>
-        <div class="seg" data-key="indent">
-          <button data-value="true" data-i18n="indent"></button>
-          <button data-value="false" data-i18n="spacing"></button>
-        </div>
-      </div>
-      <div class="setting">
-        <div class="label" data-i18n="readingMode"></div>
-        <div class="seg" data-key="view">
-          <button data-value="scroll" data-i18n="modeScroll"></button>
-          <button data-value="pages" data-i18n="modePages"></button>
-        </div>
-      </div>
-      <div class="setting pages-only">
-        <div class="label" data-i18n="pageAnim"></div>
-        <select id="page-anim"></select>
-      </div>
-      <div class="setting pages-only">
-        <div class="label" data-i18n="pagesPerScreen"></div>
-        <div class="seg" data-key="pageCols">
-          <button data-value="1">1</button>
-          <button data-value="2">2</button>
-        </div>
-      </div>
-      <div class="setting">
-        <div class="label" data-i18n="footerBar"></div>
-        <div class="seg" data-key="footerAlways">
-          <button data-value="true" data-i18n="alwaysVisible"></button>
-          <button data-value="false" data-i18n="hideWhileReading"></button>
-        </div>
-      </div>
-      <div class="setting">
-        <label class="label" for="auto-speed"><span data-i18n="autoSpeed"></span> <span id="auto-speed-val"></span></label>
-        <input type="range" id="auto-speed" min="10" max="300" step="5">
-      </div>
-      <button class="text-btn" id="reset-settings" data-i18n="reset"></button>
 
+      <div class="setting about">
+        <a class="about-row" href="https://zelinsky-vladimir.github.io/lampa-releases/support.html" data-external><span data-i18n="support"></span><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></a>
+        <a class="about-row" href="https://zelinsky-vladimir.github.io/lampa-releases/privacy.html" data-external><span data-i18n="privacy"></span><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></a>
+        <div class="about-row"><span data-i18n="version"></span><span class="muted" id="app-version"></span></div>
+      </div>
       <div class="setting shortcuts">
         <div class="label" data-i18n="keys"></div>
         <dl id="shortcuts"></dl>
@@ -439,8 +473,11 @@
   </div>
 
   <div id="drop-overlay" data-i18n="dropHere"></div>
-  <div id="display-pop" hidden>
-    <div class="color-controls" id="quick-colors"></div>
+  <div id="more-pop" class="menu-pop" role="menu" hidden>
+    <button role="menuitem" data-act="btn-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg><span data-i18n="menuSearch"></span></button>
+    <button role="menuitem" data-act="btn-bookmark"><svg viewBox="0 0 24 24"><path d="M7 4.5h10v15.5l-5-3.8-5 3.8z"/></svg><span data-i18n="menuBookmark"></span></button>
+    <button role="menuitem" data-act="btn-mark-read"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="m8.3 12.3 2.6 2.6 5-5.3"/></svg><span data-i18n="markReadTitle"></span></button>
+    <button role="menuitem" data-act="btn-auto"><svg viewBox="0 0 24 24"><path d="M12 4v14M6.5 12.5 12 18l5.5-5.5M6 21h12"/></svg><span data-i18n="menuAuto"></span></button>
   </div>
   <!-- затемнение поверх всего окна: «яркость» внутри приложения -->
   <div id="dim"></div>

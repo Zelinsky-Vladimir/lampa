@@ -422,6 +422,11 @@
     adoptBooks: async () => [],
     // синхронизация: исходный файл книги — в облако; книга из облака — в библиотеку
     readBookFile: (p) => store.read(p),
+    async version() {
+      if (!App || !App.getInfo) return '';
+      const info = await App.getInfo();
+      return info.version || '';
+    },
     saveBookFile: (name, bytes) => importBook(baseName(name), bytes),
     takeAuthCallback: async () => null,
     onAuthCallback: (cb) => {

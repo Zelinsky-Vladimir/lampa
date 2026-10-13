@@ -393,6 +393,7 @@ function registerIpc() {
     if (dir) await fsp.rm(dir, { recursive: true, force: true });
   });
 
+  ipcMain.handle('app:version', () => app.getVersion());
   ipcMain.handle('app:take-initial-path', () => {
     rendererReady = true;
     const p = pendingPath;

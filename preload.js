@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('api', {
   adoptBooks: (paths) => ipcRenderer.invoke('books:adopt', paths),
   forgetBook: (p) => ipcRenderer.invoke('books:forget', p),
   readBookFile: (p) => ipcRenderer.invoke('book:read-raw', p),
+  version: () => ipcRenderer.invoke('app:version'),
   saveBookFile: (name, bytes) => ipcRenderer.invoke('book:save', { name, bytes }),
   takeAuthCallback: () => ipcRenderer.invoke('app:take-auth'),
   onAuthCallback: (cb) => ipcRenderer.on('auth-callback', (_e, url) => cb(url)),
