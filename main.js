@@ -119,7 +119,7 @@ function createWindow() {
     minHeight: 360,
     show: false,
     title: 'Lampa',
-    backgroundColor: state.bg || '#f4ecd8',
+    backgroundColor: state.bg || '#c9cbb4',
     icon: path.join(__dirname, 'build', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

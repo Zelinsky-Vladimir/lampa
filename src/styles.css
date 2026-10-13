@@ -1,8 +1,8 @@
 :root {
   /* --bg, --fg, --accent задаются из app.js по выбранной теме */
-  --bg: #f4ecd8;
-  --fg: #5b4636;
-  --accent: #9a5b2e;
+  --bg: #c9cbb4;
+  --fg: #1f3d47;
+  --accent: #7a3f1d;
   --muted: color-mix(in srgb, var(--fg) 58%, var(--bg));
   --faint: color-mix(in srgb, var(--fg) 9%, var(--bg));
   --panel: color-mix(in srgb, var(--bg) 95%, var(--fg));

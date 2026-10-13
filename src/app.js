@@ -71,10 +71,10 @@
 
   const DEFAULTS = {
     lang: 'auto',
-    theme: 'sepia',
+    theme: 'olive',
     customBg: '#efe6d2',
     customFg: '#2f2a24',
-    font: 'literata',
+    font: 'pt-sans',
     fontSize: 20,
     lineHeight: 1.6,
     width: 760,
@@ -1373,7 +1373,6 @@
   async function openPath(p) {
     if (!p) return;
     const token = ++openToken;
-    toast(t('opening'), 0);
 
     let data;
     let book;
@@ -1461,8 +1460,7 @@
     setBar(true);
     updateProgress();
     if (paged()) refreshPageNumbers();
-    if (entry.pos && current.shownPage > 1) toast(t('continuing', { n: current.shownPage, total: displayTotal() }), 2200);
-    else ui.toast.classList.remove('show');
+    ui.toast.classList.remove('show');
     ui.scroller.focus({ preventScroll: true });
 
     if (!entry.thumb && book.coverUrl) {
@@ -3868,7 +3866,6 @@
   }
 
   async function fetchCloudBook(entry) {
-    toast(t('syncDownloading'), 0);
     const s = await cloudSession();
     syncBusy(true);
     let bytes;
