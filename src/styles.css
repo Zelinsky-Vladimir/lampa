@@ -537,6 +537,8 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
   cursor: pointer;
 }
 .card .mark-read:hover, .card .quick-add:hover { border-color: var(--accent); color: var(--accent); }
+.card .mark-read.done { border-color: transparent; background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+.card .mark-read.done svg { fill: var(--star); stroke: none; }
 .card .mark-read svg, .card .quick-add svg { flex: none; width: 14px; height: 14px; stroke-width: 2.2; }
 .card .mark-read span, .card .quick-add span { overflow: hidden; text-overflow: ellipsis; }
 .card .quick-add { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); color: var(--accent); }

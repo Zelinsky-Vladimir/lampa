@@ -1506,6 +1506,14 @@
     return entry.page ? t('pageOf', { n: entry.page, total: entry.pages }) + ' · ' + pct : t('readPct', { pct });
   }
 
+  function refreshHome() {
+    if (root.dataset.mode === 'home') renderHome();
+    else {
+      renderHomeTabs();
+      renderShelf();
+    }
+  }
+
   function renderHome() {
     renderHomeTabs();
     renderShelf();
@@ -1554,7 +1562,16 @@
 
       // книга с другого устройства, файла здесь ещё нет — скачается при открытии
       const label = entry.path ? readLabel(entry) : t('syncCloudBook') + (entry.page ? ' · ' + readLabel(entry) : '');
-      card.append(thumb, el('div', 't', entry.title), el('div', 'a', entry.author || ' '), bar, el('div', 'pct', label), remove);
+      const read = shelfFor(entry);
+      const isRead = !!read && read.list === 'read';
+      const done = el('button', isRead ? 'mark-read done' : 'mark-read');
+      if (isRead) done.append(svgIcon(STAR_PATH), el('span', null, read.rating ? read.rating + '/10' : t('inReadShort')));
+      else done.append(svgIcon('M5 12.5l4.5 4.5L19 7.5'), el('span', null, t('markRead')));
+      done.addEventListener('click', (e) => {
+        e.stopPropagation();
+        markLibraryRead(entry);
+      });
+      card.append(thumb, el('div', 't', entry.title), el('div', 'a', entry.author || ' '), bar, el('div', 'pct', label), done, remove);
       card.addEventListener('click', () => openEntry(entry));
       card.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') openEntry(entry);
@@ -2700,8 +2717,7 @@
       want.sort((a, b) => (a.pos ?? -a.added) - (b.pos ?? -b.added)).forEach((b, i) => (b.pos = i));
       saveShelf();
     }
-    renderHomeTabs();
-    renderShelf();
+    refreshHome();
     scheduleStamp();
     enrichShelf();
     // список прочитан — можно синхронизировать (удаления посчитаются верно)
@@ -2767,8 +2783,7 @@
     homeTab = tab;
     saveJSON('lampa.homeTab', tab);
     // запрос остаётся: нашли книгу на одной вкладке — можно добавить её на другой
-    renderHomeTabs();
-    renderShelf();
+    refreshHome();
   }
 
   function sortedShelf(list) {
@@ -3109,8 +3124,7 @@
     shelf.push(entry);
     if (r.thumb) pendingThumbs.set(entry, r.thumb);
     saveShelf();
-    renderHomeTabs();
-    renderShelf();
+    refreshHome();
     toast(t('shelfMoved', { list: listName(entry.list) }));
     if (r.cover) setCover(entry, r.cover);
   }
@@ -3280,11 +3294,24 @@
     showEditor();
   }
 
+  const sameBook = (a, b) => {
+    const norm = (s) => String(s || '').toLocaleLowerCase().replace(/ё/g, 'е').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+    return norm(a.title) === norm(b.title) && (!norm(a.author) || !norm(b.author) || norm(a.author) === norm(b.author));
+  };
+  const shelfFor = (entry) => entry && shelf.find((b) => sameBook(b, entry));
+
+  function markLibraryRead(entry) {
+    if (!entry) return;
+    const have = shelfFor(entry);
+    if (have) return openBookEditor({ ...have, list: 'read', finished: have.finished || today(), fromLibrary: true });
+    openBookEditor({ list: 'read', title: entry.title || '', author: entry.author || '', year: '', finished: today(), fromLibrary: true });
+  }
+
   function showEditor() {
     pickCoverOnly = false;
     bookSearchToken++;
     $('#book-dlg').hidden = false;
-    $('#dlg-heading').textContent = t(draft.id ? 'editBook' : 'shelfAdd');
+    $('#dlg-heading').textContent = t(draft.fromLibrary ? 'markReadTitle' : draft.id ? 'editBook' : 'shelfAdd');
     $('#dlg-search').hidden = true;
     $('#dlg-edit').hidden = false;
     $('#ed-title').value = draft.title || '';
@@ -3295,7 +3322,7 @@
     $('#ed-delete').hidden = !draft.id;
     $('#ed-delete').classList.remove('confirm');
     $('#ed-delete').textContent = t('delete');
-    $('#ed-back').hidden = !!draft.id;
+    $('#ed-back').hidden = !!draft.id || !!draft.fromLibrary;
     const genre = $('#ed-genre');
     const c = new Intl.Collator(I18n.lang);
     const none = el('option', null, '—');
@@ -3405,8 +3432,7 @@
     if (d.coverUrl && d.thumb) pendingThumbs.set(entry, d.thumb);
     closeBookDialog();
     saveShelf();
-    renderHomeTabs();
-    renderShelf();
+    refreshHome();
     if (d.list !== homeTab) toast(t('shelfMoved', { list: listName(d.list) }));
 
     // обложку скачиваем после закрытия окна, чтобы не ждать
@@ -3442,8 +3468,7 @@
     if (i >= 0) shelf.splice(i, 1);
     closeBookDialog();
     saveShelf();
-    renderHomeTabs();
-    renderShelf();
+    refreshHome();
     toast(t('shelfDeleted'));
   }
 
@@ -4155,6 +4180,7 @@
     $('#btn-wide').addEventListener('click', () => changeWidth(1));
     $('#btn-narrow').addEventListener('click', () => changeWidth(-1));
     ui.btnBookmark.addEventListener('click', toggleBookmark);
+    $('#btn-mark-read').addEventListener('click', () => markLibraryRead(libraryEntry()));
     ui.homeContinue.addEventListener('click', () => library[0] && openEntry(library[0]));
     ui.btnAuto.addEventListener('click', () => (auto.on ? stopAuto() : startAuto()));
     $('#auto-stop').addEventListener('click', stopAuto);
