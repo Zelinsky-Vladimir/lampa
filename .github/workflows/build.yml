@@ -1,7 +1,5 @@
 name: Build
 
-# Сборка под все три системы. Пуш тега вида v0.1.0 — собрать и выложить релиз;
-# ручной запуск во вкладке Actions — просто собрать (файлы будут в Artifacts).
 on:
   push:
     tags: ['v*']
@@ -29,13 +27,11 @@ jobs:
 
       - run: npm run dist
         env:
-          # без сертификатов разработчика: сборки не подписаны
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
       - uses: actions/upload-artifact@v4
         with:
           name: svitok-${{ runner.os }}
-          # latest*.yml и .blockmap нужны автообновлению — без них приложение не увидит новую версию
           path: |
             dist/*.exe
             dist/*.dmg
@@ -44,6 +40,7 @@ jobs:
             dist/latest*.yml
             dist/*.blockmap
           if-no-files-found: error
+          retention-days: 2
 
   release:
     needs: build
@@ -60,8 +57,6 @@ jobs:
           files: artifacts/*
           generate_release_notes: true
 
-      # Публичные установщики и обновления — в отдельном репозитории lampa-releases (код здесь закрыт).
-      # Нужен секрет RELEASES_TOKEN: токен с правом записи только в lampa-releases.
       - name: Publish to lampa-releases
         if: env.RELEASES_TOKEN != ''
         env:
