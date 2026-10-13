@@ -2661,6 +2661,8 @@
   }
 
   let selNote = null;
+  let popupClosedAt = 0;
+  const popupOpen = () => !ui.notePop.hidden || !ui.annotPop.hidden || !ui.trPop.hidden || gotoOpen() || !!selNote;
 
   const notesOver = (start, end) => bookMarks().notes.filter((n) => !n.orphan && n.start < end && n.end > start);
 
@@ -5155,6 +5157,7 @@ ${sentence}` : translation);
     });
     ui.scroller.addEventListener('click', (e) => {
       if (e.defaultPrevented || e.target.closest('a') || !window.getSelection().isCollapsed) return;
+      if (performance.now() - popupClosedAt < 600) return;
       if (!paged()) {
         if (coarsePointer()) setBar(root.dataset.chrome === 'hidden');
         return;
@@ -5190,11 +5193,13 @@ ${sentence}` : translation);
       if (a) handleLink(e, a);
     });
     document.addEventListener('mousedown', (e) => {
+      const before = popupOpen();
       if (!ui.notePop.hidden && !ui.notePop.contains(e.target) && !e.target.closest('a')) closeNote();
       if (!ui.annotPop.hidden && !ui.annotPop.contains(e.target)) closeNoteEditor();
       if (gotoOpen() && !ui.gotoPop.contains(e.target) && !e.target.closest('#page-btn')) closeGoto();
       if (!ui.trPop.hidden && !ui.trPop.contains(e.target) && !ui.selBar.contains(e.target)) closeTranslate();
       if (selNote && !ui.selBar.contains(e.target)) hideSelBar();
+      if (before && !popupOpen()) popupClosedAt = performance.now();
     });
     document.addEventListener('mousemove', (e) => {
       if (e.clientY < 56 || e.clientY > window.innerHeight - 56) setBar(true);
