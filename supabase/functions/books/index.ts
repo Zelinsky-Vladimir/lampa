@@ -14,7 +14,9 @@ const r2 = new AwsClient({
   service: 's3',
   region: 'auto',
 });
-const bucketUrl = `https://${Deno.env.get('R2_ACCOUNT_ID')}.r2.cloudflarestorage.com/${Deno.env.get('R2_BUCKET')}`;
+const jurisdiction = Deno.env.get('R2_JURISDICTION') ?? 'eu';
+const r2Host = `${Deno.env.get('R2_ACCOUNT_ID')}.${jurisdiction ? `${jurisdiction}.` : ''}r2.cloudflarestorage.com`;
+const bucketUrl = `https://${r2Host}/${Deno.env.get('R2_BUCKET')}`;
 
 const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS') || '{}').default;
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, serviceKey, { auth: { persistSession: false } });
@@ -47,6 +49,14 @@ const usedBy = (rows: Row[], except: string, withPending: boolean) =>
   rows
     .filter((r) => r.hash !== except && (r.ready || (withPending && Date.now() - Date.parse(r.created_at) < PENDING_MS)))
     .reduce((n, r) => n + Number(r.size), 0);
+
+async function objectSize(user: string, hash: string, ext: string) {
+  const key = `${user}/${hash}.${ext}`;
+  const r = await r2.fetch(`${bucketUrl}?list-type=2&max-keys=1&prefix=${encodeURIComponent(key)}`, { method: 'GET' });
+  if (!r.ok) throw new Error(`R2 list ${r.status}`);
+  const m = (await r.text()).match(/<Key>([^<]+)<\/Key>[\s\S]*?<Size>(\d+)<\/Size>/);
+  return m && m[1] === key ? Number(m[2]) : null;
+}
 
 async function removeObject(user: string, hash: string, ext: string) {
   const r = await r2.fetch(objectUrl(user, hash, ext), { method: 'DELETE' });
@@ -103,9 +113,8 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'confirm') {
-      const head = await r2.fetch(objectUrl(user, hash, ext), { method: 'HEAD' });
-      if (!head.ok) return json({ error: 'NOT_UPLOADED' }, 409);
-      const size = Number(head.headers.get('content-length'));
+      const size = await objectSize(user, hash, ext);
+      if (size === null) return json({ error: 'NOT_UPLOADED' }, 409);
       const used = usedBy(await rowsOf(user), hash, false);
       if (!(size > 0) || size > MAX_FILE || used + size > QUOTA) {
         await removeObject(user, hash, ext);
