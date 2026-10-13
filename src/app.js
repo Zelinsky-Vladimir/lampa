@@ -77,7 +77,8 @@
     justify: true,
     indent: true,
     autoSpeed: 40,
-    footerAlways: true,
+    footerAlways: false,
+    layoutV: 2,
     brightness: 1,
     translateTo: 'auto',
     view: 'scroll',
@@ -169,8 +170,11 @@
   if (!FONTS.some((f) => f.id === settings.font)) settings.font = DEFAULTS.font;
   if (savedSettings && !savedSettings.curlDefault) Object.assign(settings, { pageAnim: 'curl', curlDefault: true });
   if (!features.curl && settings.pageAnim === 'curl') settings.pageAnim = 'slide';
-  if (savedSettings && !savedSettings.layoutV) settings.footerAlways = false;
-  settings.layoutV = 2;
+  if (savedSettings && !savedSettings.layoutV) {
+    settings.footerAlways = false;
+    settings.layoutV = 2;
+    saveJSON(LS.settings, settings);
+  }
 
   let library = loadStored('library', []);
   if (!Array.isArray(library)) library = [];
@@ -4751,10 +4755,10 @@ ${sentence}` : translation);
 
     ui.scroller.addEventListener('scroll', onScroll, { passive: true });
     for (const panel of [ui.bar, $('#footer')]) {
-      panel.addEventListener('mouseenter', () => {
-        chromeHover = true;
+      panel.addEventListener('pointerenter', (e) => {
+        if (e.pointerType === 'mouse') chromeHover = true;
       });
-      panel.addEventListener('mouseleave', () => {
+      panel.addEventListener('pointerleave', () => {
         chromeHover = false;
       });
     }
