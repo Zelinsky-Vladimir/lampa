@@ -167,7 +167,8 @@
   const savedSettings = loadStored('settings', null);
   let settings = { ...DEFAULTS, ...(savedSettings || {}) };
   if (savedSettings && !savedSettings.lang) settings.lang = 'ru';
-  if (!FONTS.some((f) => f.id === settings.font)) settings.font = DEFAULTS.font;
+  const TOP_FONTS = ['pt-sans', 'pt-serif', 'literata', 'lora', 'merriweather'];
+  if (!TOP_FONTS.includes(settings.font)) settings.font = DEFAULTS.font;
   if (savedSettings && !savedSettings.curlDefault) Object.assign(settings, { pageAnim: 'curl', curlDefault: true });
   if (!features.curl && settings.pageAnim === 'curl') settings.pageAnim = 'slide';
   if (savedSettings && !savedSettings.layoutV) {
@@ -257,25 +258,6 @@
     }
   }
 
-  function fillFontSelect(sel) {
-    const value = sel.value;
-    sel.replaceChildren();
-    const groups = new Map();
-    for (const f of FONTS) {
-      if (!groups.has(f.group)) {
-        const g = el('optgroup');
-        g.label = t(f.group);
-        groups.set(f.group, g);
-        sel.append(g);
-      }
-      const o = el('option', null, fontName(f));
-      o.value = f.id;
-      o.style.fontFamily = f.stack;
-      groups.get(f.group).append(o);
-    }
-    sel.value = value || settings.font;
-  }
-
   function applyLanguage() {
     if (api.translateOnDevice) $('#translate-privacy').dataset.i18n = 'translatePrivacyDevice';
     I18n.setLang(settings.lang);
@@ -283,7 +265,6 @@
     api.setUiLang(I18n.lang);
     const langSel = $('#lang');
     langSel.options[0].textContent = t('langAuto');
-    fillFontSelect($('#font'));
     buildFontChips();
     fillTranslateSelect();
     fillAnimSelect();
@@ -379,11 +360,6 @@
       themes.append(b);
     }
 
-    const fontSel = $('#font');
-    fontSel.addEventListener('change', () => {
-      updateSettings({ font: fontSel.value });
-      fontSel.blur();
-    });
     for (const box of document.querySelectorAll('.size-step, #size-stepper')) {
       box.querySelector('.size-down').addEventListener('click', () => stepFontSize(-1));
       box.querySelector('.size-up').addEventListener('click', () => stepFontSize(1));
@@ -419,11 +395,8 @@
       b.style.setProperty('--sw-fg', c.fg);
       b.classList.toggle('active', b.dataset.theme === settings.theme);
     }
-    const font = FONTS.find((f) => f.id === settings.font) || FONTS[0];
     $('#lang').value = settings.lang;
     syncColorControls();
-    $('#font').value = settings.font;
-    $('#font').style.fontFamily = font.stack;
     for (const b of document.querySelectorAll('#font-chips button')) b.classList.toggle('active', b.dataset.font === settings.font);
     for (const v of document.querySelectorAll('.size-val')) v.textContent = settings.fontSize;
     $('#line-height-val').textContent = fmtNum(settings.lineHeight, 1);
@@ -520,8 +493,6 @@
       note.classList.toggle('warn', ratio < 3);
     }
   }
-
-  const TOP_FONTS = ['pt-sans', 'pt-serif', 'literata', 'lora', 'merriweather'];
 
   function buildFontChips() {
     const box = $('#font-chips');
