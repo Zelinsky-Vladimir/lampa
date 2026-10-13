@@ -204,6 +204,7 @@
   }
 
   async function getBytes(url) {
+    if (/^data:image\/(jpeg|png|webp);base64,/.test(url)) return b64ToBytes(url.slice(url.indexOf(',') + 1));
     if (!Online.isCoverUrl(url)) throw new Error('BAD_URL');
     if (!native) {
       const r = await fetch(url);

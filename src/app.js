@@ -1833,7 +1833,11 @@
         { icon: 'trash', label: t('ctxRemoveWant'), danger: true, run: () => confirmRemoveShelf(b) },
       ];
     }
+    const back = b.lib && b.lib.until > Date.now()
+      ? [{ icon: 'up', label: t('ctxBackToLibrary'), sub: t('ctxKeptUntil', { date: new Date(b.lib.until).toLocaleDateString(I18n.lang, { day: 'numeric', month: 'long' }) }), run: () => restoreToLibrary(b) }]
+      : [];
     return [
+      ...back,
       { icon: 'star', label: t('ctxRating'), run: () => openBookEditor(b) },
       {
         icon: 'move',
@@ -3981,8 +3985,77 @@
   function markLibraryRead(entry) {
     if (!entry) return;
     const have = shelfFor(entry);
-    if (have) return openBookEditor({ ...have, list: 'read', finished: have.finished || today(), fromLibrary: true });
-    openBookEditor({ list: 'read', title: entry.title || '', author: entry.author || '', year: '', finished: today(), fromLibrary: true });
+    const cover = entry.thumb && !(have && have.cover) ? { coverUrl: entry.thumb, thumb: entry.thumb } : {};
+    const lib = { fromLibrary: true, libKey: entry.key };
+    if (have) return openBookEditor({ ...have, list: 'read', finished: have.finished || today(), ...cover, ...lib });
+    openBookEditor({ list: 'read', title: entry.title || '', author: entry.author || '', year: '', finished: today(), ...cover, ...lib });
+  }
+
+  const KEEP_DAYS = 7;
+  const PURGE_KEY = 'lampa.purge';
+  const purgeList = () => loadJSON(PURGE_KEY, []).filter((x) => x && x.hash);
+
+  function retireFromLibrary(key, book) {
+    const e = library.find((x) => x.key === key);
+    if (!e || (current && current.key === key && readerVisible())) return;
+    const until = Date.now() + KEEP_DAYS * 864e5;
+    library = library.filter((x) => x !== e);
+    saveLibrary();
+    book.lib = { key: e.key, title: e.title || '', author: e.author || '', hash: e.hash || '', name: e.name || '', pos: e.pos || null, progress: e.progress || 0, page: e.page || 0, pages: e.pages || 0, openedAt: e.openedAt || 0, readAt: e.readAt || 0, until };
+    saveShelf();
+    if (e.hash) {
+      const list = purgeList().filter((x) => x.hash !== e.hash);
+      list.push({ hash: e.hash, name: e.name || '', path: e.path || null, source: e.source || null, thumb: e.thumb || null, at: until });
+      saveJSON(PURGE_KEY, list);
+    }
+    refreshHome();
+    showUndo(t('movedToReadUndo', { title: book.title }), () => restoreToLibrary(book));
+  }
+
+  function restoreToLibrary(book) {
+    const l = book.lib;
+    if (!l) return;
+    if (!library.some((x) => x.key === l.key)) {
+      const kept = purgeList().find((x) => x.hash === l.hash) || {};
+      const { until, ...data } = l;
+      library.push({ ...data, path: kept.path || null, source: kept.source || null, thumb: kept.thumb || null });
+      saveLibrary();
+    }
+    saveJSON(PURGE_KEY, purgeList().filter((x) => x.hash !== l.hash));
+    delete book.lib;
+    saveShelf();
+    refreshHome();
+    toast(t('backInLibrary'));
+  }
+
+  async function purgeOldFiles() {
+    const now = Date.now();
+    const list = purgeList();
+    const keep = [];
+    for (const x of list) {
+      if (x.at > now) {
+        keep.push(x);
+        continue;
+      }
+      if (library.some((e) => e.hash === x.hash)) continue;
+      if (x.path && !library.some((e) => e.path === x.path)) api.forgetBook(x.path);
+      if (signedIn() && x.name) {
+        try {
+          await Cloud.removeFile(await cloudSession(), x.hash, extOfName(x.name));
+          cloud.uploaded = (cloud.uploaded || []).filter((h) => h !== x.hash);
+          saveCloud();
+        } catch {
+          keep.push(x);
+        }
+      }
+    }
+    if (keep.length !== list.length) saveJSON(PURGE_KEY, keep);
+    for (const b of shelf) {
+      if (b.lib && b.lib.until < now) {
+        delete b.lib;
+        saveShelf();
+      }
+    }
   }
 
   function showEditor() {
@@ -4109,7 +4182,8 @@
     closeBookDialog();
     saveShelf();
     refreshHome();
-    if (d.list !== homeTab) toast(t('shelfMoved', { list: listName(d.list) }));
+    if (d.fromLibrary && d.libKey && d.list === 'read') retireFromLibrary(d.libKey, entry);
+    else if (d.list !== homeTab) toast(t('shelfMoved', { list: listName(d.list) }));
 
     if (d.coverUrl) setCover(entry, d.coverUrl);
     if (!entry.checked) lookupBook(entry, !d.coverUrl).catch(() => {});
@@ -5225,6 +5299,7 @@ ${sentence}` : translation);
       if (m) Object.assign(e, { hash: m[1], name: e.name || m[2] });
     }
     loadShelf();
+    setTimeout(() => purgeOldFiles().catch(() => {}), 8000);
     api.onOpenPath(openPath);
     const initial = await api.takeInitialPath();
     if (initial) openPath(initial);

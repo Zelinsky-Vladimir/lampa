@@ -21,8 +21,6 @@ let state = {};
 const extOf = (p) => path.extname(p).slice(1).toLowerCase();
 const isBookPath = (p) => typeof p === 'string' && BOOK_EXTS.has(extOf(p));
 
-// Копии открытых книг: Books/<хэш содержимого>/<исходное имя файла>.
-// Библиотека открывает копию, поэтому оригинал можно удалить или перенести.
 const booksDir = () => path.join(app.getPath('userData'), 'Books');
 
 function storedBookDir(p) {
@@ -31,7 +29,6 @@ function storedBookDir(p) {
   return path.dirname(dir) === booksDir() && /^[0-9a-f]{16}$/.test(path.basename(dir)) ? dir : null;
 }
 
-// Отпечаток книги — одинаковый на всех устройствах (мобильная версия считает так же): по нему её узнаёт синхронизация.
 const bookHash = (buf) => crypto.createHash('sha256').update(buf).digest('hex').slice(0, 16);
 
 async function storeBook(p, buf) {
@@ -49,13 +46,10 @@ async function storeBook(p, buf) {
   return target;
 }
 
-// Ищем путь к книге среди аргументов командной строки («Открыть с помощью», перетаскивание на ярлык).
 function bookFromArgv(argv, cwd = process.cwd()) {
   const arg = argv.slice(1).find((a) => !a.startsWith('-') && isBookPath(a));
   return arg ? path.resolve(cwd, arg) : null;
 }
-
-// ---------- вход через браузер: lampa://auth-callback?code=… ----------
 
 const AUTH_SCHEME = 'lampa';
 let pendingAuth = null;
@@ -82,8 +76,6 @@ function openInRenderer(p) {
   }
 }
 
-// ---------- состояние окна ----------
-
 const stateFile = () => path.join(app.getPath('userData'), 'window-state.json');
 
 function loadState() {
@@ -98,7 +90,6 @@ function saveState() {
   try {
     fs.writeFileSync(stateFile(), JSON.stringify(state));
   } catch {
-    // не критично
   }
 }
 
@@ -106,8 +97,6 @@ function isOnScreen(b) {
   return screen.getAllDisplays().some(({ workArea: a }) =>
     b.x < a.x + a.width && b.x + b.width > a.x && b.y < a.y + a.height && b.y + b.height > a.y);
 }
-
-// ---------- окно ----------
 
 function createWindow() {
   rendererReady = false;
@@ -127,7 +116,6 @@ function createWindow() {
       sandbox: true,
       nodeIntegration: false,
       spellcheck: false,
-      // для скриншотов в тестах: окно может быть в фоне, а анимации должны идти
       backgroundThrottling: !process.env.LAMPA_SCREENSHOT,
     },
   });
@@ -135,10 +123,8 @@ function createWindow() {
   if (state.maximized) win.maximize();
   win.once('ready-to-show', () => win.show());
   win.loadFile(path.join(__dirname, 'src', 'index.html'));
-  // масштаб страницы целиком не нужен: Ctrl+колёсико и жесты меняют только шрифт книги
   win.webContents.setVisualZoomLevelLimits(1, 1);
 
-  // Никаких переходов внутри окна: внешние ссылки открываются в браузере.
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/i.test(url)) shell.openExternal(url);
     return { action: 'deny' };
@@ -173,13 +159,8 @@ function setupMenu() {
   }
 }
 
-// ---------- автообновление ----------
-
 let updateReady = null;
 
-// Новые версии берутся из GitHub Releases: скачиваются в фоне и ставятся при выходе
-// (или сразу по кнопке «Перезапустить»). Работает для установленной версии на Windows и AppImage на Linux;
-// переносной exe и неподписанные сборки для macOS обновлять себя не умеют.
 function setupAutoUpdate() {
   const supported = app.isPackaged &&
     !process.env.PORTABLE_EXECUTABLE_DIR &&
@@ -201,9 +182,6 @@ function setupAutoUpdate() {
   setInterval(check, 4 * 60 * 60 * 1000);
 }
 
-// ---------- перевод ----------
-
-// Google отвечает на запросы перевода, только если они похожи на браузерные.
 function browserUserAgent() {
   return session.defaultSession.getUserAgent().replace(/ (Electron|Lampa|lampa-reader)\/\S+/g, '');
 }
@@ -216,9 +194,6 @@ async function fetchJson(url) {
   return JSON.parse(text);
 }
 
-// ---------- мои книги: «Прочитано» и «Хочу прочитать» ----------
-
-// Список хранится в shelf.json, обложки — в Covers/ рядом; окно видит их по адресу lampa-cover://c/<файл>.
 const shelfFile = () => path.join(app.getPath('userData'), 'shelf.json');
 const coversDir = () => path.join(app.getPath('userData'), 'Covers');
 const COVER_NAME = /^[0-9a-f]{16}\.jpg$/;
@@ -233,14 +208,12 @@ async function readShelf() {
       const d = JSON.parse(await fsp.readFile(f, 'utf8'));
       if (d && Array.isArray(d.books)) return d.books;
     } catch (e) {
-      // списка ещё нет — это не ошибка
       if (e.code === 'ENOENT' && f === file) return [];
     }
   }
   throw new Error('SHELF_UNREADABLE');
 }
 
-// Записи идут по очереди; прошлая версия остаётся в shelf.json.bak.
 let shelfWrite = Promise.resolve();
 function writeShelf(books) {
   const job = shelfWrite.then(async () => {
@@ -253,7 +226,6 @@ function writeShelf(books) {
   return job;
 }
 
-// Обложки удалённых книг убираем при запуске, когда список уже прочитан.
 async function pruneCovers(books) {
   const used = new Set(books.map((b) => b && b.cover).filter(Boolean));
   let names;
@@ -289,7 +261,6 @@ async function fetchImage(url) {
 
 const fitWidth = (img, w) => (img.getSize().width > w ? img.resize({ width: w, quality: 'best' }) : img);
 
-// Миниатюры для результатов поиска — data:-адресами, окну не нужен доступ в сеть.
 const thumbCache = new Map();
 async function coverThumb(url) {
   if (thumbCache.has(url)) return thumbCache.get(url);
@@ -300,7 +271,9 @@ async function coverThumb(url) {
 }
 
 async function saveCover(url) {
-  const img = fitWidth(await fetchImage(url), 400);
+  const data = /^data:image\/(jpeg|png|webp);base64,/.test(url) ? nativeImage.createFromDataURL(url) : null;
+  if (data && data.isEmpty()) throw new Error('NOT_IMAGE');
+  const img = fitWidth(data || (await fetchImage(url)), 400);
   const name = crypto.randomBytes(8).toString('hex') + '.jpg';
   await fsp.mkdir(coversDir(), { recursive: true });
   await fsp.writeFile(path.join(coversDir(), name), img.toJPEG(86));
@@ -315,10 +288,7 @@ function registerCoverProtocol() {
   });
 }
 
-// ---------- IPC ----------
-
 function registerIpc() {
-  // подписи диалога приходят из окна на выбранном языке интерфейса
   ipcMain.handle('dialog:open', async (_e, labels = {}) => {
     const r = await dialog.showOpenDialog(win, {
       title: String(labels.title || 'Open book'),
@@ -338,10 +308,8 @@ function registerIpc() {
     const buf = await fsp.readFile(p);
     const ext = extOf(p);
     const out = { path: p, name: path.basename(p), size: st.size, ext, hash: bookHash(buf) };
-    // Архивы распаковываем здесь, чтобы окну не нужен был доступ к Node.
     if (ext === 'epub' || ext === 'zip') out.entries = unzipSync(new Uint8Array(buf));
     else out.bytes = buf;
-    // не удалось скопировать — читаем оригинал, как раньше
     try {
       const stored = await storeBook(p, buf);
       if (stored !== p) Object.assign(out, { path: stored, source: p });
@@ -351,7 +319,6 @@ function registerIpc() {
     return out;
   });
 
-  // Копируем в библиотеку книги, открытые до того, как появилось копирование.
   ipcMain.handle('books:adopt', async (_e, paths) => {
     const done = [];
     for (const p of Array.isArray(paths) ? paths : []) {
@@ -387,7 +354,6 @@ function registerIpc() {
   ipcMain.handle('shelf:thumb', (_e, url) => coverThumb(String(url)));
   ipcMain.handle('shelf:cover', (_e, url) => saveCover(String(url)));
 
-  // Удаляем копию книги — только внутри папки библиотеки.
   ipcMain.handle('books:forget', async (_e, p) => {
     const dir = storedBookDir(p);
     if (dir) await fsp.rm(dir, { recursive: true, force: true });
@@ -398,12 +364,10 @@ function registerIpc() {
     rendererReady = true;
     const p = pendingPath;
     pendingPath = null;
-    // обновление могло скачаться раньше, чем окно было готово
     if (updateReady && win) win.webContents.send('update-ready', updateReady);
     return p;
   });
 
-  // применится при следующем запуске
   ipcMain.on('app:ui-lang', (_e, lang) => {
     if (typeof lang !== 'string' || !/^[a-z]{2}$/.test(lang) || state.uiLang === lang) return;
     state.uiLang = lang;
@@ -411,11 +375,9 @@ function registerIpc() {
   });
 
   ipcMain.on('app:install-update', () => {
-    // тихая установка и сразу запуск новой версии
     if (updateReady) autoUpdater.quitAndInstall(true, true);
   });
 
-  // Снимок области окна для анимации перелистывания.
   ipcMain.handle('capture', async (_e, r) => {
     if (!win || !r) return null;
     const rect = {
@@ -445,7 +407,6 @@ function registerIpc() {
     return url;
   });
 
-  // Для синхронизации: исходный файл книги (загрузить в облако) и книга из облака (положить в библиотеку).
   ipcMain.handle('book:read-raw', async (_e, p) => {
     if (!isBookPath(p)) throw new Error('UNSUPPORTED');
     return fsp.readFile(p);
@@ -457,7 +418,6 @@ function registerIpc() {
     return storeBook(name, Buffer.from(bytes.buffer, bytes.byteOffset, bytes.length));
   });
 
-  // Разработка: Supabase на этом компьютере (supabase start) вместо облачного проекта.
   ipcMain.on('dev:cloud-url', (e) => {
     e.returnValue = process.env.LAMPA_CLOUD_URL || '';
   });
@@ -476,7 +436,6 @@ function registerIpc() {
     if (win) win.setBackgroundColor(color);
   });
 
-  // Для разработки: LAMPA_SCREENSHOT=out.png сохраняет снимок окна после отрисовки и закрывает приложение.
   ipcMain.on('dev:rendered', () => {
     const out = process.env.LAMPA_SCREENSHOT;
     if (!out || !win) return;
@@ -492,27 +451,19 @@ function registerIpc() {
   });
 }
 
-// ---------- запуск ----------
-
-// Приложение раньше называлось Svitok: при первом запуске под новым именем переносим
-// профиль (библиотеку, закладки, настройки), пока Chromium его ещё не открыл.
 function migrateUserData() {
   try {
     const now = app.getPath('userData');
     const old = path.join(app.getPath('appData'), 'Svitok');
-    // Electron создаёт пустую папку профиля ещё до этого кода, поэтому смотрим не на папку, а на данные в ней.
     const hasData = (dir) => fs.existsSync(path.join(dir, 'Local Storage'));
     if (!hasData(now) && hasData(old)) fs.cpSync(old, now, { recursive: true });
   } catch {
-    // не получилось — начнём с чистого профиля
   }
 }
 
-// Для разработки: отдельный профиль, чтобы тесты не трогали настоящую библиотеку.
 if (process.env.LAMPA_USER_DATA) app.setPath('userData', path.resolve(process.env.LAMPA_USER_DATA));
 else migrateUserData();
 
-// Язык окна — как у интерфейса Lampa: от него зависит, например, формат даты в полях ввода.
 const savedUiLang = loadState().uiLang;
 if (savedUiLang) app.commandLine.appendSwitch('lang', savedUiLang);
 
@@ -521,8 +472,6 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   pendingPath = bookFromArgv(process.argv);
   pendingAuth = authFromArgv(process.argv);
-  // Ссылки lampa:// открывают Lampa. Установщик регистрирует их сам; здесь — для переносной версии.
-  // При запуске из исходников не регистрируем, чтобы не подменять установленное приложение.
   if (app.isPackaged) app.setAsDefaultProtocolClient(AUTH_SCHEME);
 
   app.on('second-instance', (_e, argv, cwd) => {
@@ -536,13 +485,11 @@ if (!app.requestSingleInstanceLock()) {
     }
   });
 
-  // macOS: файл открыт через Finder или перетащен на иконку в Dock.
   app.on('open-file', (e, p) => {
     e.preventDefault();
     openInRenderer(p);
   });
 
-  // macOS: ссылка lampa:// из браузера
   app.on('open-url', (e, url) => {
     e.preventDefault();
     deliverAuth(url);
