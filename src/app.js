@@ -519,13 +519,13 @@
 
   const readerVisible = () => !!current && !ui.scroller.hidden;
 
-  const READ_LINE = 56;
+  const readLine = () => 56 + safeInsets().top;
 
   function blockAtTop() {
     const blocks = current && current.blocks;
     if (!blocks || !blocks.length) return null;
     if (paged()) return blockAtPageStart(blocks);
-    const top = ui.scroller.getBoundingClientRect().top + READ_LINE;
+    const top = ui.scroller.getBoundingClientRect().top + readLine();
     let lo = 0;
     let hi = blocks.length - 1;
     let ans = hi;
@@ -551,7 +551,7 @@
       return;
     }
     const r = b.getBoundingClientRect();
-    ui.scroller.scrollTop += r.top - ui.scroller.getBoundingClientRect().top - READ_LINE + (a.f || 0) * r.height;
+    ui.scroller.scrollTop += r.top - ui.scroller.getBoundingClientRect().top - readLine() + (a.f || 0) * r.height;
   }
 
   const paged = () => settings.view === 'pages';
@@ -559,6 +559,7 @@
   const pg = { step: 1, count: 1, index: 0, h: 600, turning: false, anchor: null, cols: 1, colStep: 1, pagesTotal: 1, key: '' };
 
   let safeProbe = null;
+  let safeCache = null;
   function safeInsets() {
     if (!safeProbe) {
       safeProbe = el('div');
@@ -566,9 +567,11 @@
         'position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)';
       document.body.append(safeProbe);
     }
+    if (safeCache) return safeCache;
     const cs = getComputedStyle(safeProbe);
     const px = (v) => parseFloat(v) || 0;
-    return { top: px(cs.paddingTop), bottom: px(cs.paddingBottom), left: px(cs.paddingLeft), right: px(cs.paddingRight) };
+    safeCache = { top: px(cs.paddingTop), bottom: px(cs.paddingBottom), left: px(cs.paddingLeft), right: px(cs.paddingRight) };
+    return safeCache;
   }
 
   function layoutPages() {
@@ -2204,7 +2207,7 @@
       showPage(pageOfRect(target.getClientRects()[0] || target.getBoundingClientRect()), 0);
       return;
     }
-    ui.scroller.scrollTop += target.getBoundingClientRect().top - ui.scroller.getBoundingClientRect().top - 24;
+    ui.scroller.scrollTop += target.getBoundingClientRect().top - ui.scroller.getBoundingClientRect().top - 24 - safeInsets().top - (root.dataset.chrome === 'hidden' ? 0 : ui.bar.offsetHeight - safeInsets().top);
   }
 
   function goBack() {
@@ -2395,7 +2398,7 @@
     const s = ui.scroller;
     const sr = s.getBoundingClientRect();
     const r = range.getBoundingClientRect();
-    if (r.top < sr.top + 70 || r.bottom > sr.bottom - 90) s.scrollTop += r.top - sr.top - s.clientHeight * 0.35;
+    if (r.top < sr.top + 70 + safeInsets().top || r.bottom > sr.bottom - 90) s.scrollTop += r.top - sr.top - s.clientHeight * 0.35;
   }
 
   function gotoMatch(k) {
@@ -5223,6 +5226,7 @@ ${sentence}` : translation);
     }
     if (!features.fullscreen) $('#btn-full').hidden = true;
     window.addEventListener('resize', () => {
+      safeCache = null;
       if (gotoOpen()) placeGoto();
       if (!readerVisible() || !current.ready) return;
       const a = current.stable || pg.anchor || blockAtTop();
