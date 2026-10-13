@@ -1650,10 +1650,13 @@
 
   function withMenu(node, items) {
     let timer = 0;
+    let press = 0;
     let start = null;
     const stop = () => {
       clearTimeout(timer);
+      clearTimeout(press);
       timer = 0;
+      node.classList.remove('pressing');
     };
     node.addEventListener(
       'touchstart',
@@ -1661,12 +1664,14 @@
         if (e.touches.length !== 1 || e.target.closest('.grip, .swipe-del, .mark-read')) return;
         const p = e.touches[0];
         start = { x: p.clientX, y: p.clientY };
+        press = setTimeout(() => node.classList.add('pressing'), 120);
         timer = setTimeout(() => {
           timer = 0;
+          node.classList.remove('pressing');
           if (dragId || node.classList.contains('swiped')) return;
           blockClick();
           openContextMenu(node, items());
-        }, 480);
+        }, 520);
       },
       { passive: true },
     );
