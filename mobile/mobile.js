@@ -384,6 +384,7 @@
       return new Promise((resolve) => {
         const input = document.createElement('input');
         input.type = 'file';
+        input.accept = '.fb2,.epub,.txt,.zip';
         input.hidden = true;
         document.body.append(input);
         const done = (v) => {
