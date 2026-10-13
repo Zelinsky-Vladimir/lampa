@@ -1107,8 +1107,14 @@
     quietScrollUntil = performance.now() + 350;
   };
 
+  let statusShown = true;
   function setBar(visible) {
     root.dataset.chrome = visible ? 'shown' : 'hidden';
+    const status = visible || !readerVisible();
+    if (status !== statusShown && api.setStatusBar) {
+      statusShown = status;
+      api.setStatusBar(status);
+    }
   }
 
   let editorOpenedAt = 0;

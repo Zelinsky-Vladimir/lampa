@@ -445,6 +445,10 @@
     installUpdate: () => {},
     setUiLang: () => {},
 
+    setStatusBar(show) {
+      if (!native || !StatusBar) return;
+      (show ? StatusBar.show({ animation: 'FADE' }) : StatusBar.hide({ animation: 'FADE' })).catch(() => {});
+    },
     setEditMenu(on) {
       if (ReaderMenu) ReaderMenu.set({ off: !on }).catch(() => {});
     },
