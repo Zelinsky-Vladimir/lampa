@@ -1639,6 +1639,305 @@
     $('#up-next-all').textContent = t('upNextAll', { n: want.length });
   }
 
+  const ICON_PATHS = {
+    play: 'M8 5.5v13l10-6.5z',
+    check: 'M5 12.5l4.5 4.5L19 7.5',
+    trash: 'M5 7h14M10 11v6M14 11v6M6.5 7l1 12.5h9l1-12.5M9.5 7V4.5h5V7',
+    star: 'M12 3.6l2.55 5.2 5.75.83-4.16 4.05.98 5.72L12 16.7l-5.12 2.7.98-5.72L3.7 9.63l5.75-.83z',
+    move: 'M4 7h12M12 3l4 4-4 4M20 17H8M12 13l-4 4 4 4',
+    up: 'M12 19V5M6 11l6-6 6 6',
+  };
+  let clickBlockUntil = 0;
+  const blockClick = () => (clickBlockUntil = performance.now() + 600);
+  const ctxOpen = () => !$('#ctx').hidden;
+
+  function withMenu(node, items) {
+    let timer = 0;
+    let start = null;
+    const stop = () => {
+      clearTimeout(timer);
+      timer = 0;
+    };
+    node.addEventListener(
+      'touchstart',
+      (e) => {
+        if (e.touches.length !== 1 || e.target.closest('.grip, .swipe-del, .mark-read')) return;
+        const p = e.touches[0];
+        start = { x: p.clientX, y: p.clientY };
+        timer = setTimeout(() => {
+          timer = 0;
+          if (dragId || node.classList.contains('swiped')) return;
+          blockClick();
+          openContextMenu(node, items());
+        }, 480);
+      },
+      { passive: true },
+    );
+    node.addEventListener(
+      'touchmove',
+      (e) => {
+        if (!timer) return;
+        const p = e.touches[0];
+        if (Math.hypot(p.clientX - start.x, p.clientY - start.y) > 8) stop();
+      },
+      { passive: true },
+    );
+    node.addEventListener('touchend', stop);
+    node.addEventListener('touchcancel', stop);
+    node.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      if (!coarsePointer()) openContextMenu(node, items(), { x: e.clientX, y: e.clientY });
+    });
+    const more = el('button', 'more-btn');
+    more.title = t('moreActions');
+    more.setAttribute('aria-label', t('moreActions'));
+    more.append(svgIcon('M5 12h.01M12 12h.01M19 12h.01'));
+    more.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const r = more.getBoundingClientRect();
+      openContextMenu(node, items(), { x: r.right, y: r.bottom + 6, alignRight: true });
+    });
+    node.append(more);
+  }
+
+  function openContextMenu(node, items, point) {
+    closeSwipes();
+    const box = $('#ctx');
+    const menu = $('#ctx-menu');
+    menu.replaceChildren(
+      ...items.map((it) => {
+        const b = el('button', it.danger ? 'danger' : '');
+        b.setAttribute('role', 'menuitem');
+        const lab = el('span', 'ctx-lab');
+        lab.append(el('span', null, it.label));
+        if (it.sub) lab.append(el('span', 'ctx-sub', it.sub));
+        b.append(lab, svgIcon(ICON_PATHS[it.icon]));
+        b.addEventListener('click', (e) => {
+          e.stopPropagation();
+          closeContextMenu();
+          it.run();
+        });
+        return b;
+      }),
+    );
+    const touch = !point;
+    box.hidden = false;
+    box.classList.toggle('touch', touch);
+    if (touch) {
+      node.classList.add('ctx-target');
+      root.classList.add('ctx-on');
+    }
+    const r = node.getBoundingClientRect();
+    const mw = menu.offsetWidth;
+    const mh = menu.offsetHeight;
+    let left;
+    let top;
+    if (point) {
+      left = point.alignRight ? point.x - mw : point.x;
+      top = point.y;
+      if (top + mh > window.innerHeight - 12) top = Math.max(12, (point.alignRight ? r.top : point.y) - mh - 6);
+    } else {
+      left = r.left;
+      top = r.bottom + 12;
+      if (top + mh > window.innerHeight - 12) top = r.top - mh - 12;
+      if (top < 12) top = Math.max(12, window.innerHeight - mh - 24);
+    }
+    menu.style.left = clamp(left, 12, window.innerWidth - mw - 12) + 'px';
+    menu.style.top = top + 'px';
+    playEnter(menu, 'enter-pop');
+  }
+
+  function closeContextMenu() {
+    $('#ctx').hidden = true;
+    root.classList.remove('ctx-on');
+    for (const n of document.querySelectorAll('.ctx-target')) n.classList.remove('ctx-target');
+  }
+
+  function confirmDialog({ title, sub, text, ok, book, onOk }) {
+    const dlg = $('#confirm-dlg');
+    $('#cf-title').textContent = title;
+    $('#cf-sub').textContent = sub || '';
+    $('#cf-text').textContent = text;
+    $('#cf-cover').replaceChildren(...(book ? [book] : []));
+    $('#cf-cover').hidden = !book;
+    $('#cf-ok').textContent = ok;
+    dlg.classList.toggle('sheet', phoneLayout());
+    dlg.hidden = false;
+    playEnter(dlg.firstElementChild, phoneLayout() ? 'enter-sheet' : 'enter-pop');
+    confirmAction = onOk;
+    $('#cf-cancel').focus();
+  }
+  let confirmAction = null;
+  function closeConfirm(run) {
+    const fn = confirmAction;
+    confirmAction = null;
+    $('#confirm-dlg').hidden = true;
+    if (run && fn) fn();
+  }
+
+  let undoTimer = 0;
+  let undoAction = null;
+  function showUndo(text, fn) {
+    $('#undo-text').textContent = text;
+    undoAction = fn;
+    $('#undo-toast').hidden = false;
+    playEnter($('#undo-toast'), 'enter-fade-in');
+    clearTimeout(undoTimer);
+    undoTimer = setTimeout(() => {
+      $('#undo-toast').hidden = true;
+      undoAction = null;
+    }, 5000);
+  }
+
+  function libraryMenu(entry) {
+    const read = shelfFor(entry);
+    const started = entry.progress > 0 || entry.page;
+    const items = [{ icon: 'play', label: t(started ? 'ctxContinue' : 'ctxOpen'), sub: started ? readLabel(entry) : '', run: () => openEntry(entry) }];
+    if (!read || read.list !== 'read') items.push({ icon: 'check', label: t('ctxMarkRead'), sub: t('ctxMarkReadSub'), run: () => markLibraryRead(entry) });
+    items.push({ icon: 'trash', label: t('ctxRemoveBook'), danger: true, run: () => confirmRemoveBook(entry) });
+    return items;
+  }
+
+  function confirmRemoveBook(entry) {
+    confirmDialog({
+      title: t('removeBookQ', { title: entry.title || '' }),
+      sub: entry.author || '',
+      text: t('removeBookText'),
+      ok: t('delete'),
+      book: libraryThumb(entry),
+      onOk: () => {
+        library = library.filter((x) => x !== entry);
+        saveLibrary();
+        if (entry.path && !library.some((x) => x.path === entry.path)) api.forgetBook(entry.path);
+        forgetCloudFile(entry);
+        renderHome();
+        toast(t('bookRemoved'));
+      },
+    });
+  }
+
+  function shelfMenu(b) {
+    if (b.list === 'want') {
+      return [
+        { icon: 'check', label: t('markReadShort'), run: () => openBookEditor({ ...b, list: 'read', finished: b.finished || today() }) },
+        {
+          icon: 'up',
+          label: t('ctxTop'),
+          run: () => {
+            const first = sortedShelf('want')[0];
+            if (first && first !== b) moveWant(b.id, first.id, false);
+            renderAfterDrag = false;
+            renderShelf();
+          },
+        },
+        { icon: 'trash', label: t('ctxRemoveWant'), danger: true, run: () => confirmRemoveShelf(b) },
+      ];
+    }
+    return [
+      { icon: 'star', label: t('ctxRating'), run: () => openBookEditor(b) },
+      {
+        icon: 'move',
+        label: t('ctxToWant'),
+        run: () => {
+          b.list = 'want';
+          b.pos = nextWantPos();
+          saveShelf();
+          refreshHome();
+          toast(t('shelfMoved', { list: listName('want') }));
+        },
+      },
+      { icon: 'trash', label: t('ctxRemoveRead'), danger: true, run: () => confirmRemoveShelf(b) },
+    ];
+  }
+
+  function removeShelfBook(b) {
+    const i = shelf.indexOf(b);
+    if (i < 0) return false;
+    shelf.splice(i, 1);
+    saveShelf();
+    refreshHome();
+    return true;
+  }
+
+  function confirmRemoveShelf(b) {
+    const read = b.list === 'read';
+    confirmDialog({
+      title: t(read ? 'removeReadQ' : 'removeWantQ', { title: b.title }),
+      sub: b.author || '',
+      text: t(read ? 'removeReadText' : 'removeWantText'),
+      ok: t('delete'),
+      book: bookThumb(b),
+      onOk: () => {
+        if (removeShelfBook(b)) toast(t('shelfDeleted'));
+      },
+    });
+  }
+
+  function closeSwipes(except) {
+    for (const n of document.querySelectorAll('.swiped')) if (n !== except) n.classList.remove('swiped');
+  }
+
+  function makeSwipeDelete(row, b) {
+    if (!coarsePointer()) return;
+    const del = el('button', 'swipe-del');
+    del.append(svgIcon(ICON_PATHS.trash), el('span', null, t('delete')));
+    del.addEventListener('click', (e) => {
+      e.stopPropagation();
+      row.classList.remove('swiped');
+      if (removeShelfBook(b)) {
+        showUndo(t('shelfRemovedUndo', { title: b.title }), () => {
+          if (!shelf.includes(b)) shelf.push(b);
+          saveShelf();
+          refreshHome();
+        });
+      }
+    });
+    row.append(del);
+    let g = null;
+    row.addEventListener(
+      'touchstart',
+      (e) => {
+        if (e.touches.length !== 1 || e.target.closest('.grip, .swipe-del') || (!row.classList.contains('want-row') && !phoneLayout())) return;
+        const p = e.touches[0];
+        g = { x: p.clientX, y: p.clientY, open: row.classList.contains('swiped'), mode: null, off: 0 };
+      },
+      { passive: true },
+    );
+    row.addEventListener(
+      'touchmove',
+      (e) => {
+        if (!g || dragId) return;
+        const p = e.touches[0];
+        const dx = p.clientX - g.x;
+        const dy = p.clientY - g.y;
+        if (!g.mode) {
+          if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+          g.mode = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+          if (g.mode === 'h') {
+            closeSwipes(row);
+            row.classList.add('swiping');
+          }
+        }
+        if (g.mode !== 'h') return;
+        e.preventDefault();
+        g.off = clamp((g.open ? -96 : 0) + dx, -150, 0);
+        row.style.transform = `translateX(${g.off}px)`;
+      },
+      { passive: false },
+    );
+    const end = () => {
+      const s0 = g;
+      g = null;
+      if (!s0 || s0.mode !== 'h') return;
+      blockClick();
+      row.style.transform = '';
+      row.classList.remove('swiping');
+      row.classList.toggle('swiped', s0.off < -48);
+    };
+    row.addEventListener('touchend', end);
+    row.addEventListener('touchcancel', end);
+  }
+
   const RECENT_MAX = 6;
   const lastRead = (e) => Math.max(e.readAt || 0, e.openedAt || 0);
   const byLastRead = () => library.slice().sort((a, b) => lastRead(b) - lastRead(a));
@@ -1742,20 +2041,10 @@
     cover.append(libraryThumb(entry));
     if (entry.progress > 0 && entry.progress < 0.995) cover.append(bar);
 
-    const remove = el('button', 'remove', '×');
-    remove.title = t('removeFromList');
-    remove.addEventListener('click', (e) => {
-      e.stopPropagation();
-      library = library.filter((x) => x !== entry);
-      saveLibrary();
-      if (entry.path && !library.some((x) => x.path === entry.path)) api.forgetBook(entry.path);
-      forgetCloudFile(entry);
-      renderHome();
-    });
-
     const title = el('div', 't', entry.title);
     title.title = entry.title || '';
-    card.append(cover, title, el('div', 'a', entry.author || '\u00a0'), el('div', 'pct', libraryStatus(entry)), remove);
+    card.append(cover, title, el('div', 'a', entry.author || '\u00a0'), el('div', 'pct', libraryStatus(entry)));
+    withMenu(card, () => libraryMenu(entry));
     card.addEventListener('click', () => openEntry(entry));
     card.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') openEntry(entry);
@@ -2901,7 +3190,9 @@
       return;
     }
     if (e.key === 'Escape') {
-      if (gotoOpen()) closeGoto();
+      if (!$('#confirm-dlg').hidden) closeConfirm(false);
+      else if (ctxOpen()) closeContextMenu();
+      else if (gotoOpen()) closeGoto();
       else if (endOpen()) closeEndCard(false);
       else if (!ui.trPop.hidden) closeTranslate();
       else if (!ui.notePop.hidden) closeNote();
@@ -3119,7 +3410,7 @@
       (e) => {
         const tgt = e.target;
         start =
-          e.touches.length === 1 && !tgt.closest('input, select, textarea, .home-tabs, .shelf-tools, #book-dlg')
+          e.touches.length === 1 && !tgt.closest('input, select, textarea, .home-tabs, .shelf-tools, #book-dlg, #shelf-grid .card')
             ? { x: e.touches[0].clientX, y: e.touches[0].clientY, t: performance.now() }
             : null;
       },
@@ -3305,7 +3596,6 @@
         const p = e.touches[0];
         start = { x: p.clientX, y: p.clientY };
         if (e.target.closest('.grip')) begin(p.clientY);
-        else hold = setTimeout(() => begin(start.y), 450);
       },
       { passive: true },
     );
@@ -3520,23 +3810,10 @@
       e.stopPropagation();
       openBookEditor({ ...b, list: 'read', finished: b.finished || today() });
     });
-    const del = el('button', 'row-del');
-    del.title = t('removeFromList');
-    del.append(svgIcon('M6 6l12 12M18 6L6 18'));
-    del.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (!del.classList.contains('confirm')) {
-        del.classList.add('confirm');
-        del.replaceChildren(t('deleteConfirm'));
-        return;
-      }
-      shelf = shelf.filter((x) => x !== b);
-      saveShelf();
-      refreshHome();
-      toast(t('shelfDeleted'));
-    });
-    row.append(grip, el('span', 'num', String(n)), bookThumb(b), info, done, del);
+    row.append(grip, el('span', 'num', String(n)), bookThumb(b), info, done);
     if (!$('#shelf-filter').value.trim()) makeDraggable(row, b);
+    withMenu(row, () => shelfMenu(b));
+    makeSwipeDelete(row, b);
     row.addEventListener('click', () => {
       if (performance.now() - dragEndedAt > 350) openBookEditor(b);
     });
@@ -3572,6 +3849,8 @@
       });
       card.append(done);
     }
+    withMenu(card, () => shelfMenu(b));
+    makeSwipeDelete(card, b);
     card.addEventListener('click', () => openBookEditor(b));
     card.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && e.target === card) openBookEditor(b);
@@ -3867,6 +4146,42 @@
   function bindShelf() {
     for (const b of document.querySelectorAll('#home-tabs [data-tab]')) b.addEventListener('click', () => switchHomeTab(b.dataset.tab, Math.sign(HOME_TABS.indexOf(b.dataset.tab) - HOME_TABS.indexOf(homeTab))));
     $('#recent-all').addEventListener('click', openAll);
+    $('#ctx').addEventListener('click', (e) => {
+      if (!$('#ctx-menu').contains(e.target)) closeContextMenu();
+    });
+    $('#ctx').addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      closeContextMenu();
+    });
+    $('#cf-ok').addEventListener('click', () => closeConfirm(true));
+    $('#cf-cancel').addEventListener('click', () => closeConfirm(false));
+    $('#confirm-dlg').addEventListener('click', (e) => {
+      if (e.target.id === 'confirm-dlg') closeConfirm(false);
+    });
+    $('#undo-btn').addEventListener('click', () => {
+      const fn = undoAction;
+      undoAction = null;
+      $('#undo-toast').hidden = true;
+      if (fn) fn();
+    });
+    document.addEventListener(
+      'click',
+      (e) => {
+        if (performance.now() < clickBlockUntil && !e.target.closest('#ctx, #confirm-dlg, .swipe-del')) {
+          e.stopPropagation();
+          e.preventDefault();
+        }
+      },
+      true,
+    );
+    document.addEventListener(
+      'touchstart',
+      (e) => {
+        if (!e.target.closest('.swiped')) closeSwipes();
+      },
+      { passive: true },
+    );
+    ui.home.addEventListener('scroll', () => closeSwipes(), { passive: true });
     $('#all-back').addEventListener('click', closeAll);
     $('#all-filter').addEventListener('input', renderAll);
     const filter = $('#shelf-filter');

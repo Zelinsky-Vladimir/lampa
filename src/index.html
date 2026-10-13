@@ -507,6 +507,18 @@
   <div id="dim"></div>
   <canvas id="curl" hidden></canvas>
 
+  <div id="ctx" hidden><div class="ctx-menu" id="ctx-menu" role="menu"></div></div>
+  <div id="confirm-dlg" hidden>
+    <div class="cf-box" role="alertdialog" aria-labelledby="cf-title">
+      <div class="cf-head"><div class="cf-cover" id="cf-cover"></div><div class="cf-titles"><div class="cf-title" id="cf-title"></div><div class="cf-sub" id="cf-sub"></div></div></div>
+      <p class="cf-text" id="cf-text"></p>
+      <div class="cf-actions">
+        <button class="ghost-btn" id="cf-cancel" data-i18n="cancel"></button>
+        <button class="danger-btn" id="cf-ok"></button>
+      </div>
+    </div>
+  </div>
+  <div id="undo-toast" role="status" hidden><span id="undo-text"></span><button id="undo-btn" data-i18n="undo"></button></div>
   <div id="toast" role="status"></div>
   <div id="sync-jump" role="status" hidden>
     <span id="sync-jump-text"></span>
