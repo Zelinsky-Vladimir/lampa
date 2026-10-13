@@ -15,8 +15,8 @@ button, .card, .icon-btn, .home-tabs, .seg { -webkit-user-select: none; user-sel
 #home { padding: calc(var(--bar-h) + var(--safe-top) + 16px) calc(16px + var(--safe-right)) calc(40px + var(--safe-bottom)) calc(16px + var(--safe-left)); }
 #book { padding-top: calc(var(--bar-h) + var(--safe-top) + 32px); }
 :root:not([data-view="pages"]) #book { padding-left: calc(18px + max(var(--safe-left), var(--safe-right))); padding-right: calc(18px + max(var(--safe-left), var(--safe-right))); }
-#mini-page { right: calc(14px + var(--safe-right)); }
-#progress { bottom: var(--safe-bottom); }
+#mini-page { right: calc(14px + var(--safe-right)); bottom: max(8px, calc(var(--safe-bottom) - 26px)); }
+#progress { bottom: 0; height: calc(4px + var(--safe-bottom)); background: linear-gradient(color-mix(in srgb, var(--fg) 12%, var(--bg)) 0 4px, var(--bg) 4px); }
 .panel { padding-top: var(--safe-top); padding-bottom: var(--safe-bottom); }
 #update-banner { top: calc(var(--bar-h) + var(--safe-top) + 10px); }
 #toast { bottom: calc(70px + var(--safe-bottom)); }
