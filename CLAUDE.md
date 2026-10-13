@@ -62,5 +62,11 @@ Not done yet, roughly in order:
 2. Sign in with Apple — code is done (`api.signInApple` → `Cloud.idTokenSignIn('apple', idToken, rawNonce)`, button shown only on iOS, closing the sheet counts as cancel). Still to do: Supabase → Apple provider enabled with Client IDs `io.github.zelinskyvladimir.lampa` (no secret needed for native-only), a build with his paid team, a real-device test.
    Account deletion (guideline 5.1.1(v)) is in Settings → Sync → Delete account (two taps): `Cloud.deleteAccount` removes the user's files in `books/` through the Storage API, then calls the `public.delete_account()` RPC (security definer, granted to `authenticated` only), which deletes the auth user; records go with it by cascade. With Sign in with Apple, Apple also expects the user's Apple tokens to be revoked on deletion — not done yet (needs a server-side call with the Apple key).
 3. Privacy policy and support pages are live on GitHub Pages (`lampa-releases/docs`, English + Russian, contact sunstrike1997@gmail.com): https://zelinsky-vladimir.github.io/lampa-releases/privacy.html and .../support.html. Google Auth Platform branding uses them and the Google OAuth app is published (In production), so any Google account can sign in. Next: prepare App Store Connect (record, screenshots, privacy labels). Keep the privacy page in sync with what the app sends where.
-4. TestFlight: archive in Xcode and upload, or automate later.
+4. TestFlight: App Store Connect record "Lampa: Book Reader" (the name "Lampa" is taken; the home-screen name stays Lampa), SKU `lampa-ios`, iPhone only. Upload a build:
+   ```
+   npm run build:mobile && npx cap sync ios
+   xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS' -archivePath build/Lampa.xcarchive -allowProvisioningUpdates archive
+   xcodebuild -exportArchive -archivePath build/Lampa.xcarchive -exportOptionsPlist ios/release/ExportOptions.plist -exportPath build/export -allowProvisioningUpdates
+   ```
+   The build number comes from package.json (0.10.1 → 1001), so bump the version before every upload; App Store Connect rejects a repeated build number. First build 0.10.1 (1001) uploaded on 2026-10-13.
 5. For a paid/public release the free Google Translate endpoint should move to an official service behind a server proxy (Microsoft Translator keeps the dictionary).
