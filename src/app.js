@@ -2275,7 +2275,17 @@
     sel.value = value;
   }
 
+  const canTranslate = () => !!api.translateOnDevice || !!(cloud.session && (cloud.session.user.features || []).includes('translate'));
+
+  function applyTranslateAccess() {
+    const ok = canTranslate();
+    $('#sel-translate').hidden = !ok;
+    $('#translate-setting').hidden = !ok;
+    if (!ok) closeTranslate();
+  }
+
   async function translateSelection() {
+    if (!canTranslate()) return;
     const r = selectionCharRange();
     if (!r) return;
     const text = oneLine(fullText().slice(r.start, r.end)).slice(0, 1500);
@@ -3610,10 +3620,11 @@
   async function cloudSession() {
     const s = cloud.session;
     if (!s) throw new Error('SIGNED_OUT');
-    if (s.expires_at - Date.now() > 60000) return s;
+    if (s.expires_at - Date.now() > 60000 && Array.isArray(s.user.features)) return s;
     try {
       cloud.session = await Cloud.refresh(s);
       saveCloud();
+      applyTranslateAccess();
       return cloud.session;
     } catch (e) {
       // сессию отозвали (вышли на другом устройстве, сменили пароль) — нужно войти заново
@@ -4083,6 +4094,7 @@
     }
     $('#sync-delete').classList.remove('confirm');
     $('#sync-delete').textContent = t('syncDelete');
+    applyTranslateAccess();
     setSyncMessage('');
     renderSyncStatus();
   }

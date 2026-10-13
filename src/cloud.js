@@ -46,7 +46,11 @@
       access_token: j.access_token,
       refresh_token: j.refresh_token,
       expires_at: j.expires_at ? j.expires_at * 1000 : Date.now() + (j.expires_in || 3600) * 1000,
-      user: { id: j.user && j.user.id, email: (j.user && j.user.email) || '' },
+      user: {
+        id: j.user && j.user.id,
+        email: (j.user && j.user.email) || '',
+        features: (j.user && j.user.app_metadata && Array.isArray(j.user.app_metadata.features) && j.user.app_metadata.features) || [],
+      },
     };
   }
 
