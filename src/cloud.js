@@ -8,7 +8,6 @@
   const dev = (global.api && global.api.cloudUrl) || '';
   const URL_BASE = dev || 'https://lxztjateewlladvgzzlj.supabase.co';
   const KEY = dev ? 'dev' : 'sb_publishable_usZ2I_BM4dbq8gdVmXgSkQ_YQ8FXdmc';
-  const BUCKET = 'books';
   const MAX_FILE = 50 * 1024 * 1024;
 
   async function call(path, { method = 'GET', token, body, headers = {}, raw = false } = {}) {
@@ -26,11 +25,12 @@
     }
     if (!r.ok) {
       let msg = 'HTTP ' + r.status;
+      let j = null;
       try {
-        const j = await r.json();
+        j = await r.json();
         msg = j.error_description || j.msg || j.message || j.error || msg;
       } catch {}
-      throw Object.assign(new Error(msg), { status: r.status });
+      throw Object.assign(new Error(msg), { status: r.status, body: j });
     }
     if (raw) return new Uint8Array(await r.arrayBuffer());
     const text = await r.text();
@@ -112,46 +112,43 @@
     }
   }
 
-  // ---------- файлы книг: books/<id пользователя>/<отпечаток>.<расширение> ----------
+  const books = (session, body) => call('/functions/v1/books', { method: 'POST', token: session.access_token, body });
 
-  const objectPath = (session, hash, ext) => `${session.user.id}/${hash}.${ext}`;
-
-  async function listFiles(session) {
-    const names = new Set();
-    for (let offset = 0; ; offset += 1000) {
-      const rows = await call(`/storage/v1/object/list/${BUCKET}`, {
-        method: 'POST',
-        token: session.access_token,
-        body: { prefix: session.user.id, limit: 1000, offset },
-      });
-      for (const r of rows) names.add(r.name);
-      if (rows.length < 1000) break;
+  async function transfer(url, init) {
+    let r;
+    try {
+      r = await fetch(url, init);
+    } catch {
+      throw Object.assign(new Error('OFFLINE'), { code: 'OFFLINE' });
     }
-    return names;
+    if (!r.ok) throw Object.assign(new Error('HTTP ' + r.status), { status: r.status });
+    return r;
   }
 
-  const upload = (session, hash, ext, bytes) =>
-    call(`/storage/v1/object/${BUCKET}/${objectPath(session, hash, ext)}`, {
-      method: 'POST',
-      token: session.access_token,
-      headers: { 'x-upsert': 'true', 'Content-Type': 'application/octet-stream' },
-      body: bytes,
-    });
+  async function listFiles(session) {
+    const { files } = await books(session, { action: 'list' });
+    return new Set(files.map((f) => `${f.hash}.${f.ext}`));
+  }
 
-  const download = (session, hash, ext) =>
-    call(`/storage/v1/object/authenticated/${BUCKET}/${objectPath(session, hash, ext)}`, { token: session.access_token, raw: true });
+  async function upload(session, hash, ext, bytes) {
+    const { url } = await books(session, { action: 'upload', hash, ext, size: bytes.length });
+    await transfer(url, { method: 'PUT', body: bytes });
+    await books(session, { action: 'confirm', hash, ext });
+  }
+
+  async function download(session, hash, ext) {
+    const { url } = await books(session, { action: 'download', hash, ext });
+    return new Uint8Array(await (await transfer(url, { method: 'GET' })).arrayBuffer());
+  }
 
   async function removeFile(session, hash, ext) {
     try {
-      await call(`/storage/v1/object/${BUCKET}`, { method: 'DELETE', token: session.access_token, body: { prefixes: [objectPath(session, hash, ext)] } });
+      await books(session, { action: 'delete', hash, ext });
     } catch {}
   }
 
   async function deleteAccount(session) {
-    const paths = [...(await listFiles(session))].map((name) => `${session.user.id}/${name}`);
-    for (let i = 0; i < paths.length; i += 500) {
-      await call(`/storage/v1/object/${BUCKET}`, { method: 'DELETE', token: session.access_token, body: { prefixes: paths.slice(i, i + 500) } });
-    }
+    await books(session, { action: 'deleteAll' });
     await call('/rest/v1/rpc/delete_account', { method: 'POST', token: session.access_token, body: {} });
   }
 

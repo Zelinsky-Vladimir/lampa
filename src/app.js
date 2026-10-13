@@ -3762,6 +3762,7 @@
 
   // Файлы книг — в облако, по одной, в фоне. Книги больше 50 МБ остаются только на этом устройстве.
   let uploading = false;
+  let quotaWarned = false;
   async function uploadBooks(s) {
     if (uploading) return;
     uploading = true;
@@ -3780,7 +3781,18 @@
           } catch {
             continue; // файла нет на месте — попробуем в другой раз
           }
-          if (bytes.length <= Cloud.MAX_FILE) await Cloud.upload(s, e.hash, ext, bytes);
+          if (bytes.length <= Cloud.MAX_FILE) {
+            try {
+              await Cloud.upload(s, e.hash, ext, bytes);
+            } catch (err) {
+              if (err.message !== 'QUOTA') throw err;
+              if (!quotaWarned) {
+                quotaWarned = true;
+                toast(t('syncQuotaFull', { mb: Math.round(((err.body && err.body.quota) || 0) / 1048576) }), 8000);
+              }
+              return;
+            }
+          }
         }
         done.add(e.hash);
         cloud.uploaded = [...done];

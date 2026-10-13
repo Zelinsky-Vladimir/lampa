@@ -90,3 +90,20 @@ end $$;
 
 revoke execute on function public.delete_account() from public, anon;
 grant execute on function public.delete_account() to authenticated;
+
+create table if not exists public.book_files (
+  user_id    uuid        not null references auth.users (id) on delete cascade,
+  hash       text        not null check (hash ~ '^[0-9a-f]{16}$'),
+  ext        text        not null check (ext in ('fb2', 'epub', 'txt', 'zip')),
+  size       bigint      not null check (size > 0),
+  ready      boolean     not null default false,
+  created_at timestamptz not null default now(),
+  primary key (user_id, hash)
+);
+
+alter table public.book_files enable row level security;
+
+drop policy if exists "book_files: read own" on public.book_files;
+create policy "book_files: read own" on public.book_files
+  for select to authenticated
+  using (auth.uid() = user_id);

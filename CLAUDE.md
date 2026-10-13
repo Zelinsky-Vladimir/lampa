@@ -14,7 +14,7 @@ Lampa is a book reader (FB2, EPUB, TXT) for Windows, macOS and Linux (Electron) 
 - Don't publish copyrighted book text (screenshots use public-domain samples).
 - Never sign in with passwords or create accounts on real services yourself; he approves logins himself (GitHub and the Supabase CLI were authorised through browser device flows).
 - New UI strings go into all five languages in `src/i18n.js` (en, ru, fr, de, es).
-- Desktop CSP is strict (`src/index.html`): renderer network goes only to the Supabase project; everything else is fetched by the main process (desktop) or native HTTP (iOS).
+- Desktop CSP is strict (`src/index.html`): renderer network goes only to the Supabase project and to presigned R2 URLs (`https://*.r2.cloudflarestorage.com`); everything else is fetched by the main process (desktop) or native HTTP (iOS). `scripts/build-mobile.js` swaps that exact connect-src string, so change both together.
 
 ## Layout
 
@@ -27,14 +27,15 @@ src/decode.js      text encoding detection
 src/i18n.js        interface strings, 5 languages
 src/online.js      book search (Apple Books + Open Library), genres, reader ratings (+ Wikidata for originals), translation; shared by desktop and iOS
 src/stamps.js      change stamps per record for sync (fingerprint, time, tombstones, pushed flag)
-src/cloud.js       Supabase over plain HTTP: auth (password, Google PKCE), records pull/push, book files in storage
+src/cloud.js       Supabase over plain HTTP: auth (password, Google PKCE, Apple id_token), records pull/push, book files through the `books` function + presigned R2 URLs
 mobile/mobile.js   iOS platform layer: the same window.api on Capacitor (Filesystem, native HTTP, App, StatusBar)
 mobile/mobile.css  phone styles (safe areas, touch)
 ios/               Xcode project (Capacitor 8, Swift Package Manager, no CocoaPods)
 ios/App/App/WebAuth.swift  local plugin `WebAuth.start({url, scheme})` (ASWebAuthenticationSession) + LampaBridgeViewController that registers the local plugins
 ios/App/App/AppleSignIn.swift  local plugin `AppleSignIn.authorize({nonce})` → `{idToken}` (sends SHA-256 of the nonce to Apple); App.entitlements enables Sign in with Apple
 scripts/build-mobile.js  assembles www/ for Capacitor (src + mobile + fflate + icon), syncs iOS version from package.json
-supabase/schema.sql      database schema (records table + RLS + newer-wins trigger, private `books` bucket)
+supabase/schema.sql      database schema (records + RLS + newer-wins trigger, book_files quota ledger, delete_account(); the old `books` storage bucket is unused)
+supabase/functions/books Edge Function for book files in Cloudflare R2: list / upload (quota check + presigned PUT) / confirm (HEAD, real size) / download (presigned GET) / delete / deleteAll
 ```
 
 ## Desktop
@@ -48,7 +49,7 @@ supabase/schema.sql      database schema (records table + RLS + newer-wins trigg
 - Project ref `lxztjateewlladvgzzlj` ("Lampa Server", Frankfurt). URL and the publishable key are in `src/cloud.js` (public by design). Never use or ask for the service-role/secret key or the database password.
 - Apply schema changes with the Supabase CLI (login is stored on his machine; on a new machine run `npx supabase login` in a terminal he can type into): `npx supabase db query --linked --project-ref lxztjateewlladvgzzlj -f supabase/schema.sql`.
 - Auth: Google provider (Google Cloud project "Lampa", OAuth app published) and email/password with "Confirm email" off. Redirect URLs allowed: `lampa://auth-callback` (desktop) and `io.github.zelinskyvladimir.lampa://auth-callback` (iOS).
-- Records: kind `lib` (id = `size|title|author`, library entry + reading position), `mark` (bookmark/note id), `shelf` (reading-list book id). Newer `updated_at` wins (server trigger). Records arriving from the server are stamped `r` and not pushed back. Book files go to `books/<user id>/<sha256-16>.<ext>` (≤ 50 MB).
+- Records: kind `lib` (id = `size|title|author`, library entry + reading position), `mark` (bookmark/note id), `shelf` (reading-list book id). Newer `updated_at` wins (server trigger). Records arriving from the server are stamped `r` and not pushed back. Book files live in Cloudflare R2 bucket `lampa-books` at `<user id>/<sha256-16>.<ext>` (≤ 50 MB each). Only the `books` Edge Function holds the R2 keys (Supabase function secrets `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, set by him); clients get 15-minute presigned URLs. `public.book_files` is the per-user ledger (RLS: read own only, writes only from the function); a file counts once `confirm` has checked its real size in R2. Quota per account: `BOOK_QUOTA_MB` function secret, default 300; over quota the function answers 413 `QUOTA` and the app shows `syncQuotaFull` once and keeps the book local. Deploy: `npx supabase functions deploy books --project-ref lxztjateewlladvgzzlj --no-verify-jwt --use-api` (the function checks the user token itself).
 - Sync runs on start, on window focus, a few seconds after changes and every minute. If the open book moved on another device, a banner offers to jump.
 
 ## iOS (current focus)
@@ -70,4 +71,4 @@ Not done yet, roughly in order:
    ```
    The build number comes from package.json (0.10.1 → 1001), so bump the version before every upload; App Store Connect rejects a repeated build number. First build 0.10.1 (1001) uploaded on 2026-10-13; internal TestFlight works (he installed it on his iPhone).
 5. Translation: on iOS it is Apple's on-device Translation framework (`ios/App/App/AppleTranslate.swift`, iOS 18+, `api.translateOnDevice`), no network and no limits; Google is not used on the phone. The desktop still uses the free Google endpoint; for a public release it should move to Microsoft Translator behind a Supabase Edge Function with per-user monthly limits (free ≈ 20 translations, premium ≈ 1000).
-6. Storage and money (decided 2026-10-13): book files move from Supabase Storage to Cloudflare R2 behind an Edge Function that enforces a per-account cloud quota (free ≈ 300 MB, premium ≈ 10 GB, the number lives on the server); premium subscription $5/month through the App Store with the Small Business Program (15%). Estimated cost for 1000 users ≈ $26/month (Supabase Pro $25 + R2 ~$1).
+6. Storage and money (decided 2026-10-13): book files are in Cloudflare R2 behind the `books` Edge Function that enforces a per-account cloud quota (free ≈ 300 MB, premium ≈ 10 GB, the number lives on the server); premium subscription $5/month through the App Store with the Small Business Program (15%). Estimated cost for 1000 users ≈ $26/month (Supabase Pro $25 + R2 ~$1).
