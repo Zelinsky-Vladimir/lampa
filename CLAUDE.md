@@ -53,14 +53,13 @@ supabase/schema.sql      database schema (records table + RLS + newer-wins trigg
 
 ## iOS (current focus)
 
-Built on a Mac: `npm ci`, then `npm run ios` (builds www, `cap sync ios`, opens Xcode); pick his Team in Signing & Capabilities and Run on the iPhone. Bundle id `io.github.zelinskyvladimir.lampa`. He is enrolling in the paid Apple Developer Program.
+Built on a Mac: `npm ci`, then `npm run ios` (builds www, `cap sync ios`, opens Xcode); Run on the iPhone. Bundle id `io.github.zelinskyvladimir.lampa`, team `PV476BT87F` (his paid Individual Apple Developer account, set as DEVELOPMENT_TEAM in the project; automatic signing). Use Node 22 (`~/.nvm/versions/node/v22.21.1/bin`); the machine's nvm default may be older.
 
 Done: reader on the phone (pages + slide by default, swipes, tap zones, selection bar under the iOS menu, long-press reordering in Want to read, safe areas), books imported via the Files picker and "Open in Lampa" (document types for fb2/epub/txt/zip), covers/lists stored in the app folder, localStorage mirrored to a file, email/password sync, Google sign-in (`api.openAuth` → `WebAuth` plugin, callback `io.github.zelinskyvladimir.lampa://auth-callback` returned straight to the app, no URL scheme registration; verified end to end in the simulator). CI builds it for the simulator and checks the log line `[lampa] ready: plugins=…`.
 
 Not done yet, roughly in order:
 1. First run on his real iPhone and fix what comes up (gestures, selection, "Open in Lampa", sync).
 2. Sign in with Apple — code is done (`api.signInApple` → `Cloud.idTokenSignIn('apple', idToken, rawNonce)`, button shown only on iOS, closing the sheet counts as cancel). Still to do: Supabase → Apple provider enabled with Client IDs `io.github.zelinskyvladimir.lampa` (no secret needed for native-only), a build with his paid team, a real-device test.
-   Until the paid team is active, device builds with the Personal Team need `CODE_SIGN_ENTITLEMENTS=` on the xcodebuild command line (personal teams can't sign the Sign in with Apple capability).
    Account deletion (guideline 5.1.1(v)) is in Settings → Sync → Delete account (two taps): `Cloud.deleteAccount` removes the user's files in `books/` through the Storage API, then calls the `public.delete_account()` RPC (security definer, granted to `authenticated` only), which deletes the auth user; records go with it by cascade. With Sign in with Apple, Apple also expects the user's Apple tokens to be revoked on deletion — not done yet (needs a server-side call with the Apple key).
 3. Privacy policy and support pages are live on GitHub Pages (`lampa-releases/docs`, English + Russian, contact sunstrike1997@gmail.com): https://zelinsky-vladimir.github.io/lampa-releases/privacy.html and .../support.html. Google Auth Platform branding uses them and the Google OAuth app is published (In production), so any Google account can sign in. Next: prepare App Store Connect (record, screenshots, privacy labels). Keep the privacy page in sync with what the app sends where.
 4. TestFlight: archive in Xcode and upload, or automate later.

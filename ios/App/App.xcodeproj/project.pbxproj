@@ -310,6 +310,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = PV476BT87F;
 				CURRENT_PROJECT_VERSION = 1001;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				INFOPLIST_FILE = App/Info.plist;
@@ -333,6 +334,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = PV476BT87F;
 				CURRENT_PROJECT_VERSION = 1001;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				INFOPLIST_FILE = App/Info.plist;
