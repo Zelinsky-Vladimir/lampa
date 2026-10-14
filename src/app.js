@@ -7,13 +7,11 @@
   const root = document.documentElement;
 
   const THEMES = [
-    { id: 'light', name: 'themeLight', bg: '#fbfaf7', fg: '#22211e', accent: '#9c5b23' },
-    { id: 'sepia', name: 'themeSepia', bg: '#f4ecd8', fg: '#5b4636', accent: '#9a5b2e' },
-    { id: 'olive', name: 'themeOlive', bg: '#c9cbb4', fg: '#1f3d47', accent: '#7a3f1d' },
-    { id: 'mint', name: 'themeMint', bg: '#dde8df', fg: '#27392f', accent: '#2f7a55' },
-    { id: 'graphite', name: 'themeGraphite', bg: '#2c2e33', fg: '#d4d0c8', accent: '#dba660' },
-    { id: 'night', name: 'themeNight', bg: '#16181c', fg: '#aaa598', accent: '#c39152' },
-    { id: 'black', name: 'themeBlack', bg: '#000000', fg: '#8e8a80', accent: '#b08850' },
+    { id: 'paper', name: 'themePaper', bg: '#f8f5ee', fg: '#2a2620', accent: '#9c5b23' },
+    { id: 'sepia', name: 'themeSepia', bg: '#f1e6cf', fg: '#4b3b2a', accent: '#9a5b2e' },
+    { id: 'sage', name: 'themeSage', bg: '#dce6d5', fg: '#25352b', accent: '#2f7a55' },
+    { id: 'dusk', name: 'themeDusk', bg: '#3a3733', fg: '#dad3c6', accent: '#dba660' },
+    { id: 'night', name: 'themeNight', bg: '#000000', fg: '#a8a196', accent: '#b08850' },
     { id: 'custom', name: 'themeCustom' },
   ];
 
@@ -68,7 +66,7 @@
 
   const DEFAULTS = {
     lang: 'auto',
-    theme: 'olive',
+    theme: 'paper',
     customBg: '#efe6d2',
     customFg: '#2f2a24',
     font: 'pt-sans',
@@ -170,6 +168,11 @@
   if (savedSettings && !savedSettings.lang) settings.lang = 'ru';
   const TOP_FONTS = ['pt-sans', 'pt-serif', 'literata', 'lora', 'merriweather'];
   if (!TOP_FONTS.includes(settings.font)) settings.font = DEFAULTS.font;
+  const OLD_THEMES = { light: 'paper', olive: 'paper', mint: 'sage', graphite: 'dusk', black: 'night' };
+  if (OLD_THEMES[settings.theme]) {
+    settings.theme = OLD_THEMES[settings.theme];
+    saveJSON(LS.settings, settings);
+  }
   if (savedSettings && !savedSettings.curlDefault) Object.assign(settings, { pageAnim: 'curl', curlDefault: true });
   if (!features.curl && settings.pageAnim === 'curl') settings.pageAnim = 'slide';
   if (savedSettings && (savedSettings.layoutV || 0) < 3) {
@@ -292,7 +295,7 @@
   }
 
   function themeColors(id) {
-    const th = THEMES.find((x) => x.id === id) || THEMES[1];
+    const th = THEMES.find((x) => x.id === id) || THEMES[0];
     if (th.id !== 'custom') return th;
     return { bg: settings.customBg, fg: settings.customFg, accent: `color-mix(in srgb, ${settings.customFg} 65%, #c07a3a)` };
   }

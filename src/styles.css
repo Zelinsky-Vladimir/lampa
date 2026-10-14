@@ -1,7 +1,7 @@
 :root {
-  --bg: #c9cbb4;
-  --fg: #1f3d47;
-  --accent: #7a3f1d;
+  --bg: #f8f5ee;
+  --fg: #2a2620;
+  --accent: #9c5b23;
   --muted: color-mix(in srgb, var(--fg) 58%, var(--bg));
   --faint: color-mix(in srgb, var(--fg) 9%, var(--bg));
   --panel: color-mix(in srgb, var(--bg) 95%, var(--fg));
@@ -718,7 +718,7 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .setting .label { display: flex; justify-content: space-between; margin-bottom: 9px; font-size: 13px; color: var(--muted); }
 .setting .label span { color: var(--fg); font-variant-numeric: tabular-nums; }
 
-.themes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.themes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .theme-swatch {
   display: flex;
   flex-direction: column;
