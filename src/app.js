@@ -351,13 +351,14 @@
       renderPrepare();
     });
 
-    const themes = $('#themes');
-    for (const th of THEMES) {
-      const b = el('button', 'theme-swatch');
-      b.dataset.theme = th.id;
-      b.append(el('span', 'aa', 'Aa'), el('span', 'nm'));
-      b.addEventListener('click', () => updateSettings({ theme: th.id }));
-      themes.append(b);
+    for (const themes of [$('#themes'), $('#account-themes')]) {
+      for (const th of THEMES) {
+        const b = el('button', 'theme-swatch');
+        b.dataset.theme = th.id;
+        b.append(el('span', 'aa', 'Aa'), el('span', 'nm'));
+        b.addEventListener('click', () => updateSettings({ theme: th.id }));
+        themes.append(b);
+      }
     }
 
     for (const box of document.querySelectorAll('.size-step, #size-stepper')) {

@@ -106,12 +106,12 @@ button, .card, .icon-btn, .home-tabs, .seg { -webkit-user-select: none; user-sel
 
 #sync-jump { top: calc(var(--bar-h) + var(--safe-top) + 10px); }
 @media (max-width: 600px) {
-  #settings-panel .themes { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 6px; scrollbar-width: none; }
-  #settings-panel .theme-swatch { flex: none; width: 54px; aspect-ratio: auto; height: auto; padding: 0; border: none; background: none; color: var(--muted); gap: 5px; }
-  #settings-panel .theme-swatch .aa { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--sw-bg); color: var(--sw-fg); font-size: 15px; box-shadow: inset 0 0 0 1px var(--border); }
-  #settings-panel .theme-swatch.active { box-shadow: none; color: var(--fg); font-weight: 700; }
-  #settings-panel .theme-swatch.active .aa { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent); }
-  #settings-panel .theme-swatch .nm { font-size: 11px; color: inherit; opacity: 1; }
+  :is(#settings-panel, #account-panel) .themes { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 6px; scrollbar-width: none; }
+  :is(#settings-panel, #account-panel) .theme-swatch { flex: none; width: 54px; aspect-ratio: auto; height: auto; padding: 0; border: none; background: none; color: var(--muted); gap: 5px; }
+  :is(#settings-panel, #account-panel) .theme-swatch .aa { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--sw-bg); color: var(--sw-fg); font-size: 15px; box-shadow: inset 0 0 0 1px var(--border); }
+  :is(#settings-panel, #account-panel) .theme-swatch.active { box-shadow: none; color: var(--fg); font-weight: 700; }
+  :is(#settings-panel, #account-panel) .theme-swatch.active .aa { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent); }
+  :is(#settings-panel, #account-panel) .theme-swatch .nm { font-size: 11px; color: inherit; opacity: 1; }
 }
 
 @media (orientation: landscape) and (max-height: 520px) {
