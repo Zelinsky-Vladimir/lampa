@@ -88,3 +88,17 @@ Not done yet, roughly in order:
    The build number comes from package.json (0.10.1 → 1001), so bump the version before every upload; App Store Connect rejects a repeated build number. First build 0.10.1 (1001) uploaded on 2026-10-13; internal TestFlight works (he installed it on his iPhone).
 5. Translation: on iOS it is Apple's on-device Translation framework (`ios/App/App/AppleTranslate.swift`, iOS 18+, `api.translateOnDevice`), no network and no limits; Google is not used on the phone. The desktop still uses the free Google endpoint; for a public release it should move to Microsoft Translator behind a Supabase Edge Function with per-user monthly limits (free ≈ 20 translations, premium ≈ 1000).
 6. Storage and money (decided 2026-10-13): book files are in Cloudflare R2 behind the `books` Edge Function that enforces a per-account cloud quota (free ≈ 300 MB, premium ≈ 10 GB, the number lives on the server); premium subscription $5/month through the App Store with the Small Business Program (15%). Estimated cost for 1000 users ≈ $26/month (Supabase Pro $25 + R2 ~$1).
+
+## Android (started 2026-10-14)
+
+Capacitor platform in `android/`, same `www` as iOS. Toolchain on his Mac: JDK 21 from Homebrew (`export JAVA_HOME=$(brew --prefix openjdk@21)/libexec/openjdk.jdk/Contents/Home`), SDK in `~/Library/Android/sdk` (platform 36, build-tools, emulator, image `android-36;google_apis;arm64-v8a`, AVD `lampa_pixel`). `npm run android` builds www, syncs and opens Android Studio; `cd android && ./gradlew assembleDebug` gives `app/build/outputs/apk/debug/app-debug.apk`. versionName/versionCode follow package.json like the iOS build number (build-mobile.js). Debugging: `adb forward tcp:9333 localabstract:webview_devtools_remote_<pid>` and Chrome DevTools protocol.
+
+Android specifics:
+- `LampaWindowPlugin` (MainActivity registers it) paints the window behind the WebView in the theme colour (`api.setThemeBg`); the status bar is hidden like on iOS (swipe from the top shows it for a moment). WebView older than 140 pads the system bars instead of passing safe areas through, so the paint matters there.
+- Files from other apps arrive as `content://` URIs without a name: `importUrl` reads them through Filesystem and sniffs the format (zip/epub signature, `<FictionBook`, else txt). The manifest declares VIEW intents for epub, fb2 MIME types, zip, text and octet-stream.
+- The file picker has no `accept` filter on Android: `.fb2` has no MIME type there and the picker greys such files out.
+- Google sign-in opens a Custom Tab (`@capacitor/browser`); the `io.github.zelinskyvladimir.lampa://auth-callback` intent comes back through `appUrlOpen`. Sign in with Apple is hidden. Translation has no on-device engine yet.
+- The system Back button: `api.onBack` → `onBack()` in app.js closes the top layer (same list as Escape, `closeTopLayer`), then leaves the book for the library, and only on the home screen exits.
+- Smooth `scrollTo` does nothing on the overflow-hidden page strip in Android WebView, so page turns there animate `scrollLeft` themselves (`glideTo`).
+
+Not done: Play Console account (he creates it), release signing, store listing, tablet and landscape check, real-device test.

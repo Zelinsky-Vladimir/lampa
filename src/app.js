@@ -816,10 +816,24 @@
     if (dir > 0 && !chromeHover && !anyPanelOpen() && !gotoOpen()) setBar(false);
   }
 
+  function glideTo(el, left) {
+    const from = el.scrollLeft;
+    const t0 = performance.now();
+    const step = (now) => {
+      const t = Math.min(1, (now - t0) / 260);
+      el.scrollLeft = from + (left - from) * (1 - (1 - t) ** 3);
+      if (t < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
   function showPage(n, dir) {
     n = clamp(n, 0, pg.count - 1);
     const b = ui.book;
-    const apply = (smooth) => b.scrollTo({ left: n * pg.step, behavior: smooth ? 'smooth' : 'instant' });
+    const apply = (smooth) => {
+      if (smooth && api.platform === 'android') glideTo(b, n * pg.step);
+      else b.scrollTo({ left: n * pg.step, behavior: smooth ? 'smooth' : 'instant' });
+    };
     pg.index = n;
     const anim = dir && b.animate ? settings.pageAnim : 'none';
     if (anim === 'curl') {
@@ -3175,6 +3189,29 @@
     openGoto();
   }
 
+  function closeTopLayer() {
+    if (!$('#confirm-dlg').hidden) closeConfirm(false);
+    else if (ctxOpen()) closeContextMenu();
+    else if (gotoOpen()) closeGoto();
+    else if (endOpen()) closeEndCard(false);
+    else if (!ui.trPop.hidden) closeTranslate();
+    else if (!ui.notePop.hidden) closeNote();
+    else if (!ui.selBar.hidden) hideSelBar();
+    else if (anyPanelOpen()) closePanels();
+    else if (searchOpen()) closeSearch();
+    else if (auto.on) stopAuto();
+    else return false;
+    return true;
+  }
+
+  function onBack() {
+    if (dlgOpen()) closeBookDialog();
+    else if (closeTopLayer()) return true;
+    else if (readerVisible()) showHome();
+    else return false;
+    return true;
+  }
+
   function onKeyDown(e) {
     const ctrl = e.ctrlKey || e.metaKey;
     if (dlgOpen()) {
@@ -3222,16 +3259,7 @@
       return;
     }
     if (e.key === 'Escape') {
-      if (!$('#confirm-dlg').hidden) closeConfirm(false);
-      else if (ctxOpen()) closeContextMenu();
-      else if (gotoOpen()) closeGoto();
-      else if (endOpen()) closeEndCard(false);
-      else if (!ui.trPop.hidden) closeTranslate();
-      else if (!ui.notePop.hidden) closeNote();
-      else if (!ui.selBar.hidden) hideSelBar();
-      else if (anyPanelOpen()) closePanels();
-      else if (searchOpen()) closeSearch();
-      else if (auto.on) stopAuto();
+      closeTopLayer();
       return;
     }
     if (e.code === 'KeyS' && !e.altKey) {
@@ -5272,6 +5300,7 @@ ${sentence}` : translation);
       if (e.clientY < 56 || e.clientY > window.innerHeight - 56) setBar(true);
     });
     document.addEventListener('keydown', onKeyDown);
+    if (api.onBack) api.onBack(onBack);
     window.addEventListener('beforeunload', () => {
       closeNoteEditor();
       savePosition();

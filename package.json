@@ -15,7 +15,8 @@
     "dist:mac": "electron-builder --mac --publish never",
     "dist:linux": "electron-builder --linux --publish never",
     "build:mobile": "node scripts/build-mobile.js",
-    "ios": "node scripts/build-mobile.js && cap sync ios && cap open ios"
+    "ios": "node scripts/build-mobile.js && cap sync ios && cap open ios",
+    "android": "node scripts/build-mobile.js && cap sync android && cap open android"
   },
   "build": {
     "appId": "io.github.zelinskyvladimir.svitok",
@@ -102,6 +103,8 @@
     ]
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/browser": "^8.0.5",
     "electron-updater": "^6.8.9",
     "fflate": "^0.8.3"
   },

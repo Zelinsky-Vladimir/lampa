@@ -12,6 +12,10 @@
   const AppleSignIn = (native && P.AppleSignIn) || null;
   const AppleTranslate = (native && P.AppleTranslate) || null;
   const ReaderMenu = (native && P.ReaderMenu) || null;
+  const Browser = (native && P.Browser) || null;
+  const android = native && Cap.getPlatform() === 'android';
+  const LampaWindow = (native && P.LampaWindow) || null;
+  let backHandler = null;
   let authCallback = () => {};
 
   const BOOK_EXTS = new Set(['fb2', 'epub', 'txt', 'zip']);
@@ -238,12 +242,22 @@
     return path;
   }
 
+  function sniffExt(bytes) {
+    if (bytes[0] === 0x50 && bytes[1] === 0x4b) {
+      return new TextDecoder('latin1').decode(bytes.subarray(30, 90)).includes('epub') ? 'epub' : 'zip';
+    }
+    return /<FictionBook/i.test(new TextDecoder('latin1').decode(bytes.subarray(0, 2048))) ? 'fb2' : 'txt';
+  }
+
   async function importUrl(url) {
-    if (!url || !/^file:/i.test(url)) return null;
+    if (!url || !/^(file|content):/i.test(url)) return null;
     try {
       const r = await Filesystem.readFile({ path: url });
-      const path = await importBook(decodeURIComponent(baseName(url)), b64ToBytes(r.data));
-      Filesystem.deleteFile({ path: url }).catch(() => {});
+      const bytes = b64ToBytes(r.data);
+      let name = decodeURIComponent(baseName(url));
+      if (!BOOK_EXTS.has(extOf(name))) name = `${name.replace(/[^\w.-]+/g, '_') || 'book'}.${sniffExt(bytes)}`;
+      const path = await importBook(name, bytes);
+      if (/^file:/i.test(url)) Filesystem.deleteFile({ path: url }).catch(() => {});
       return path;
     } catch (e) {
       console.error('import failed', e);
@@ -355,7 +369,7 @@
       return new Promise((resolve) => {
         const input = document.createElement('input');
         input.type = 'file';
-        input.accept = '.fb2,.epub,.txt,.zip';
+        if (!android) input.accept = '.fb2,.epub,.txt,.zip';
         input.hidden = true;
         document.body.append(input);
         const done = (v) => {
@@ -400,7 +414,7 @@
     onAuthCallback: (cb) => {
       authCallback = cb;
     },
-    authRedirect: WebAuth ? AUTH_SCHEME + '://auth-callback' : '',
+    authRedirect: WebAuth || Browser ? AUTH_SCHEME + '://auth-callback' : '',
     signInApple: AppleSignIn
       ? async (nonce) => {
           const res = await AppleSignIn.authorize({ nonce });
@@ -408,8 +422,12 @@
         }
       : null,
     async openAuth(url) {
+      if (!WebAuth) return Browser.open({ url });
       const res = await WebAuth.start({ url, scheme: AUTH_SCHEME });
       if (res && res.url) authCallback(res.url);
+    },
+    onBack: (cb) => {
+      backHandler = cb;
     },
     cloudUrl: '',
     async forgetBook(p) {
@@ -435,6 +453,7 @@
     openExternal: (url) => window.open(url, '_blank'),
     toggleFullscreen: () => {},
     setThemeBg(color) {
+      if (LampaWindow) LampaWindow.setBackground({ color: String(color) }).catch(() => {});
       if (!native || !StatusBar) return;
       const n = parseInt(String(color).slice(1), 16);
       const lum = 0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255);
@@ -527,10 +546,17 @@
       const launch = await App.getLaunchUrl().catch(() => null);
       if (launch && launch.url) launchPath = await importUrl(launch.url);
       App.addListener('appUrlOpen', async ({ url }) => {
+        if (String(url).startsWith(AUTH_SCHEME + ':')) {
+          if (Browser) Browser.close().catch(() => {});
+          return authCallback(url);
+        }
         const p = await importUrl(url);
         if (p && openCallback) openCallback(p);
       });
       App.addListener('pause', dumpState);
+      App.addListener('backButton', () => {
+        if (!backHandler || !backHandler()) App.exitApp();
+      });
     }
   })().catch((e) => console.error('platform init failed', e));
 })();
