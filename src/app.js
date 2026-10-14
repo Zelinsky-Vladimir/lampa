@@ -1047,6 +1047,10 @@
 
   const libraryEntry = () => current && library.find((e) => e.key === current.key);
 
+  let lastInputAt = 0;
+  let lastResizeAt = 0;
+  const readingNow = () => auto.on || (Date.now() - lastInputAt < 6000 && Date.now() - lastResizeAt > 1500);
+
   function savePosition() {
     if (!current || !current.ready || !readerVisible()) return;
     const entry = libraryEntry();
@@ -1054,7 +1058,8 @@
     updateProgress();
     const a = blockAtTop();
     if (a) {
-      if (!entry.pos || Math.abs(anchorChar(a) - anchorChar(entry.pos)) > POS_SLACK) entry.posAt = Date.now();
+      const moved = !entry.pos || Math.abs(anchorChar(a) - anchorChar(entry.pos)) > POS_SLACK;
+      if (moved && readingNow()) entry.posAt = Date.now();
       entry.pos = a;
     }
     if (entry.progress !== current.ratio) entry.readAt = Date.now();
@@ -1093,6 +1098,7 @@
   let lastChapter = -2;
   let resizing = false;
   let resizeTimer = 0;
+  let resizeAnchor = null;
 
   function updateProgress() {
     if (!readerVisible() || !current.ready) return;
@@ -4552,7 +4558,6 @@
     })();
   }
 
-  const posTime = (x) => x.posAt || x.readAt || 0;
 
   function applyLib(row, older) {
     let e = library.find((x) => x.key === row.id);
@@ -4572,9 +4577,12 @@
     }
     if (!older) Object.assign(e, { title: d.title, author: d.author, hash: d.hash || e.hash, name: d.name || e.name, openedAt: d.openedAt, readAt: d.readAt || e.readAt || 0 });
     const samePos = JSON.stringify(d.pos || null) === JSON.stringify(e.pos || null);
-    if (samePos || !d.pos || posTime(d) <= posTime(e)) return { changed: !older, mine: !older && !samePos };
-    if (current && current.ready && current.key === row.id && readerVisible()) return { changed: !older, offer: { key: row.id, pos: d.pos, page: d.page } };
-    Object.assign(e, { pos: d.pos, posAt: posTime(d), progress: d.progress, page: d.page, pages: d.pages, readAt: Math.max(e.readAt || 0, d.readAt || 0) });
+    const remoteAt = d.posAt || 0;
+    const localAt = e.posAt || 0;
+    const takeRemote = d.pos && !samePos && (!e.pos || remoteAt > localAt || (!remoteAt && !localAt && !older));
+    if (!takeRemote) return { changed: !older, mine: !older && !samePos };
+    if (current && current.ready && current.key === row.id && readerVisible()) return { changed: !older, offer: { key: row.id, pos: d.pos, page: d.page, posAt: remoteAt } };
+    Object.assign(e, { pos: d.pos, posAt: remoteAt, progress: d.progress, page: d.page, pages: d.pages, readAt: Math.max(e.readAt || 0, d.readAt || 0) });
     return { changed: true };
   }
 
@@ -4743,7 +4751,14 @@
     if (back) pushBack();
     scrollToAnchor(o.pos);
     if (paged()) pg.anchor = o.pos;
+    current.stable = o.pos;
+    if (resizing) resizeAnchor = o.pos;
     savePosition();
+    const entry = libraryEntry();
+    if (entry && o.posAt > (entry.posAt || 0)) {
+      entry.posAt = o.posAt;
+      saveLibrary();
+    }
   }
 
   async function afterSignIn(session) {
@@ -5331,15 +5346,21 @@ ${sentence}` : translation);
       window.visualViewport.addEventListener('scroll', kb);
     }
     if (!features.fullscreen) $('#btn-full').hidden = true;
+    for (const type of ['pointerdown', 'touchstart', 'keydown', 'wheel']) {
+      document.addEventListener(type, () => {
+        lastInputAt = Date.now();
+      }, { capture: true, passive: true });
+    }
     window.addEventListener('resize', () => {
+      lastResizeAt = Date.now();
       safeCache = null;
       if (gotoOpen()) placeGoto();
       if (!readerVisible() || !current.ready) return;
-      const a = current.stable || pg.anchor || blockAtTop();
+      resizeAnchor = current.stable || pg.anchor || blockAtTop();
       const restore = () => {
         quietScroll();
         layoutPages();
-        scrollToAnchor(a);
+        scrollToAnchor(resizeAnchor);
       };
       resizing = true;
       clearTimeout(saveTimer);
@@ -5350,9 +5371,9 @@ ${sentence}` : translation);
         resizeTimer = setTimeout(() => {
           restore();
           resizing = false;
-          if (paged()) pg.anchor = a;
+          if (paged()) pg.anchor = resizeAnchor;
           updateProgress();
-          current.stable = a;
+          current.stable = resizeAnchor;
           scheduleSave();
         }, 80);
       }, 250);
