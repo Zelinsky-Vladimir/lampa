@@ -101,4 +101,8 @@ Android specifics:
 - The system Back button: `api.onBack` → `onBack()` in app.js closes the top layer (same list as Escape, `closeTopLayer`), then leaves the book for the library, and only on the home screen exits.
 - Smooth `scrollTo` does nothing on the overflow-hidden page strip in Android WebView, so page turns there animate `scrollLeft` themselves (`glideTo`).
 
-Not done: Play Console account (he creates it), release signing, store listing, tablet and landscape check, real-device test.
+- Icon: adaptive icon whose background layer is the iOS artwork shrunk to 72% with its vertical gradient carried to the edges (so circle and squircle masks keep the lamp and the book), empty foreground; legacy square/round PNGs and the splash PNGs come from the same art, Android 12+ splash is the icon on #f8f5ee (`windowSplashScreenBackground`). `android/store/icon-512.png` is the Play Store icon.
+- Release: `cd android && ./gradlew bundleRelease` → `app/build/outputs/bundle/release/app-release.aab`. It is signed with the upload key when `android/keystore.properties` exists (gitignored; `storeFile`, `storePassword`, `keyAlias`, `keyPassword`); the keystore itself lives outside the repo in `~/.lampa/lampa-upload.jks`, and he creates it and types the passwords himself. Play App Signing holds the real app key.
+- Google Play rule for new personal accounts: a closed test with 12+ testers opted in for 14 days in a row before production access.
+
+Not done: Play Console account (he creates it), upload keystore, store listing and screenshots, tablet and landscape check, real-device test.
