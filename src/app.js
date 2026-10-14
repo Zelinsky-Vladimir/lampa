@@ -4431,7 +4431,7 @@
   let syncTimer = 0;
   let syncState = { state: 'idle', error: '' };
 
-  function syncSoon(ms = 4000) {
+  function syncSoon(ms = 2000) {
     if (!signedIn()) return;
     clearTimeout(syncTimer);
     syncTimer = setTimeout(syncNow, ms);
@@ -4967,7 +4967,12 @@
       if (!document.hidden) syncNow();
     }, 60000);
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) syncNow();
+      if (document.hidden) return;
+      const entry = current && current.ready ? libraryEntry() : null;
+      if (entry) current.posAtOpen = entry.posAt || 0;
+      syncNow();
+      setTimeout(syncNow, 5000);
+      setTimeout(syncNow, 15000);
     });
     window.addEventListener('focus', () => syncSoon(300));
     renderSyncBox();
