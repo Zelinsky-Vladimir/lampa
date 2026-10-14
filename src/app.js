@@ -69,15 +69,15 @@
     theme: 'paper',
     customBg: '#efe6d2',
     customFg: '#2f2a24',
-    font: 'pt-sans',
+    font: 'literata',
     fontSize: 20,
     lineHeight: 1.6,
-    width: 760,
+    width: 680,
     justify: true,
     indent: true,
     autoSpeed: 40,
     footerAlways: false,
-    layoutV: 3,
+    layoutV: 4,
     brightness: 1,
     translateTo: 'auto',
     view: 'scroll',
@@ -179,6 +179,12 @@
     if (!savedSettings.layoutV) settings.footerAlways = false;
     settings.progressLine = false;
     settings.layoutV = 3;
+    saveJSON(LS.settings, settings);
+  }
+  if (savedSettings && settings.layoutV < 4) {
+    if (settings.font === 'pt-sans') settings.font = 'literata';
+    if (settings.width === 760) settings.width = 680;
+    settings.layoutV = 4;
     saveJSON(LS.settings, settings);
   }
 
