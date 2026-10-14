@@ -1557,3 +1557,4 @@ kbd {
 }
 select:focus, select:focus-visible { outline: none; border-color: var(--accent); }
 #safe-top { position: fixed; inset: 0 0 auto 0; z-index: 16; height: env(safe-area-inset-top, 0px); background: var(--bg); pointer-events: none; }
+.sw-clear { flex: none; width: 22px; height: 22px; padding: 0; border: 2px solid var(--muted); border-radius: 50%; background: linear-gradient(to top right, transparent calc(50% - 1px), var(--muted) calc(50% - 1px), var(--muted) calc(50% + 1px), transparent calc(50% + 1px)); cursor: pointer; }
