@@ -494,7 +494,11 @@
     </div>
   </div>
 
-  <button id="back-btn" hidden></button>
+  <div id="back-btn" hidden>
+    <button id="back-dismiss" data-i18n-title="backDismiss" data-i18n-aria="backDismiss"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    <span class="back-sep"></span>
+    <button id="back-go"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg><span id="back-label"></span></button>
+  </div>
 
   <div id="auto-pill" hidden>
     <button class="icon-btn" id="auto-stop" data-i18n-title="autoStop"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg></button>

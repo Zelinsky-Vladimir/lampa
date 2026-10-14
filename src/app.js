@@ -52,6 +52,7 @@
     [['Shift+@keySpace', 'PgUp'], 'kPageUp'],
     [['Ctrl+F'], 'kSearch'],
     [['Ctrl+G'], 'kGoto'],
+    [['Backspace'], 'kBack'],
     [['T'], 'kToc'],
     [['B'], 'kBookmark'],
     [['@keySelect'], 'kSelect'],
@@ -2200,7 +2201,8 @@
     const ghost = $('#scrub-ghost');
     ghost.hidden = !top;
     if (!top) return;
-    ui.backBtn.textContent = t('backToPage', { n: top.page });
+    $('#back-label').textContent = t('pageShort', { n: top.page });
+    $('#back-go').title = t('backToPage', { n: top.page });
     ghost.style.left = `calc(9px + (100% - 18px) * ${parseFloat(tickLeft(top.pos)) / 100 || 0})`;
   }
 
@@ -3235,6 +3237,7 @@
       case 'Home': if (paged()) showPage(0, 0); else s.scrollTop = 0; break;
       case 'End': if (paged()) showPage(pg.count - 1, 0); else s.scrollTop = s.scrollHeight; break;
       case 'KeyP': toggleView(); break;
+      case 'Backspace': if (!backStack.length) return; goBack(); break;
       case 'KeyT': openPanel(ui.tocPanel); break;
       case 'KeyB': toggleBookmark(); break;
       case 'KeyA': (auto.on ? stopAuto : startAuto)(); break;
@@ -5151,7 +5154,11 @@ ${sentence}` : translation);
       closePanels();
     });
     document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', closePanels));
-    ui.backBtn.addEventListener('click', goBack);
+    $('#back-go').addEventListener('click', goBack);
+    $('#back-dismiss').addEventListener('click', () => {
+      backStack.length = 0;
+      renderBackBtn();
+    });
 
     ui.scroller.addEventListener('scroll', onScroll, { passive: true });
     for (const panel of [ui.bar, $('#footer')]) {

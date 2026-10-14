@@ -20,7 +20,7 @@ button, .card, .icon-btn, .home-tabs, .seg { -webkit-user-select: none; user-sel
 .panel { padding-top: var(--safe-top); padding-bottom: var(--safe-bottom); }
 #update-banner { top: calc(var(--bar-h) + var(--safe-top) + 10px); }
 #toast { bottom: calc(70px + var(--safe-bottom)); }
-#back-btn { bottom: calc(66px + var(--safe-bottom)); }
+#back-btn { right: calc(16px + var(--safe-right)); bottom: calc(70px + var(--safe-bottom)); }
 #auto-pill { bottom: calc(70px + var(--safe-bottom)); }
 
 .hint, .shortcuts { display: none !important; }
@@ -49,8 +49,7 @@ button, .card, .icon-btn, .home-tabs, .seg { -webkit-user-select: none; user-sel
   #fi-pct { flex: none; }
   #fi-ch:not(:empty) + #fi-pct::before { content: '· '; }
   #page-btn { grid-area: page; height: 38px; }
-  #back-btn { bottom: calc(118px + var(--safe-bottom)); }
-  :root[data-chrome="hidden"][data-footer="auto"] #back-btn { bottom: calc(30px + var(--safe-bottom)); }
+  #back-btn { bottom: calc(124px + var(--safe-bottom)); }
 
   #end-card { top: auto; bottom: calc(24px + var(--safe-bottom)); left: 12px; right: 12px; width: auto; transform: none; }
 
@@ -123,9 +122,10 @@ button, .card, .icon-btn, .home-tabs, .seg { -webkit-user-select: none; user-sel
   .cont-title { font-size: 19px; }
   .cont-actions .primary-btn { padding: 10px 22px; }
   #footer { gap: 12px; }
-  #back-btn { bottom: calc(60px + var(--safe-bottom)); }
+  #back-btn { bottom: calc(66px + var(--safe-bottom)); }
 }
 @media (max-width: 600px) {
   #sel-bar { max-width: calc(100vw - 24px); }
   #sel-bar.on-note .sel-btn:not(#sel-remove) span { display: none; }
 }
+:root[data-chrome="hidden"][data-footer="auto"] #back-btn { bottom: calc(18px + var(--safe-bottom)); }

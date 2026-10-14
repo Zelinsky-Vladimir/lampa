@@ -832,21 +832,24 @@ kbd {
 
 #back-btn {
   position: fixed;
-  bottom: 66px;
-  left: 50%;
+  right: 16px;
+  bottom: 70px;
   z-index: 22;
-  transform: translateX(-50%);
-  padding: 8px 16px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--panel);
-  color: var(--accent);
-  box-shadow: var(--shadow);
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
+  display: flex;
+  align-items: center;
+  height: 48px;
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--bg) 88%, var(--fg));
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.28), inset 0 0 0 1px color-mix(in srgb, var(--fg) 8%, transparent);
+  transition: bottom 0.32s cubic-bezier(0.25, 0.8, 0.3, 1);
 }
+:root[data-chrome="hidden"][data-footer="auto"] #back-btn { bottom: 20px; }
+#back-btn button { display: flex; align-items: center; height: 48px; border: none; background: none; cursor: pointer; }
+#back-dismiss { width: 42px; justify-content: center; color: var(--muted); }
+#back-dismiss svg { width: 15px; height: 15px; stroke-width: 2.4; }
+.back-sep { width: 1px; height: 22px; background: color-mix(in srgb, var(--fg) 14%, transparent); }
+#back-go { gap: 8px; padding: 0 18px 0 12px; color: var(--accent); font: 700 15px var(--ui); white-space: nowrap; }
+#back-go svg { width: 18px; height: 18px; stroke-width: 2.2; }
 
 #toast {
   position: fixed;
