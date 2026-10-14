@@ -970,6 +970,12 @@
     return index.total;
   }
 
+  const POS_SLACK = CHARS_PER_PAGE / 3;
+  function anchorChar(a) {
+    const start = current.starts[a.i];
+    return start == null ? -Infinity : start + (a.f || 0) * (blockEnd(a.i) - start);
+  }
+
   const pageOf = (pos) => clamp(Math.floor(pos / CHARS_PER_PAGE) + 1, 1, current.pages);
 
   function atBookEnd() {
@@ -1023,7 +1029,10 @@
     if (!entry) return;
     updateProgress();
     const a = blockAtTop();
-    if (a) entry.pos = a;
+    if (a) {
+      if (!entry.pos || Math.abs(anchorChar(a) - anchorChar(entry.pos)) > POS_SLACK) entry.posAt = Date.now();
+      entry.pos = a;
+    }
     if (entry.progress !== current.ratio) entry.readAt = Date.now();
     entry.progress = current.ratio;
     entry.page = current.shownPage || current.page;
@@ -1441,6 +1450,7 @@
       api.rendered();
       return;
     }
+    if (syncing) await Promise.race([syncing, sleep(1500)]);
     if (token !== openToken) {
       book.urls.forEach((u) => URL.revokeObjectURL(u));
       return;
@@ -1455,6 +1465,7 @@
     closeNoteEditor();
     closeTranslate();
     hideSelBar();
+    $('#sync-jump').hidden = true;
     clearNoteHighlights();
     backStack.length = 0;
     viewMemo = null;
@@ -1514,6 +1525,7 @@
     if (entry.pos) scrollToAnchor(entry.pos);
     pg.anchor = entry.pos || null;
     lastScrollTop = ui.scroller.scrollTop;
+    current.posAtOpen = entry.posAt || 0;
     current.ready = true;
     playEnter(ui.book, 'enter-book');
     setBar(true);
@@ -1566,6 +1578,7 @@
     closeNoteEditor();
     closeTranslate();
     hideSelBar();
+    $('#sync-jump').hidden = true;
     closeGoto();
     $('#end-card').hidden = true;
     ui.backBtn.hidden = true;
@@ -4014,7 +4027,7 @@
     const until = Date.now() + KEEP_DAYS * 864e5;
     library = library.filter((x) => x !== e);
     saveLibrary();
-    book.lib = { key: e.key, title: e.title || '', author: e.author || '', hash: e.hash || '', name: e.name || '', pos: e.pos || null, progress: e.progress || 0, page: e.page || 0, pages: e.pages || 0, openedAt: e.openedAt || 0, readAt: e.readAt || 0, until };
+    book.lib = { key: e.key, title: e.title || '', author: e.author || '', hash: e.hash || '', name: e.name || '', pos: e.pos || null, posAt: e.posAt || 0, progress: e.progress || 0, page: e.page || 0, pages: e.pages || 0, openedAt: e.openedAt || 0, readAt: e.readAt || 0, until };
     saveShelf();
     const list = purgeList().filter((x) => x.key !== e.key);
     list.push({ key: e.key, hash: e.hash || '', name: e.name || '', path: e.path || null, source: e.source || null, thumb: e.thumb || null, at: until });
@@ -4340,6 +4353,7 @@
         openedAt: e.openedAt || 0,
         readAt: e.readAt || 0,
         pos: e.pos || null,
+        posAt: e.posAt || 0,
         progress: e.progress || 0,
         page: e.page || 0,
         pages: e.pages || 0,
@@ -4454,18 +4468,26 @@
     const applied = [];
     const covers = [];
     let offer = null;
+    let merged = false;
     for (const row of rows) {
       const local = Stamps.get(row.kind, row.id);
-      if (local && local.t >= row.updated_at) continue;
-      if (row.kind === 'lib') offer = applyLib(row) || offer;
-      else if (row.kind === 'mark') applyMark(row);
+      const older = !!local && local.t >= row.updated_at;
+      if (row.kind === 'lib') {
+        const r = applyLib(row, older);
+        offer = r.offer || offer;
+        merged = merged || !!r.changed;
+        if (!older && !r.mine) applied.push(row);
+        continue;
+      }
+      if (older) continue;
+      if (row.kind === 'mark') applyMark(row);
       else if (row.kind === 'shelf') applyShelf(row, covers);
       else continue;
       applied.push(row);
     }
     cloud.lastPull = rows[rows.length - 1].server_at;
     saveCloud();
-    if (!applied.length) return;
+    if (!applied.length && !merged && !offer) return;
 
     library.sort((a, b) => (b.openedAt || 0) - (a.openedAt || 0));
     saveJSON(LS.library, library);
@@ -4477,6 +4499,7 @@
       const rec = byKind[row.kind][row.id];
       Stamps.accept(row.kind, row.id, rec, row.updated_at, row.deleted || !rec);
     }
+    if (merged) stampNow();
 
     if (root.dataset.mode === 'home') renderHome();
     else {
@@ -4498,26 +4521,30 @@
     })();
   }
 
-  function applyLib(row) {
+  const posTime = (x) => x.posAt || x.readAt || 0;
+
+  function applyLib(row, older) {
     let e = library.find((x) => x.key === row.id);
     if (row.deleted) {
+      if (older) return {};
       if (e && !(current && current.key === e.key)) {
         library = library.filter((x) => x !== e);
         if (e.path && !library.some((x) => x.path === e.path)) api.forgetBook(e.path);
       }
-      return null;
+      return { changed: true };
     }
     const d = row.data || {};
     if (!e) {
+      if (older) return {};
       e = { key: row.id, path: null };
       library.push(e);
     }
-    Object.assign(e, { title: d.title, author: d.author, hash: d.hash || e.hash, name: d.name || e.name, openedAt: d.openedAt, readAt: d.readAt || e.readAt || 0 });
-    const reading = current && current.ready && current.key === row.id;
-    const moved = JSON.stringify(d.pos) !== JSON.stringify(e.pos);
-    if (reading && moved && d.pos) return { key: row.id, pos: d.pos, page: d.page };
-    Object.assign(e, { pos: d.pos, progress: d.progress, page: d.page, pages: d.pages });
-    return null;
+    if (!older) Object.assign(e, { title: d.title, author: d.author, hash: d.hash || e.hash, name: d.name || e.name, openedAt: d.openedAt, readAt: d.readAt || e.readAt || 0 });
+    const samePos = JSON.stringify(d.pos || null) === JSON.stringify(e.pos || null);
+    if (samePos || !d.pos || posTime(d) <= posTime(e)) return { changed: !older, mine: !older && !samePos };
+    if (current && current.ready && current.key === row.id && readerVisible()) return { changed: !older, offer: { key: row.id, pos: d.pos, page: d.page } };
+    Object.assign(e, { pos: d.pos, posAt: posTime(d), progress: d.progress, page: d.page, pages: d.pages, readAt: Math.max(e.readAt || 0, d.readAt || 0) });
+    return { changed: true };
   }
 
   function applyMark(row) {
@@ -4664,9 +4691,14 @@
     const bar = $('#sync-jump');
     let n = o.page || '?';
     if (current && current.ready && o.pos && current.starts[o.pos.i] != null) {
-      const start = current.starts[o.pos.i];
-      n = displayPage(start + (o.pos.f || 0) * (blockEnd(o.pos.i) - start));
+      n = displayPage(anchorChar(o.pos));
       if (current.shownPage && Math.abs(n - current.shownPage) < 2) return;
+      const entry = libraryEntry();
+      if (entry && (entry.posAt || 0) === current.posAtOpen && readerVisible()) {
+        jumpToSynced(o, false);
+        toast(t('syncJumped', { n }), 3500);
+        return;
+      }
     }
     $('#sync-jump-text').textContent = t('syncJump', { n });
     bar.hidden = false;
@@ -4674,6 +4706,14 @@
     syncJumpTarget = o;
   }
   let syncJumpTarget = null;
+
+  function jumpToSynced(o, back) {
+    if (!o || !current || current.key !== o.key) return;
+    if (back) pushBack();
+    scrollToAnchor(o.pos);
+    if (paged()) pg.anchor = o.pos;
+    savePosition();
+  }
 
   async function afterSignIn(session) {
     cloud = { session, lastPull: null, uploaded: [] };
@@ -4885,11 +4925,7 @@
     $('#sync-jump-go').addEventListener('click', () => {
       const o = syncJumpTarget;
       $('#sync-jump').hidden = true;
-      if (!o || !current || current.key !== o.key) return;
-      pushBack();
-      scrollToAnchor(o.pos);
-      if (paged()) pg.anchor = o.pos;
-      savePosition();
+      jumpToSynced(o, true);
     });
     $('#sync-jump-close').addEventListener('click', () => {
       $('#sync-jump').hidden = true;
