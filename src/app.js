@@ -1177,16 +1177,9 @@
       tick.style.left = tickLeft(tocStarts[k]);
       ui.scrubTicks.append(tick);
     });
-    const bm = bookMarks();
-    for (const b of bm.bookmarks) {
+    for (const b of bookMarks().bookmarks) {
       const tick = el('i', 'bm');
       tick.style.left = tickLeft(b.pos);
-      ui.scrubTicks.append(tick);
-    }
-    for (const n of bm.notes) {
-      if (n.orphan) continue;
-      const tick = el('i', 'nt ' + n.color);
-      tick.style.left = tickLeft(n.start);
       ui.scrubTicks.append(tick);
     }
   }

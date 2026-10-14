@@ -162,7 +162,7 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
   opacity: 0;
   transition: opacity 0.15s;
 }
-.scrub-wrap.scrubbing #scrub-ticks i:not(.bm):not(.nt) { opacity: 0.3; }
+.scrub-wrap.scrubbing #scrub-ticks i:not(.bm) { opacity: 0.3; }
 #scrub-tip {
   position: absolute;
   bottom: calc(100% + 6px);
@@ -1112,11 +1112,6 @@ kbd {
 :root[data-footer="auto"][data-chrome="hidden"] #auto-pill { bottom: 22px; }
 
 #scrub-ticks i.bm { top: calc(50% - 15px); width: 2px; height: 8px; background: var(--accent); opacity: 1; border-radius: 1px; }
-#scrub-ticks i.nt { top: calc(50% - 13px); width: 4px; height: 4px; border-radius: 50%; opacity: 1; margin-left: -1px; }
-#scrub-ticks i.nt.yellow { background: rgb(var(--c-yellow)); }
-#scrub-ticks i.nt.green { background: rgb(var(--c-green)); }
-#scrub-ticks i.nt.blue { background: rgb(var(--c-blue)); }
-#scrub-ticks i.nt.pink { background: rgb(var(--c-pink)); }
 
 .logo-icon { width: 92px; height: 92px; margin-bottom: 10px; filter: drop-shadow(0 8px 18px rgb(0 0 0 / 0.25)); }
 
