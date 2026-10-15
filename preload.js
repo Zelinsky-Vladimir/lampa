@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('api', {
   setUiLang: (lang) => ipcRenderer.send('app:ui-lang', lang),
   translate: (text, to) => ipcRenderer.invoke('translate', { text, to }),
   define: (word) => ipcRenderer.invoke('dict:define', String(word || '')),
+  netGet: (url, opts) => ipcRenderer.invoke('net:get', { url, ...(opts || {}) }),
   lookUp: () => ipcRenderer.invoke('dict:look-up'),
   capture: (rect) => ipcRenderer.invoke('capture', rect),
 });

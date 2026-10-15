@@ -1600,3 +1600,82 @@ kbd {
 select:focus, select:focus-visible { outline: none; border-color: var(--accent); }
 #safe-top { position: fixed; inset: 0 0 auto 0; z-index: 16; height: env(safe-area-inset-top, 0px); background: var(--bg); pointer-events: none; }
 .sw-clear { flex: none; width: 22px; height: 22px; padding: 0; border: 2px solid var(--muted); border-radius: 50%; background: linear-gradient(to top right, transparent calc(50% - 1px), var(--muted) calc(50% - 1px), var(--muted) calc(50% + 1px), transparent calc(50% + 1px)); cursor: pointer; }
+
+#cat-view { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; background: var(--bg); color: var(--fg); }
+.cat-bar { flex: none; display: flex; align-items: center; gap: 8px; height: var(--bar-h); padding: 0 12px; border-bottom: 1px solid var(--border); }
+.cat-head { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; line-height: 1.25; }
+.cat-head b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; }
+.cat-head span { font-size: 12px; color: var(--muted); }
+.cat-head span:empty { display: none; }
+.cat-bar-end { width: 40px; }
+.cat-body { flex: 1; min-height: 0; display: flex; }
+#cat-side { flex: none; width: 280px; padding: 16px 12px; overflow-y: auto; border-right: 1px solid var(--border); }
+#cat-main { flex: 1; min-width: 0; overflow-y: auto; padding: 20px 28px 40px; }
+@media (max-width: 899px) { #cat-side { display: none; } #cat-main { padding: 12px 16px 40px; } }
+.cat-list { max-width: 640px; }
+.cat-section { margin: 14px 4px 6px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.cat-section:first-child { margin-top: 0; }
+.cat-row, .cat-nav { width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 8px; border: none; border-radius: 12px; background: none; color: var(--fg); font: inherit; text-align: left; cursor: pointer; }
+.cat-row.active { background: var(--faint); }
+.cat-row svg, .cat-nav svg { flex: none; width: 18px; height: 18px; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.cat-badge { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 11px; color: #fff; font: 700 18px Georgia, serif; background: linear-gradient(160deg, hsl(var(--h) 38% 46%), hsl(var(--h) 42% 30%)); }
+.cat-lab { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cat-lab b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; }
+.cat-lab span { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cat-add { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 14px; padding: 12px; border: none; border-radius: 12px; background: var(--faint); color: var(--accent); font: 700 15px var(--ui); cursor: pointer; }
+.cat-add svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+.cat-restore { margin-top: 8px; padding: 6px 8px; border: none; background: none; color: var(--accent); font: 600 13px var(--ui); cursor: pointer; }
+.cat-hint { margin: 10px 4px 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.cat-empty { margin-top: 40px; text-align: center; color: var(--muted); }
+.cat-search { display: flex; align-items: center; gap: 8px; max-width: 520px; height: 42px; margin-bottom: 12px; padding: 0 12px; border-radius: 12px; background: var(--faint); }
+.cat-search svg { flex: none; width: 18px; height: 18px; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; }
+.cat-search input { flex: 1; min-width: 0; border: none; background: none; color: var(--fg); font: 15px var(--ui); outline: none; }
+.cat-navs { max-width: 760px; }
+.cat-nav { border-bottom: 1px solid var(--border); border-radius: 0; padding: 13px 4px; }
+.cat-books { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 0 24px; }
+@media (max-width: 899px) { .cat-books { grid-template-columns: 1fr; } }
+.cat-book { width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 0; border: none; border-bottom: 1px solid var(--border); background: none; color: var(--fg); font: inherit; text-align: left; cursor: pointer; }
+.cat-book > svg { flex: none; width: 18px; height: 18px; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.cat-cover { flex: none; width: 52px; height: 76px; border-radius: 6px; object-fit: cover; box-shadow: 0 3px 8px rgb(40 30 20 / 0.18); }
+.cat-cover.ph, .cat-dcover.ph { display: grid; place-items: center; color: rgb(255 255 255 / 0.85); font: 700 22px Georgia, serif; background: linear-gradient(160deg, hsl(var(--h) 38% 46%), hsl(var(--h) 42% 30%)); }
+.cat-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cat-info b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.cat-author { font-size: 13px; color: var(--muted); }
+.cat-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+.cat-chip { padding: 2px 7px; border: none; border-radius: 6px; background: var(--faint); color: var(--muted); font: 700 11px var(--ui); letter-spacing: 0.03em; }
+.cat-chip.pick { padding: 5px 10px; font-size: 12.5px; letter-spacing: 0; cursor: pointer; }
+.cat-chip.pick.on { background: color-mix(in srgb, var(--accent) 18%, var(--bg)); color: var(--fg); }
+.cat-btn { flex: none; height: 34px; padding: 0 14px; border: none; border-radius: 17px; background: var(--faint); color: var(--fg); font: 700 14px var(--ui); cursor: pointer; }
+.cat-btn.read { background: var(--accent); color: #fff; }
+.cat-ring { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--faint); border-top-color: var(--accent); animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.cat-nofmt { flex: none; font-size: 12px; color: var(--muted); }
+.cat-more { display: block; margin: 18px auto 0; padding: 10px 18px; border: none; border-radius: 12px; background: none; color: var(--accent); font: 700 15px var(--ui); cursor: pointer; }
+.cat-state { max-width: 520px; margin: 28px auto; text-align: center; color: var(--muted); line-height: 1.5; }
+.cat-state .cat-btn { margin-top: 10px; }
+.cat-state.skel { margin: 0; text-align: left; }
+.cat-skel { display: flex; gap: 12px; align-items: center; padding: 10px 0; }
+.cat-skel i { width: 52px; height: 76px; border-radius: 6px; background: var(--faint); }
+.cat-skel span { flex: 1; max-width: 360px; height: 12px; border-radius: 6px; background: var(--faint); }
+.cat-detail { max-width: 760px; }
+.cat-dhead { display: flex; gap: 18px; }
+.cat-dcover { flex: none; width: 120px; height: 176px; border-radius: 8px; object-fit: cover; box-shadow: 0 6px 16px rgb(40 30 20 / 0.2); }
+.cat-dcover.ph { font-size: 52px; }
+.cat-dmeta { min-width: 0; padding-top: 2px; }
+.cat-dmeta h2 { margin: 0; font: 700 23px/1.2 var(--font); }
+.cat-dmeta .cat-author { margin-top: 6px; font-size: 15px; }
+.cat-facts { margin-top: 6px; font-size: 13px; color: var(--muted); }
+.cat-dacts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.cat-dacts .primary-btn { flex: 1 1 200px; justify-content: center; }
+.cat-dacts .sync-btn { flex: 0 1 auto; width: auto; padding: 0 16px; }
+.cat-nofmt-note { flex-basis: 100%; margin: 0; color: var(--muted); }
+.cat-summary { margin-top: 20px; font: 16px/1.55 var(--font); overflow-wrap: anywhere; }
+.cat-summary p { margin: 0 0 6px; }
+.cat-related { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
+.cat-form { max-width: 520px; display: flex; flex-direction: column; gap: 12px; }
+.cat-form .fld { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+.cat-form .fld input { height: 44px; padding: 0 12px; border: 1.5px solid var(--border); border-radius: 12px; background: var(--bg); color: var(--fg); font: 16px var(--ui); }
+.cat-form .fld.bad input { border-color: #c0503c; }
+.cat-err { margin: -4px 0 0; font-size: 13px; color: #c0503c; }
+.cat-toggle { align-self: flex-start; padding: 4px 0; border: none; background: none; color: var(--muted); font: 15px var(--ui); cursor: pointer; }
+.cat-form .primary-btn { justify-content: center; }

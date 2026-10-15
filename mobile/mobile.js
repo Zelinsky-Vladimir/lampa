@@ -510,6 +510,38 @@
     },
 
     define: (word) => Online.define(String(word || '').slice(0, 80), getJson),
+    async netGet(url, opts = {}) {
+      if (!/^https?:\/\//i.test(String(url))) throw new Error('BAD_URL');
+      const headers = { Accept: opts.as === 'bytes' ? '*/*' : 'application/atom+xml, application/xml;q=0.9, */*;q=0.8' };
+      if (opts.auth && opts.auth.user) headers.Authorization = 'Basic ' + btoa(unescape(encodeURIComponent(`${opts.auth.user}:${opts.auth.pass || ''}`)));
+      if (!native) {
+        let r;
+        try {
+          r = await fetch(url, { headers });
+        } catch {
+          throw new Error('OFFLINE');
+        }
+        if (r.status === 401 || r.status === 403) throw new Error('AUTH');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const type = r.headers.get('content-type') || '';
+        return opts.as === 'bytes' ? { bytes: new Uint8Array(await r.arrayBuffer()), type, url: r.url } : { text: await r.text(), type, url: r.url };
+      }
+      let r;
+      try {
+        r = await Http.request({ url, method: 'GET', headers, responseType: opts.as === 'bytes' ? 'arraybuffer' : 'text', connectTimeout: 20000, readTimeout: 60000 });
+      } catch {
+        throw new Error('OFFLINE');
+      }
+      if (r.status === 401 || r.status === 403) throw new Error('AUTH');
+      if (r.status >= 400) throw new Error('HTTP ' + r.status);
+      const type = (r.headers && (r.headers['Content-Type'] || r.headers['content-type'])) || '';
+      if (opts.as === 'bytes') {
+        const bytes = typeof r.data === 'string' ? b64ToBytes(r.data) : new Uint8Array(r.data);
+        if (bytes.length > MAX_BOOK_SIZE) throw new Error('TOO_LARGE');
+        return { bytes, type, url: r.url || url };
+      }
+      return { text: typeof r.data === 'string' ? r.data : JSON.stringify(r.data), type, url: r.url || url };
+    },
     async lookUp(word) {
       if (!Dictionary) return false;
       const res = await Dictionary.show({ term: String(word || '') });

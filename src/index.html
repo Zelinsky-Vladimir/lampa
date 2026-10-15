@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob: data: lampa-cover:; font-src 'self'; connect-src https://lxztjateewlladvgzzlj.supabase.co http://127.0.0.1:54321 https://*.r2.cloudflarestorage.com">
+        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob: data: lampa-cover: https:; font-src 'self'; connect-src https://lxztjateewlladvgzzlj.supabase.co http://127.0.0.1:54321 https://*.r2.cloudflarestorage.com">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Lampa</title>
   <link rel="stylesheet" href="fonts/fonts.css">
@@ -533,6 +533,18 @@
   <div id="undo-toast" role="status" hidden><span id="undo-text"></span><button id="undo-btn" data-i18n="undo"></button></div>
   <div id="toast" role="status"></div>
   <div id="import-card" role="status" hidden></div>
+
+  <section id="cat-view" hidden>
+    <header class="cat-bar">
+      <button class="icon-btn" id="cat-back" data-i18n-title="close" data-i18n-aria="close"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <div class="cat-head"><b id="cat-title"></b><span id="cat-sub"></span></div>
+      <span class="cat-bar-end"></span>
+    </header>
+    <div class="cat-body">
+      <aside id="cat-side"></aside>
+      <div id="cat-main"></div>
+    </div>
+  </section>
   <div id="sync-jump" role="status" hidden>
     <span id="sync-jump-text"></span>
     <button class="primary-btn" id="sync-jump-go" data-i18n="syncJumpGo"></button>
@@ -549,6 +561,7 @@
   <script src="parsers.js"></script>
   <script src="stamps.js"></script>
   <script src="cloud.js"></script>
+  <script src="opds.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

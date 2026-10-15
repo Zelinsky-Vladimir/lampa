@@ -20,7 +20,7 @@ function swap(a, b) {
   html = html.replace(a, b);
 }
 swap('content="width=device-width, initial-scale=1"', 'content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"');
-swap("img-src 'self' blob: data: lampa-cover:;", "img-src 'self' blob: data: capacitor: https:;");
+swap("img-src 'self' blob: data: lampa-cover: https:;", "img-src 'self' blob: data: capacitor: https:;");
 swap('connect-src https://lxztjateewlladvgzzlj.supabase.co http://127.0.0.1:54321 https://*.r2.cloudflarestorage.com', "connect-src 'self' https:");
 swap('src="../build/icon.png"', 'src="icon.png"');
 swap('<link rel="stylesheet" href="styles.css">', '<link rel="stylesheet" href="styles.css">\n  <link rel="stylesheet" href="mobile.css">');

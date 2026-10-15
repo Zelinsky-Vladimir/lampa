@@ -2034,6 +2034,7 @@
   function openAddMenu(e) {
     const items = [{ label: t('addFiles'), sub: t('addFilesSub'), icon: 'file', run: pickBooks }];
     if (api.pickFolder) items.push({ label: t('addFolder'), sub: t('addFolderSub'), icon: 'folder', run: pickFolder });
+    if (api.netGet) items.push({ label: t('catalogs'), sub: t('catalogsSub'), icon: 'globe', run: openCatalogs });
     const node = e.currentTarget;
     const r = node.getBoundingClientRect();
     openContextMenu(node, items, coarsePointer() ? undefined : { x: r.left + 56, y: r.bottom + 6 });
@@ -2071,6 +2072,23 @@
   const refName = (ref) => (api.refName ? api.refName(ref) : String(ref).split(/[\\/]/).pop());
   let importJob = null;
 
+  async function addToLibrary(p) {
+    const data = await loadBookFile(p);
+    const book = Parsers.parseBook(data);
+    try {
+      const key = `${data.size}|${book.title}|${book.author}`;
+      const found = library.find((x) => x.key === key || (data.hash && x.hash === data.hash));
+      if (found) return { status: 'existed', entry: found };
+      if (library.length >= LIBRARY_LIMIT) return { status: 'full' };
+      const thumb = book.coverUrl ? await makeThumb(book.coverUrl, 100) : null;
+      const entry = { key, path: data.path, source: data.source, hash: data.hash, name: data.name, title: book.title, author: book.author, progress: 0, pos: null, openedAt: 0, addedAt: Date.now(), thumb };
+      library.push(entry);
+      return { status: 'added', entry };
+    } finally {
+      book.urls.forEach((u) => URL.revokeObjectURL(u));
+    }
+  }
+
   async function importBooks(refs, folder) {
     if (importJob) {
       toast(t('importBusy'), 3000);
@@ -2084,17 +2102,10 @@
       renderImportCard();
       try {
         const p = await api.importRef(ref);
-        const data = await loadBookFile(p);
-        const book = Parsers.parseBook(data);
-        const key = `${data.size}|${book.title}|${book.author}`;
-        if (library.some((x) => x.key === key || (data.hash && x.hash === data.hash))) job.existed++;
-        else if (library.length >= LIBRARY_LIMIT) job.full++;
-        else {
-          const thumb = book.coverUrl ? await makeThumb(book.coverUrl, 100) : null;
-          library.push({ key, path: data.path, source: data.source, hash: data.hash, name: data.name, title: book.title, author: book.author, progress: 0, pos: null, openedAt: 0, addedAt: Date.now(), thumb });
-          job.added++;
-        }
-        book.urls.forEach((u) => URL.revokeObjectURL(u));
+        const r = await addToLibrary(p);
+        if (r.status === 'added') job.added++;
+        else if (r.status === 'existed') job.existed++;
+        else job.full++;
       } catch (err) {
         const msg = String((err && err.message) || err);
         job.failed.push({ name: job.name, reason: /UNSUPPORTED/.test(msg) ? t('errUnsupported') : /TOO_LARGE/.test(msg) ? t('errTooLarge') : t('importBroken') });
@@ -2175,6 +2186,534 @@
       acts.append(what);
     }
     if (acts.children.length) card.append(acts);
+  }
+
+  const CATALOGS_KEY = 'lampa.catalogs';
+  const BUILTIN_CATALOGS = [{ id: 'gutenberg', title: 'Project Gutenberg', url: 'https://www.gutenberg.org/ebooks.opds/', search: 'https://www.gutenberg.org/ebooks/search.opds/?query={searchTerms}', sub: 'catGutenbergSub', builtin: true }];
+  let catalogs = loadJSON(CATALOGS_KEY, null) || {};
+  catalogs = { own: Array.isArray(catalogs.own) ? catalogs.own : [], hidden: Array.isArray(catalogs.hidden) ? catalogs.hidden : [] };
+  const saveCatalogs = () => saveJSON(CATALOGS_KEY, catalogs);
+  const catalogList = () => [...BUILTIN_CATALOGS.filter((c) => !catalogs.hidden.includes(c.id)), ...catalogs.own];
+  const catById = (id) => BUILTIN_CATALOGS.find((c) => c.id === id) || catalogs.own.find((c) => c.id === id) || null;
+  const catAuth = (cat) => (cat && cat.user ? { user: cat.user, pass: cat.pass || '' } : null);
+  const catWide = () => matchMedia('(min-width: 900px)').matches;
+  const catOpen = () => !$('#cat-view').hidden;
+  const catSearchTpl = new Map(BUILTIN_CATALOGS.map((c) => [c.id, c.search]));
+  const catFiles = new Map();
+  let catStack = [];
+
+  function openCatalogs() {
+    const list = catalogList();
+    catStack = catWide() ? [] : [{ type: 'list' }];
+    $('#cat-view').hidden = false;
+    root.classList.add('cat-on');
+    if (catWide() && list.length) catOpenFeed(list[0], list[0].url, list[0].title, true);
+    else renderCat();
+    playEnter($('#cat-view'), 'enter-left');
+  }
+
+  function closeCatalogs() {
+    $('#cat-view').hidden = true;
+    root.classList.remove('cat-on');
+    catStack = [];
+  }
+
+  function catBack() {
+    if (catStack.length > 1) {
+      catStack.pop();
+      renderCat();
+    } else closeCatalogs();
+  }
+
+  function catTop() {
+    return catStack[catStack.length - 1] || { type: catWide() ? 'pick' : 'list' };
+  }
+
+  function catOpenFeed(cat, url, title, reset) {
+    const screen = { type: 'feed', catId: cat.id, url, title, entries: [], next: '', state: 'loading', search: catSearchTpl.get(cat.id) || '' };
+    if (reset) catStack = catWide() ? [screen] : [{ type: 'list' }, screen];
+    else catStack.push(screen);
+    renderCat();
+    catLoad(screen, url, false);
+  }
+
+  async function catLoad(screen, url, append) {
+    const cat = catById(screen.catId);
+    screen.loadingMore = append;
+    try {
+      const res = await api.netGet(url, { auth: catAuth(cat) });
+      const feed = Opds.parseFeed(res.text, res.url || url);
+      screen.entries = append ? screen.entries.concat(feed.entries) : feed.entries;
+      screen.next = feed.next;
+      if (!screen.title || screen.root) screen.title = screen.title || feed.title;
+      if (feed.search && !catSearchTpl.get(screen.catId)) {
+        let tpl = Opds.searchTemplate(feed.search, '', res.url || url);
+        if (!tpl) {
+          const osd = await api.netGet(feed.search.href, { auth: catAuth(cat) }).catch(() => null);
+          tpl = osd ? Opds.searchTemplate(feed.search, osd.text, feed.search.href) : '';
+        }
+        if (tpl) catSearchTpl.set(screen.catId, tpl);
+      }
+      screen.search = catSearchTpl.get(screen.catId) || '';
+      screen.state = 'ok';
+    } catch (e) {
+      const msg = String((e && e.message) || e);
+      if (append) toast(t('catLoadFailed'), 4000);
+      else screen.state = /AUTH/.test(msg) ? 'auth' : /OFFLINE|HTTP/.test(msg) ? 'offline' : 'broken';
+    }
+    screen.loadingMore = false;
+    if (catStack.includes(screen)) renderCat();
+  }
+
+  function catBooks(entries) {
+    const groups = new Map();
+    for (const e of entries) {
+      if (!e.files.length && !e.other.length) continue;
+      const key = (e.title + '|' + e.author).toLowerCase();
+      const g = groups.get(key);
+      const rank = e.files.length ? Math.min(...e.files.map((f) => f.rank)) : 99;
+      if (!g) {
+        groups.set(key, { ...e, files: [...e.files], other: [...e.other], rank });
+        continue;
+      }
+      for (const f of e.files) if (!g.files.some((x) => x.href === f.href)) g.files.push(f);
+      for (const o of e.other) if (!g.other.includes(o)) g.other.push(o);
+      if (rank < g.rank || (rank === g.rank && e.summary.length > g.summary.length)) {
+        g.summary = e.summary;
+        g.rank = rank;
+      }
+      g.cover = g.cover || e.cover;
+      g.thumb = g.thumb || e.thumb;
+    }
+    for (const g of groups.values()) g.files.sort((a, b) => a.rank - b.rank);
+    return Array.from(groups.values());
+  }
+
+  const catNorm = (s) => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  function catInLibrary(book) {
+    const known = book.files.map((f) => catFiles.get(f.href)).find((v) => v && v.path);
+    if (known) return library.find((x) => x.path === known.path) || null;
+    const title = catNorm(book.title);
+    return library.find((x) => catNorm(x.title) === title && (!book.author || !x.author || catNorm(x.author).split(' ').some((w) => w.length > 2 && catNorm(book.author).includes(w)))) || null;
+  }
+
+  function catCover(book, cls) {
+    const ph = el('div', cls + ' ph', (book.title || '?').trim().charAt(0).toUpperCase());
+    ph.style.setProperty('--h', hue(book.title));
+    const src = book.thumb || book.cover;
+    if (!src) return ph;
+    const img = el('img', cls);
+    img.alt = '';
+    img.loading = 'lazy';
+    img.referrerPolicy = 'no-referrer';
+    img.src = src;
+    img.addEventListener('error', () => img.replaceWith(ph));
+    return img;
+  }
+
+  function catAction(book, cat) {
+    const file = book.files[0];
+    if (!file) return el('span', 'cat-nofmt', book.other.join(', '));
+    const busy = book.files.some((f) => catFiles.get(f.href) === 'busy');
+    if (busy) {
+      const ring = el('span', 'cat-ring');
+      ring.title = t('catDownloading');
+      return ring;
+    }
+    const have = catInLibrary(book);
+    const b = el('button', have ? 'cat-btn read' : 'cat-btn', have ? t('catRead') : t('catGet'));
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (have) {
+        closeCatalogs();
+        openEntryPath(have);
+      } else catDownload(book, file, cat, false);
+    });
+    return b;
+  }
+
+  function openEntryPath(entry) {
+    if (entry.path) openPath(entry.path);
+    else openEntry(entry);
+  }
+
+  async function catDownload(book, file, cat, open) {
+    if (catFiles.get(file.href) === 'busy') return;
+    catFiles.set(file.href, 'busy');
+    renderCat();
+    try {
+      const res = await api.netGet(file.href, { as: 'bytes', auth: catAuth(cat) });
+      const name = `${(book.title || 'book').replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 80) || 'book'}.${file.ext}`;
+      const p = await api.saveBookFile(name, res.bytes);
+      const r = await addToLibrary(p);
+      if (r.status === 'full') throw new Error(t('importFull', { n: 1 }));
+      catFiles.set(file.href, { path: r.entry ? r.entry.path : p });
+      saveLibrary();
+      refreshHome();
+      if (open) {
+        closeCatalogs();
+        openPath(r.entry && r.entry.path ? r.entry.path : p);
+        return;
+      }
+      toast(t('catAdded', { title: book.title }), 3000);
+    } catch (e) {
+      catFiles.delete(file.href);
+      toast(t('catDownloadFailed', { e: errorText(e) }), 5000);
+    }
+    if (catOpen()) renderCat();
+  }
+
+  function catWant(book) {
+    const title = catNorm(book.title);
+    if (shelf.some((b) => catNorm(b.title) === title)) {
+      toast(t('catAlreadyListed'), 3000);
+      return;
+    }
+    const entry = { id: uid(), added: Date.now(), cover: null, list: 'want', title: book.title, author: book.author, year: /^\d{4}/.test(book.issued) ? book.issued.slice(0, 4) : '', rating: 0, finished: '', note: '', ref: '', genre: '', world: null, checked: Date.now() };
+    entry.pos = nextWantPos();
+    shelf.push(entry);
+    saveShelf();
+    refreshHome();
+    toast(t('shelfMoved', { list: listName('want') }));
+    if (book.cover) Promise.resolve(setCover(entry, book.cover)).catch(() => {});
+  }
+
+  function renderCatSide() {
+    const side = $('#cat-side');
+    side.replaceChildren(catListNode());
+  }
+
+  function catListNode() {
+    const box = el('div', 'cat-list');
+    const top = catTop();
+    const active = top.catId || '';
+    const section = (label, items) => {
+      if (!items.length) return;
+      box.append(el('div', 'cat-section', label));
+      for (const cat of items) {
+        const row = el('button', 'cat-row' + (cat.id === active ? ' active' : ''));
+        const badge = el('span', 'cat-badge', (cat.title || '?').trim().charAt(0).toUpperCase());
+        badge.style.setProperty('--h', hue(cat.title));
+        const lab = el('span', 'cat-lab');
+        lab.append(el('b', '', cat.title), el('span', '', cat.builtin ? t(cat.sub) : cat.url.replace(/^https?:\/\//, '').replace(/\/$/, '')));
+        row.append(badge, lab, svgIcon('M9 5l7 7-7 7'));
+        row.addEventListener('click', () => catOpenFeed(cat, cat.url, cat.title, true));
+        withMenu(row, () => [cat.builtin
+          ? { label: t('catHide'), icon: 'trash', danger: true, run: () => { catalogs.hidden.push(cat.id); saveCatalogs(); renderCat(); } }
+          : { label: t('catDelete'), icon: 'trash', danger: true, run: () => { catalogs.own = catalogs.own.filter((c) => c.id !== cat.id); saveCatalogs(); if (catTop().catId === cat.id) catStack = catWide() ? [] : [{ type: 'list' }]; renderCat(); } }]);
+        box.append(row);
+      }
+    };
+    section(t('catBuiltin'), BUILTIN_CATALOGS.filter((c) => !catalogs.hidden.includes(c.id)));
+    section(t('catOwn'), catalogs.own);
+    const add = el('button', 'cat-add');
+    add.append(svgIcon('M12 5v14M5 12h14'), el('span', '', t('catAddTitle')));
+    add.addEventListener('click', () => {
+      catStack.push({ type: 'add', url: '', name: '', user: '', pass: '', needAuth: false, state: 'idle', error: '' });
+      renderCat();
+    });
+    box.append(add);
+    if (catalogs.hidden.length) {
+      const restore = el('button', 'cat-restore', t('catRestore'));
+      restore.addEventListener('click', () => {
+        catalogs.hidden = [];
+        saveCatalogs();
+        renderCat();
+      });
+      box.append(restore);
+    }
+    box.append(el('p', 'cat-hint', t('catHint')));
+    return box;
+  }
+
+  function renderCat() {
+    if (!catOpen()) return;
+    const top = catTop();
+    const main = $('#cat-main');
+    main.replaceChildren();
+    main.scrollTop = 0;
+    renderCatSide();
+    const cat = top.catId ? catById(top.catId) : null;
+    $('#cat-title').textContent = top.type === 'list' || top.type === 'pick' ? t('catalogs') : top.type === 'add' ? t('catAddTitle') : top.type === 'book' ? top.book.title : top.title || (cat && cat.title) || '';
+    $('#cat-sub').textContent = top.type === 'feed' && cat && top.title !== cat.title ? cat.title : top.type === 'book' && cat ? cat.title : '';
+    if (top.type === 'list') return main.append(catListNode());
+    if (top.type === 'pick') return main.append(el('p', 'cat-empty', t('catPick')));
+    if (top.type === 'add') return main.append(catAddNode(top));
+    if (top.type === 'book') return main.append(catBookNode(top.book, cat));
+    main.append(catFeedNode(top, cat));
+  }
+
+  function catState(kind, retry) {
+    const box = el('div', 'cat-state');
+    if (kind === 'loading') {
+      box.classList.add('skel');
+      for (let i = 0; i < 6; i++) {
+        const r = el('div', 'cat-skel');
+        r.append(el('i'), el('span'));
+        box.append(r);
+      }
+      return box;
+    }
+    box.append(el('p', '', t(kind === 'offline' ? 'catOffline' : kind === 'auth' ? 'catNeedAuth' : kind === 'empty' ? 'catNothing' : 'catBroken')));
+    if (retry) {
+      const b = el('button', 'cat-btn', t(kind === 'auth' ? 'catSignIn' : 'catRetry'));
+      b.addEventListener('click', retry);
+      box.append(b);
+    }
+    return box;
+  }
+
+  function catFeedNode(screen, cat) {
+    const box = el('div', 'cat-feed');
+    const single = screen.state === 'ok' && catBooks(screen.entries).length === 1 && !screen.entries.some((e) => e.nav && !e.files.length && !e.other.length) && !screen.next;
+    if (screen.search && !screen.isSearch && !single) {
+      const form = el('form', 'cat-search');
+      const input = el('input');
+      input.type = 'search';
+      input.placeholder = t('catSearchIn', { name: cat ? cat.title : '' });
+      input.enterKeyHint = 'search';
+      form.append(svgIcon('M11 4.5a6.5 6.5 0 1 0 0 13a6.5 6.5 0 1 0 0-13zM20 20l-4.2-4.2'), input);
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const q = input.value.trim();
+        if (!q) return;
+        input.blur();
+        const s = { type: 'feed', catId: screen.catId, url: Opds.fillSearch(screen.search, q), title: q, isSearch: true, entries: [], next: '', state: 'loading', search: screen.search };
+        catStack.push(s);
+        renderCat();
+        catLoad(s, s.url, false);
+      });
+      box.append(form);
+    }
+    if (screen.state === 'loading') return box.append(catState('loading')), box;
+    if (screen.state !== 'ok') {
+      box.append(catState(screen.state, () => {
+        if (screen.state === 'auth' && cat && !cat.builtin) {
+          catStack.push({ type: 'add', edit: cat.id, url: cat.url, name: cat.title, user: cat.user || '', pass: '', needAuth: true, state: 'idle', error: '' });
+          renderCat();
+          return;
+        }
+        screen.state = 'loading';
+        renderCat();
+        catLoad(screen, screen.url, false);
+      }));
+      return box;
+    }
+    const books = catBooks(screen.entries);
+    const navs = screen.entries.filter((e) => e.nav && !e.files.length && !e.other.length);
+    if (books.length === 1 && !navs.length && !screen.next) {
+      box.append(catBookNode(books[0], cat));
+      return box;
+    }
+    if (!books.length && !navs.length) {
+      box.append(catState(screen.isSearch ? 'empty' : 'broken'));
+      return box;
+    }
+    const plain = navs.filter((n) => !n.thumb);
+    const pages = navs.filter((n) => n.thumb);
+    if (plain.length) {
+      const list = el('div', 'cat-navs');
+      for (const n of plain) {
+        const row = el('button', 'cat-nav');
+        const lab = el('span', 'cat-lab');
+        lab.append(el('b', '', n.title));
+        const sub = n.author || n.summary;
+        if (sub) lab.append(el('span', '', sub.split('\n')[0]));
+        row.append(lab, svgIcon('M9 5l7 7-7 7'));
+        row.addEventListener('click', () => catOpenFeed(cat, n.nav, n.title, false));
+        list.append(row);
+      }
+      box.append(list);
+    }
+    if (pages.length) {
+      const grid = el('div', 'cat-books');
+      for (const n of pages) {
+        const row = el('button', 'cat-book');
+        const info = el('div', 'cat-info');
+        info.append(el('b', '', n.title), el('span', 'cat-author', n.author || (n.summary || '').split('\n')[0]));
+        row.append(catCover(n, 'cat-cover'), info, svgIcon('M9 5l7 7-7 7'));
+        row.addEventListener('click', () => catOpenFeed(cat, n.nav, n.title, false));
+        grid.append(row);
+      }
+      box.append(grid);
+    }
+    if (books.length) {
+      const grid = el('div', 'cat-books');
+      for (const b of books) {
+        const row = el('div', 'cat-book');
+        row.tabIndex = 0;
+        row.setAttribute('role', 'button');
+        const info = el('div', 'cat-info');
+        info.append(el('b', '', b.title), el('span', 'cat-author', b.author));
+        const chips = el('div', 'cat-chips');
+        const labels = Array.from(new Set(b.files.map((f) => f.label)));
+        for (const l of labels) chips.append(el('span', 'cat-chip', l));
+        info.append(chips);
+        row.append(catCover(b, 'cat-cover'), info, catAction(b, cat));
+        const open = () => {
+          catStack.push({ type: 'book', catId: screen.catId, book: b });
+          renderCat();
+        };
+        row.addEventListener('click', open);
+        row.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' && e.target === row) open();
+        });
+        grid.append(row);
+      }
+      box.append(grid);
+    }
+    if (screen.next) {
+      const more = el('button', 'cat-more', screen.loadingMore ? t('catLoading') : t('catMore'));
+      more.disabled = !!screen.loadingMore;
+      more.addEventListener('click', () => {
+        more.textContent = t('catLoading');
+        more.disabled = true;
+        catLoad(screen, screen.next, true);
+      });
+      box.append(more);
+    }
+    return box;
+  }
+
+  function catBookNode(book, cat) {
+    const box = el('div', 'cat-detail');
+    const head = el('div', 'cat-dhead');
+    const meta = el('div', 'cat-dmeta');
+    meta.append(el('h2', '', book.title));
+    if (book.author) meta.append(el('div', 'cat-author', book.author));
+    const facts = [book.issued, book.language].filter(Boolean).join(' · ');
+    if (facts) meta.append(el('div', 'cat-facts', facts));
+    let file = book.files[0];
+    if (book.files.length) {
+      const chips = el('div', 'cat-chips');
+      const seen = new Set();
+      for (const f of book.files) {
+        const label = f.label + (book.files.filter((x) => x.label === f.label).length > 1 && /noimages/i.test(f.href) ? ' · ' + t('catNoImages') : '');
+        if (seen.has(label)) continue;
+        seen.add(label);
+        const c = el('button', 'cat-chip pick' + (f === file ? ' on' : ''), label);
+        c.addEventListener('click', () => {
+          file = f;
+          for (const x of chips.children) x.classList.toggle('on', x === c);
+        });
+        chips.append(c);
+      }
+      meta.append(chips);
+    }
+    head.append(catCover({ ...book, thumb: book.cover || book.thumb }, 'cat-dcover'), meta);
+    box.append(head);
+    const acts = el('div', 'cat-dacts');
+    const have = catInLibrary(book);
+    if (have) {
+      const read = el('button', 'primary-btn', t('catRead'));
+      read.addEventListener('click', () => {
+        closeCatalogs();
+        openEntryPath(have);
+      });
+      acts.append(read);
+    } else if (file) {
+      const busy = book.files.some((f) => catFiles.get(f.href) === 'busy');
+      const get = el('button', 'primary-btn', busy ? t('catDownloading') : t('catGetRead'));
+      get.disabled = busy;
+      get.addEventListener('click', () => catDownload(book, file, cat, true));
+      acts.append(get);
+    } else acts.append(el('p', 'cat-nofmt-note', t('catNoFormat', { formats: book.other.join(', ') || '—' })));
+    const want = el('button', 'sync-btn', t('catWant'));
+    want.addEventListener('click', () => catWant(book));
+    acts.append(want);
+    box.append(acts);
+    if (book.summary) {
+      const s = el('div', 'cat-summary');
+      for (const line of book.summary.split('\n').slice(0, 12)) s.append(el('p', '', line));
+      box.append(s);
+    }
+    if (book.related && book.related.length) {
+      const rel = el('div', 'cat-related');
+      for (const r of book.related.slice(0, 12)) {
+        const b = el('button', 'cat-chip pick', r.title);
+        b.addEventListener('click', () => catOpenFeed(cat, r.href, r.title, false));
+        rel.append(b);
+      }
+      box.append(rel);
+    }
+    return box;
+  }
+
+  function catAddNode(screen) {
+    const form = el('form', 'cat-form');
+    const field = (label, name, type, value, hint) => {
+      const wrap = el('label', 'fld');
+      wrap.append(el('span', '', label));
+      const input = el('input');
+      input.type = type;
+      input.name = name;
+      input.value = value;
+      input.autocapitalize = 'off';
+      input.spellcheck = false;
+      if (hint) input.placeholder = hint;
+      input.addEventListener('input', () => (screen[name] = input.value));
+      wrap.append(input);
+      return wrap;
+    };
+    const url = field(t('catUrl'), 'url', 'url', screen.url, 'https://');
+    form.append(url);
+    if (screen.state === 'error') {
+      url.classList.add('bad');
+      form.append(el('p', 'cat-err', screen.error));
+    }
+    form.append(field(t('catName'), 'name', 'text', screen.name, t('catNameAuto')));
+    const toggle = el('button', 'cat-toggle', (screen.needAuth ? '▾ ' : '▸ ') + t('catNeedLogin'));
+    toggle.type = 'button';
+    toggle.addEventListener('click', () => {
+      screen.needAuth = !screen.needAuth;
+      renderCat();
+    });
+    form.append(toggle);
+    if (screen.needAuth) {
+      form.append(field(t('catLogin'), 'user', 'text', screen.user, ''));
+      const pass = field(t('catPassword'), 'pass', 'password', screen.pass, '');
+      pass.querySelector('input').autocomplete = 'current-password';
+      form.append(pass, el('p', 'cat-hint', t('catLocalOnly')));
+    }
+    const submit = el('button', 'primary-btn', screen.state === 'busy' ? t('catChecking') : screen.edit ? t('catSave') : t('catAddBtn'));
+    submit.type = 'submit';
+    submit.disabled = screen.state === 'busy';
+    form.append(submit, el('p', 'cat-hint', t('catAddHint')));
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      let link = String(screen.url || '').trim();
+      if (!link) return;
+      if (!/^https?:\/\//i.test(link)) link = 'https://' + link;
+      screen.url = link;
+      screen.state = 'busy';
+      renderCat();
+      const auth = screen.needAuth && screen.user ? { user: screen.user, pass: screen.pass } : null;
+      try {
+        const res = await api.netGet(link, { auth });
+        const feed = Opds.parseFeed(res.text, res.url || link);
+        const data = { title: (screen.name || '').trim() || feed.title || new URL(link).host, url: link, user: auth ? auth.user : '', pass: auth ? auth.pass : '' };
+        let cat;
+        if (screen.edit) {
+          cat = catalogs.own.find((c) => c.id === screen.edit);
+          Object.assign(cat, data);
+        } else {
+          cat = { id: uid(), ...data };
+          catalogs.own.push(cat);
+        }
+        saveCatalogs();
+        catSearchTpl.delete(cat.id);
+        catOpenFeed(cat, cat.url, cat.title, true);
+      } catch (err) {
+        const msg = String((err && err.message) || err);
+        screen.state = 'error';
+        if (/AUTH/.test(msg)) {
+          screen.needAuth = true;
+          screen.error = t('catNeedAuth');
+        } else screen.error = /OFFLINE/.test(msg) ? t('catOffline') : t('catNotOpds');
+        if (catStack.includes(screen)) renderCat();
+      }
+    });
+    return form;
   }
 
   function openAll() {
@@ -3437,6 +3976,7 @@
   function closeTopLayer() {
     if (!$('#confirm-dlg').hidden) closeConfirm(false);
     else if (ctxOpen()) closeContextMenu();
+    else if (catOpen()) catBack();
     else if (gotoOpen()) closeGoto();
     else if (endOpen()) closeEndCard(false);
     else if (!ui.trPop.hidden) closeTranslate();
@@ -5317,6 +5857,7 @@
     bindShelf();
     bindSync();
     $('#home-add').addEventListener('click', openAddMenu);
+    $('#cat-back').addEventListener('click', catBack);
     $('#home-open').addEventListener('click', openAddMenu);
     $('#btn-home').addEventListener('click', showHome);
     $('#btn-toc').addEventListener('click', () => openPanel(ui.tocPanel));

@@ -442,6 +442,27 @@ function registerIpc() {
     return img.isEmpty() ? null : img.toJPEG(92);
   });
 
+  ipcMain.handle('net:get', async (_e, req) => {
+    const url = req && typeof req.url === 'string' ? req.url : '';
+    if (!/^https?:\/\//i.test(url)) throw new Error('BAD_URL');
+    const headers = { 'User-Agent': booksUserAgent(), Accept: req.as === 'bytes' ? '*/*' : 'application/atom+xml, application/xml;q=0.9, */*;q=0.8' };
+    if (req.auth && typeof req.auth.user === 'string') headers.Authorization = 'Basic ' + Buffer.from(`${req.auth.user}:${req.auth.pass || ''}`).toString('base64');
+    let r;
+    try {
+      r = await net.fetch(url, { headers });
+    } catch {
+      throw new Error('OFFLINE');
+    }
+    if (r.status === 401 || r.status === 403) throw new Error('AUTH');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const type = r.headers.get('content-type') || '';
+    if (req.as === 'bytes') {
+      const buf = new Uint8Array(await r.arrayBuffer());
+      if (buf.length > MAX_BOOK_SIZE) throw new Error('TOO_LARGE');
+      return { bytes: buf, type, url: r.url };
+    }
+    return { text: await r.text(), type, url: r.url };
+  });
   ipcMain.handle('dict:define', (_e, word) => Online.define(String(word || '').slice(0, 80), fetchJson));
   ipcMain.handle('dict:look-up', (e) => {
     if (process.platform !== 'darwin') return false;
