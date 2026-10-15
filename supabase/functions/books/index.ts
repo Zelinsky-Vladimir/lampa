@@ -2,7 +2,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 import { AwsClient } from 'npm:aws4fetch@1.0.20';
 
 const MB = 1024 * 1024;
-const QUOTA = Number(Deno.env.get('BOOK_QUOTA_MB') ?? '300') * MB;
+const DEFAULT_QUOTA_MB = Number(Deno.env.get('BOOK_QUOTA_MB') ?? '100');
 const MAX_FILE = 50 * MB;
 const PENDING_MS = 60 * 60 * 1000;
 const EXTS = new Set(['fb2', 'epub', 'txt', 'zip']);
@@ -45,6 +45,12 @@ async function rowsOf(user: string): Promise<Row[]> {
   return data as Row[];
 }
 
+async function quotaOf(user: string) {
+  const { data, error } = await admin.from('book_quotas').select('quota_mb').eq('user_id', user).maybeSingle();
+  if (error) throw error;
+  return (data ? Number(data.quota_mb) : DEFAULT_QUOTA_MB) * MB;
+}
+
 const usedBy = (rows: Row[], except: string, withPending: boolean) =>
   rows
     .filter((r) => r.hash !== except && (r.ready || (withPending && Date.now() - Date.parse(r.created_at) < PENDING_MS)))
@@ -83,11 +89,11 @@ Deno.serve(async (req) => {
 
   try {
     if (action === 'list') {
-      const rows = await rowsOf(user);
+      const [rows, quota] = await Promise.all([rowsOf(user), quotaOf(user)]);
       return json({
         files: rows.filter((r) => r.ready).map(({ hash, ext, size }) => ({ hash, ext, size })),
         used: usedBy(rows, '', false),
-        quota: QUOTA,
+        quota,
       });
     }
 
@@ -103,8 +109,9 @@ Deno.serve(async (req) => {
     if (action === 'upload') {
       const size = Number(body.size);
       if (!(size > 0 && size <= MAX_FILE)) return json({ error: 'TOO_LARGE', max: MAX_FILE }, 413);
-      const used = usedBy(await rowsOf(user), hash, true);
-      if (used + size > QUOTA) return json({ error: 'QUOTA', used, quota: QUOTA }, 413);
+      const [rows, quota] = await Promise.all([rowsOf(user), quotaOf(user)]);
+      const used = usedBy(rows, hash, true);
+      if (used + size > quota) return json({ error: 'QUOTA', used, quota }, 413);
       const { error } = await admin
         .from('book_files')
         .upsert({ user_id: user, hash, ext, size, ready: false, created_at: new Date().toISOString() });
@@ -115,12 +122,13 @@ Deno.serve(async (req) => {
     if (action === 'confirm') {
       const size = await objectSize(user, hash, ext);
       if (size === null) return json({ error: 'NOT_UPLOADED' }, 409);
-      const used = usedBy(await rowsOf(user), hash, false);
-      const problem = !(size > 0) ? 'EMPTY' : size > MAX_FILE ? 'TOO_LARGE' : used + size > QUOTA ? 'QUOTA' : '';
+      const [rows, quota] = await Promise.all([rowsOf(user), quotaOf(user)]);
+      const used = usedBy(rows, hash, false);
+      const problem = !(size > 0) ? 'EMPTY' : size > MAX_FILE ? 'TOO_LARGE' : used + size > quota ? 'QUOTA' : '';
       if (problem) {
         await removeObject(user, hash, ext);
         await admin.from('book_files').delete().eq('user_id', user).eq('hash', hash);
-        return json({ error: problem, used, quota: QUOTA, max: MAX_FILE }, problem === 'EMPTY' ? 422 : 413);
+        return json({ error: problem, used, quota, max: MAX_FILE }, problem === 'EMPTY' ? 422 : 413);
       }
       const { error } = await admin.from('book_files').update({ size, ext, ready: true }).eq('user_id', user).eq('hash', hash);
       if (error) throw error;

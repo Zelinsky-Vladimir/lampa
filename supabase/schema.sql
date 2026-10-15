@@ -1,15 +1,3 @@
--- Lampa: синхронизация между устройствами.
--- Выполнить один раз в Supabase: SQL Editor → New query → вставить этот файл → Run.
--- Скрипт можно запускать повторно: он ничего не удаляет и не дублирует.
-
--- ---------- записи ----------
--- Одна строка — одна запись приложения:
---   kind = 'lib'   книга в библиотеке и место чтения (id — размер|название|автор)
---   kind = 'mark'  закладка или заметка (id из приложения)
---   kind = 'shelf' книга в «Прочитано» / «Хочу прочитать» (id из приложения)
--- updated_at — время изменения на устройстве (мс); побеждает более позднее.
--- server_at — когда запись пришла на сервер; по нему устройства забирают новое.
-
 create table if not exists public.records (
   user_id    uuid        not null default auth.uid() references auth.users (id) on delete cascade,
   kind       text        not null check (kind in ('lib', 'mark', 'shelf')),
@@ -32,11 +20,9 @@ create policy "records: only own" on public.records
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
--- Время прихода на сервер ставит сервер, а не устройство.
 create or replace function public.records_before_write() returns trigger
 language plpgsql as $$
 begin
-  -- более старая версия не затирает более новую (два устройства правили одно и то же)
   if tg_op = 'UPDATE' and new.updated_at <= old.updated_at then
     return null;
   end if;
@@ -48,9 +34,6 @@ drop trigger if exists records_before_write on public.records;
 create trigger records_before_write
   before insert or update on public.records
   for each row execute function public.records_before_write();
-
--- ---------- файлы книг ----------
--- Приватное хранилище: books/<id пользователя>/<отпечаток>.<расширение>, не больше 50 МБ на файл.
 
 insert into storage.buckets (id, name, public, file_size_limit)
 values ('books', 'books', false, 52428800)
@@ -107,3 +90,10 @@ drop policy if exists "book_files: read own" on public.book_files;
 create policy "book_files: read own" on public.book_files
   for select to authenticated
   using (auth.uid() = user_id);
+
+create table if not exists public.book_quotas (
+  user_id  uuid    primary key references auth.users (id) on delete cascade,
+  quota_mb integer not null check (quota_mb > 0)
+);
+
+alter table public.book_quotas enable row level security;
