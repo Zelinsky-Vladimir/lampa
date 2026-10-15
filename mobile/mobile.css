@@ -126,6 +126,6 @@ button, .card, .icon-btn, .home-tabs, .seg { -webkit-user-select: none; user-sel
 }
 @media (max-width: 600px) {
   #sel-bar { max-width: calc(100vw - 24px); }
-  #sel-bar.on-note .sel-btn span { display: none; }
+  #sel-bar .sel-btn span { display: none; }
 }
 :root[data-chrome="hidden"][data-footer="auto"] #back-btn { bottom: calc(18px + var(--safe-bottom)); }

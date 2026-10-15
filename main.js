@@ -390,6 +390,12 @@ function registerIpc() {
     return img.isEmpty() ? null : img.toJPEG(92);
   });
 
+  ipcMain.handle('dict:define', (_e, word) => Online.define(String(word || '').slice(0, 80), fetchJson));
+  ipcMain.handle('dict:look-up', (e) => {
+    if (process.platform !== 'darwin') return false;
+    e.sender.showDefinitionForSelection();
+    return true;
+  });
   ipcMain.handle('translate', async (_e, req) => {
     const text = req && typeof req.text === 'string' ? req.text.trim() : '';
     const to = req && typeof req.to === 'string' ? req.to : '';

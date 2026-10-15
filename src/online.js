@@ -1,15 +1,9 @@
-// Поиск книг в каталогах и перевод: общий код для Electron (main.js) и мобильной версии (mobile.js).
-// Сеть каждая платформа даёт свою: функции принимают getJson(url) → Promise<object>.
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.Online = factory();
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  // ---------- перевод ----------
-
-  // Бесплатный открытый адрес Google Translate (тот же, что у браузерных расширений): без ключа,
-  // но неофициальный — при большом числе запросов Google может временно ограничить.
   const MAX_TRANSLATE = 1500;
   const isLangCode = (to) => /^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(to);
 
@@ -23,7 +17,6 @@
         dict: (j.dict || []).map((d) => ({ pos: d.pos || '', terms: (d.terms || []).slice(0, 8) })),
       };
     } catch {
-      // запасной адрес: только перевод, без словаря
       const j = await getJson(`https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=auto&tl=${to}&q=${q}`);
       const first = Array.isArray(j) ? j[0] : null;
       if (Array.isArray(first)) return { text: String(first[0] || '').trim(), src: String(first[1] || ''), dict: [] };
@@ -32,9 +25,6 @@
     }
   }
 
-  // ---------- поиск книг ----------
-
-  // картинки скачиваем только с сайтов, которые отдают обложки в поиске
   const COVER_HOSTS = /(^|\.)(mzstatic\.com|openlibrary\.org|archive\.org)$/;
 
   function isCoverUrl(url) {
@@ -46,10 +36,8 @@
     }
   }
 
-  // Та же обложка, но маленькая — для результатов поиска.
   const thumbUrl = (url) => url.replace(/\/\d+x\d+bb\.jpg$/, '/120x180bb.jpg').replace(/-L\.jpg$/, '-M.jpg');
 
-  // Жанр по рубрикам Apple Books или темам Open Library. Порядок — приоритет при равенстве.
   const GENRE_RULES = [
     ['classics', /classic|классик/],
     ['scifi', /science.?fiction|sci-?fi|научн\S* фантаст|фантастик/],
@@ -72,19 +60,15 @@
     ['business', /business|financ|econom|management|marketing|бизнес|экономик/],
     ['science', /^(?!.*fiction).*(science|nature|physics|biolog|mathemat|astronom|научпоп)/],
     ['travel', /travel|путешеств/],
-    // «political fiction» — художественная книга, а не публицистика
     ['nonfiction', /non-?fiction|^(?!.*(?<!non-?)fiction).*(politic|current events|reference|computer|technolog|cook|parenting|sport)/],
     ['fiction', /fiction|literature|novel|литератур|роман|проза/],
-    // сатира обычно ещё и проза — при равенстве побеждает проза
     ['humor', /humou?r|satire|comedy|юмор|сатир/],
   ];
 
-  // primaryFirst: у Apple первая рубрика — основная, она весит вдвое больше.
   function classifyGenre(items, primaryFirst) {
     const score = new Map();
     (items || []).forEach((raw, i) => {
       let hits = GENRE_RULES.filter(([, re]) => re.test(String(raw).toLowerCase())).map(([id]) => id);
-      // «Science Fiction» — фантастика, а не просто проза; «Mysteries for Young Adults» — детектив
       if (hits.length > 1) hits = hits.filter((id) => id !== 'ya');
       if (hits.length > 1) hits = hits.filter((id) => id !== 'fiction');
       const weight = primaryFirst && i === 0 ? 2 : 1;
@@ -95,14 +79,11 @@
     return best;
   }
 
-  // Средняя оценка читателей по пятибалльной шкале; редкие оценки ничего не говорят.
-  // rank — чем больше, тем надёжнее: Apple округляет среднюю до 0,5, поэтому Open Library с 20+ оценками точнее.
   const readerRating = (avg, n, src) =>
     Number(n) >= 10 && Number(avg) > 0
       ? { avg: Math.round(Number(avg) * 100) / 100, n: Number(n), src, rank: Number(n) * (src === 'Open Library' && Number(n) >= 20 ? 1000 : 1) }
       : null;
 
-  // Apple иногда отдаёт названия с HTML-сущностями: «Питер &amp; Майкл».
   const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
   const unescapeHtml = (s) =>
     String(s || '').replace(/&(#x[0-9a-f]+|#\d+|\w+);/gi, (m, e) => {
@@ -110,7 +91,6 @@
       return ENTITIES[e.toLowerCase()] ?? m;
     });
 
-  // Apple Books: хорошо находит русские книги и даёт обложки в любом размере.
   async function searchApple(q, getJson) {
     const j = await getJson(`https://itunes.apple.com/search?media=ebook&entity=ebook&country=us&limit=20&term=${encodeURIComponent(q)}`);
     return (j.results || [])
@@ -126,7 +106,6 @@
       }));
   }
 
-  // Open Library: открытый каталог, год первого издания, оценки читателей.
   async function searchOpenLibrary(q, getJson) {
     const fields = 'key,title,author_name,first_publish_year,cover_i,ratings_average,ratings_count,subject';
     const j = await getJson(`https://openlibrary.org/search.json?limit=20&fields=${fields}&q=${encodeURIComponent(q)}`);
@@ -153,7 +132,6 @@
     const lists = [apple.value || [], ol.value || []];
     const out = [];
     const seen = new Map();
-    // по очереди из обоих источников; одну и ту же книгу показываем один раз
     for (let i = 0; i < 20; i++) {
       for (const list of lists) {
         const b = list[i];
@@ -161,7 +139,6 @@
         const prev = seen.get(bookKey(b));
         if (prev) {
           if (!prev.cover && b.cover) prev.cover = b.cover;
-          // у переизданий год новый — оставляем самый ранний
           if (b.year && (!prev.year || b.year < prev.year)) prev.year = b.year;
           if (b.rating && (!prev.rating || b.rating.rank > prev.rating.rank)) prev.rating = b.rating;
           if (!prev.genre) prev.genre = b.genre;
@@ -174,9 +151,6 @@
     return out.slice(0, 30);
   }
 
-  // ---------- оценка и жанр для книги из списка ----------
-
-  // Результаты поиска, которые относятся к этой книге: то же название (или его начало) и тот же автор.
   function sameBook(results, title, author) {
     const t = norm(title);
     const last = lastName(author);
@@ -189,19 +163,16 @@
 
   const bestRated = (pool) => pool.filter((r) => r.rating).sort((a, b) => b.rating.rank - a.rating.rank)[0] || null;
 
-  // Английское название и автор по Wikidata: у русских изданий в каталогах мало оценок, у оригинала — сотни.
   async function englishTitle(title, author, getJson) {
     const api = 'https://www.wikidata.org/w/api.php?format=json&origin=*';
     const s = await getJson(`${api}&action=wbsearchentities&type=item&limit=20&language=ru&uselang=ru&search=${encodeURIComponent(title)}`);
     const items = s.search || [];
-    // «Трудно быть богом» — это и фильм, и игра; нужна повесть: в описании есть фамилия автора или «роман»
     const stem = lastName(author).slice(0, 5);
     const literary = /роман|повест|рассказ|книг|пьес|поэм|novel|novella|book|poem/i;
     const pick = (stem && items.find((x) => norm(x.description).includes(stem))) || items.find((x) => literary.test(x.description || ''));
     if (!pick) return null;
     const e = await getJson(`${api}&action=wbgetentities&props=labels|claims&languages=en&ids=${pick.id}`);
     const ent = e.entities && e.entities[pick.id];
-    // «Frankenstein; or, The Modern Prometheus» — в каталогах просто «Frankenstein»
     const en = ent && ent.labels && ent.labels.en && ent.labels.en.value.split(/[:;]|,? or,? /i)[0].trim();
     if (!en) return null;
     const authorIds = ((ent.claims && ent.claims.P50) || [])
@@ -216,11 +187,9 @@
     return { title: en, author: enAuthor };
   }
 
-  // Оценка читателей, жанр и обложка для книги, которую добавили вручную или раньше, чем появились эти поля.
   async function lookupBook(title, author, getJson) {
     let pool = sameBook(await searchBooks(`${title} ${author}`.trim(), getJson), title, author);
     let best = bestRated(pool);
-    // нелатинское название без оценки или с горсткой оценок — пробуем оригинал на английском
     if ((!best || best.rating.n < 50) && /[^\u0000-ɏ\s\d\p{P}]/u.test(title)) {
       const en = await englishTitle(title, author, getJson).catch(() => null);
       if (en) {
@@ -237,5 +206,112 @@
     };
   }
 
-  return { MAX_TRANSLATE, isLangCode, translate, searchBooks, lookupBook, classifyGenre, isCoverUrl, thumbUrl };
+  const RU_POS = { сущ: 'существительное', гл: 'глагол', прил: 'прилагательное', adv: 'наречие', мест: 'местоимение', числ: 'числительное', прич: 'причастие', деепр: 'деепричастие', conj: 'союз', prep: 'предлог', part: 'частица', interj: 'междометие' };
+
+  function dropTemplates(t, name) {
+    let s = t;
+    for (let at = s.indexOf('{{' + name); at >= 0; at = s.indexOf('{{' + name)) {
+      let depth = 0;
+      let i = at;
+      for (; i < s.length; i++) {
+        if (s.startsWith('{{', i)) {
+          depth++;
+          i++;
+        } else if (s.startsWith('}}', i)) {
+          depth--;
+          i++;
+          if (!depth) break;
+        }
+      }
+      s = s.slice(0, at) + s.slice(i + 1);
+    }
+    return s;
+  }
+
+  function cleanWikitext(t) {
+    let s = dropTemplates(t, 'пример');
+    const ABBR = { 'п.': 'перен.' };
+    for (let i = 0; i < 5; i++) {
+      s = s
+        .replace(/\{\{(?:t:)?=\|([^{}|]*)[^{}]*\}\}/g, 'то же, что $1')
+        .replace(/\{\{(?:помета|помета\.)\|([^{}|]*)[^{}]*\}\}/g, '$1')
+        .replace(/\{\{([^{}|]+\.)(?:\|[^{}]*)?\}\}/g, (m, a) => ABBR[a] || a)
+        .replace(/\{\{выдел\|([^{}|]*)\}\}/g, '$1');
+      s = s.replace(/\{\{[^{}]*\}\}/g, '');
+    }
+    return s
+      .replace(/\[\[[^\]|]*\|([^\]]*)\]\]/g, '$1')
+      .replace(/\[\[([^\]]*)\]\]/g, '$1')
+      .replace(/<ref[^>]*\/>|<ref[^>]*>[\s\S]*?<\/ref>/g, '')
+      .replace(/<[^>]+>/g, '')
+      .replace(/'{2,}/g, '')
+      .replace(/\s*\[\d+\]/g, '')
+      .replace(/\s+([,.;:])/g, '$1')
+      .replace(/\s{2,}/g, ' ')
+      .replace(/^[\s,;:—-]+|[\s,;:—]+$/g, '')
+      .trim();
+  }
+
+  async function ruWiktionary(word, getJson) {
+    const j = await getJson(`https://ru.wiktionary.org/w/api.php?action=parse&page=${encodeURIComponent(word)}&prop=wikitext&format=json&formatversion=2&redirects=1&origin=*`);
+    const text = j && j.parse && j.parse.wikitext;
+    if (!text) return null;
+    const ru = (/= *\{\{-ru-\}\} *=([\s\S]*?)(?:\n= *\{\{-[\w-]+-\}\} *=|$)/.exec(text) || [])[1] || '';
+    if (!ru) return null;
+    const posKey = (/\{\{(сущ|гл|прил|adv|мест|числ|прич|деепр|conj|prep|part|interj)[ |-]/.exec(ru) || [])[1];
+    const block = (/=+ *Значение *=+\n([\s\S]*?)(?:\n=|$)/.exec(ru) || [])[1] || '';
+    const senses = block
+      .split('\n')
+      .filter((l) => /^#(?![#:*])/.test(l))
+      .map((l) => cleanWikitext(l.replace(/^#\s*/, '')))
+      .filter((l) => l.length > 1)
+      .slice(0, 4);
+    if (!senses.length) return null;
+    return { word: j.parse.title || word, pos: RU_POS[posKey] || '', senses, source: 'ru.wiktionary.org', url: `https://ru.wiktionary.org/wiki/${encodeURIComponent(j.parse.title || word)}` };
+  }
+
+  async function enDefinitions(word, getJson) {
+    try {
+      return await getJson(`https://en.wiktionary.org/api/rest_v1/page/definition/${encodeURIComponent(word)}?redirect=true`);
+    } catch {
+      return null;
+    }
+  }
+
+  const stripHtml = (h) => String(h || '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s{2,}/g, ' ').trim();
+
+  async function define(word, getJson) {
+    const w = String(word || '').trim().replace(/[«»"“”„.,!?;:()]+/g, '');
+    if (!w || w.length > 60) return null;
+    const ru = /[Ѐ-ӿ]/.test(w);
+    const forms = Array.from(new Set([w, w.toLowerCase()]));
+    if (ru) {
+      for (const f of forms) {
+        const r = await ruWiktionary(f, getJson).catch(() => null);
+        if (r) return r;
+      }
+      for (const f of forms) {
+        const en = await enDefinitions(f, getJson);
+        const html = en && (en.ru || []).flatMap((x) => x.definitions || []).map((d) => d.definition || '').join(' ');
+        const lemma = html && Array.from(html.matchAll(/<a [^>]*title="([^"#]+)"/g), (m) => m[1]).find((x) => !x.includes(':'));
+        if (lemma && lemma !== f) {
+          const r = await ruWiktionary(lemma.replace(/[̀́]/g, ''), getJson).catch(() => null);
+          if (r) return { ...r, from: w };
+        }
+      }
+      return null;
+    }
+    for (const f of forms) {
+      const en = await enDefinitions(f, getJson);
+      if (!en) continue;
+      const lang = en.en ? 'en' : Object.keys(en)[0];
+      const items = (en[lang] || []).filter((x) => x.definitions && x.definitions.length);
+      if (!items.length) continue;
+      const senses = items.flatMap((x) => x.definitions.map((d) => stripHtml(d.definition))).filter(Boolean).slice(0, 4);
+      if (senses.length) return { word: f, pos: items[0].partOfSpeech || '', senses, source: 'en.wiktionary.org', url: `https://en.wiktionary.org/wiki/${encodeURIComponent(f)}` };
+    }
+    return null;
+  }
+
+  return { MAX_TRANSLATE, isLangCode, translate, define, searchBooks, lookupBook, classifyGenre, isCoverUrl, thumbUrl };
 });

@@ -32,5 +32,7 @@ contextBridge.exposeInMainWorld('api', {
   installUpdate: () => ipcRenderer.send('app:install-update'),
   setUiLang: (lang) => ipcRenderer.send('app:ui-lang', lang),
   translate: (text, to) => ipcRenderer.invoke('translate', { text, to }),
+  define: (word) => ipcRenderer.invoke('dict:define', String(word || '')),
+  lookUp: () => ipcRenderer.invoke('dict:look-up'),
   capture: (rect) => ipcRenderer.invoke('capture', rect),
 });

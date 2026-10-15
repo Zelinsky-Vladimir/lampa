@@ -96,6 +96,33 @@ public class ReaderMenuPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 }
 
+@objc(DictionaryPlugin)
+public class DictionaryPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "DictionaryPlugin"
+    public let jsName = "Dictionary"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "show", returnType: CAPPluginReturnPromise)
+    ]
+
+    @objc func show(_ call: CAPPluginCall) {
+        let term = call.getString("term") ?? ""
+        DispatchQueue.main.async {
+            guard let host = self.bridge?.viewController, !term.isEmpty else {
+                call.reject("NO_TERM")
+                return
+            }
+            guard UIReferenceLibraryViewController.dictionaryHasDefinition(forTerm: term) else {
+                call.resolve(["shown": false])
+                return
+            }
+            let sheet = UIReferenceLibraryViewController(term: term)
+            sheet.modalPresentationStyle = .pageSheet
+            host.present(sheet, animated: true)
+            call.resolve(["shown": true])
+        }
+    }
+}
+
 class LampaBridgeViewController: CAPBridgeViewController {
     override open func webView(with frame: CGRect, configuration: WKWebViewConfiguration) -> WKWebView {
         LampaWebView(frame: frame, configuration: configuration)
@@ -106,5 +133,6 @@ class LampaBridgeViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(AppleSignInPlugin())
         bridge?.registerPluginInstance(AppleTranslatePlugin())
         bridge?.registerPluginInstance(ReaderMenuPlugin())
+        bridge?.registerPluginInstance(DictionaryPlugin())
     }
 }

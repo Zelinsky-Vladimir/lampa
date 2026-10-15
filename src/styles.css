@@ -1153,6 +1153,27 @@ kbd {
 #tr-orig mark { background: color-mix(in srgb, var(--accent) 25%, transparent); color: var(--fg); border-radius: 2px; }
 #tr-sentence { margin-top: 6px; font-family: var(--font); font-size: 15px; line-height: 1.45; }
 .tr-actions { display: flex; gap: 8px; margin-top: 10px; }
+#dict-pop {
+  position: fixed;
+  z-index: 43;
+  width: min(380px, calc(100vw - 32px));
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 14px 16px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.dict-word { font-family: var(--font); font-size: 21px; font-weight: 700; line-height: 1.25; }
+.dict-meta { margin-top: 2px; font-size: 12.5px; color: var(--muted); }
+.dict-senses { margin: 10px 0 0; padding-left: 1.3em; font-family: var(--font); font-size: 15px; line-height: 1.5; }
+.dict-senses li + li { margin-top: 4px; }
+.dict-note { margin-top: 10px; font-size: 14px; line-height: 1.45; color: var(--muted); }
+.dict-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 12.5px; color: var(--muted); }
+.dict-foot button, .dict-note button { padding: 0; border: none; background: none; color: var(--accent); font: inherit; cursor: pointer; }
+.dict-skel { display: grid; gap: 8px; margin-top: 12px; }
+.dict-skel i { display: block; height: 11px; border-radius: 6px; background: color-mix(in srgb, var(--fg) 8%, var(--panel)); }
 .tr-actions .text-btn { width: auto; }
 .setting-hint { margin: 6px 0 0; font-size: 12px; line-height: 1.4; color: var(--muted); }
 ::highlight(tr-current) { background-color: color-mix(in srgb, var(--accent) 28%, transparent); }

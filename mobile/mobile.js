@@ -15,6 +15,7 @@
   const Browser = (native && P.Browser) || null;
   const android = native && Cap.getPlatform() === 'android';
   const LampaWindow = (native && P.LampaWindow) || null;
+  const Dictionary = (native && P.Dictionary) || null;
   let backHandler = null;
   let authCallback = () => {};
 
@@ -468,6 +469,12 @@
       if (ReaderMenu) ReaderMenu.set({ off: !on }).catch(() => {});
     },
 
+    define: (word) => Online.define(String(word || '').slice(0, 80), getJson),
+    async lookUp(word) {
+      if (!Dictionary) return false;
+      const res = await Dictionary.show({ term: String(word || '') });
+      return !!(res && res.shown);
+    },
     translateOnDevice: !!AppleTranslate,
     async translateStatus(text, to, from) {
       if (!AppleTranslate) return null;

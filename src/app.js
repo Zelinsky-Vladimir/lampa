@@ -135,6 +135,7 @@
     annotPop: $('#annot-pop'),
     annotText: $('#annot-text'),
     trPop: $('#tr-pop'),
+    dictPop: $('#dict-pop'),
     backBtn: $('#back-btn'),
     autoPill: $('#auto-pill'),
     autoSpeedLabel: $('#auto-speed-label'),
@@ -813,6 +814,7 @@
     closeNote();
     hideSelBar();
     if (!ui.trPop.hidden) closeTranslate();
+    if (!ui.dictPop.hidden) closeDict();
     if (dir > 0 && !chromeHover && !anyPanelOpen() && !gotoOpen()) setBar(false);
   }
 
@@ -1165,6 +1167,7 @@
     if (!ui.notePop.hidden) closeNote();
     if (!ui.selBar.hidden) hideSelBar();
     if (!ui.trPop.hidden && performance.now() - trOpenedAt > 400) closeTranslate();
+    if (!ui.dictPop.hidden && performance.now() - dictOpenedAt > 400) closeDict();
     if (!ui.annotPop.hidden && performance.now() - editorOpenedAt > 400) closeNoteEditor();
     scheduleProgress();
     if (!resizing) scheduleSave();
@@ -2703,7 +2706,7 @@
 
   let selNote = null;
   let popupClosedAt = 0;
-  const popupOpen = () => !ui.notePop.hidden || !ui.annotPop.hidden || !ui.trPop.hidden || gotoOpen() || !!selNote;
+  const popupOpen = () => !ui.notePop.hidden || !ui.annotPop.hidden || !ui.trPop.hidden || !ui.dictPop.hidden || gotoOpen() || !!selNote;
 
   const notesOver = (start, end) => bookMarks().notes.filter((n) => !n.orphan && n.start < end && n.end > start);
 
@@ -2728,6 +2731,7 @@
     selNote = note;
     ui.selBar.classList.toggle('on-note', !!note);
     $('#sel-remove').hidden = !note;
+    $('#sel-dict').hidden = !dictWord();
     for (const b of ui.selBar.querySelectorAll('.sw')) b.classList.toggle('active', !!note && b.dataset.color === note.color);
     ui.selBar.hidden = false;
     const w = ui.selBar.offsetWidth;
@@ -2742,6 +2746,92 @@
   function hideSelBar() {
     ui.selBar.hidden = true;
     selNote = null;
+  }
+
+  function dictWord() {
+    const r = selRange();
+    if (!r) return '';
+    const text = fullText().slice(r.start, r.end).trim().replace(/^[«»"“”„(]+|[«»"“”„).,!?;:…]+$/g, '');
+    return text.length <= 40 && /^[\p{L}\p{M}'’-]+(?:\s+[\p{L}\p{M}'’-]+){0,2}$/u.test(text) ? text : '';
+  }
+
+  let dictToken = 0;
+  let dictOpenedAt = 0;
+
+  async function lookUpSelection() {
+    const word = dictWord();
+    if (!word) return;
+    const r = selRange();
+    const rect = rangeFor(r.start, r.end).getBoundingClientRect();
+    const native = api.lookUp ? await api.lookUp(word).catch(() => false) : false;
+    hideSelBar();
+    if (native) return;
+    window.getSelection().removeAllRanges();
+    openDict(word, rect);
+  }
+
+  async function openDict(word, rect) {
+    const token = ++dictToken;
+    closeTranslate();
+    closeNote();
+    renderDict(word, 'loading');
+    ui.dictPop.hidden = false;
+    dictOpenedAt = performance.now();
+    placePopup(ui.dictPop, rect);
+    let res = null;
+    let state = 'ok';
+    try {
+      res = await api.define(word);
+      if (!res) state = 'none';
+    } catch {
+      state = 'offline';
+    }
+    if (token !== dictToken || ui.dictPop.hidden) return;
+    renderDict(word, state, res);
+    placePopup(ui.dictPop, rect);
+  }
+
+  function renderDict(word, state, res) {
+    const pop = ui.dictPop;
+    pop.replaceChildren();
+    pop.append(el('div', 'dict-word', res ? res.word : word));
+    const wiki = /[\u0400-\u04ff]/.test(word) ? 'ru' : 'en';
+    if (state === 'loading') {
+      const sk = el('div', 'dict-skel');
+      for (const w of [92, 74, 84]) {
+        const i = el('i');
+        i.style.width = w + '%';
+        sk.append(i);
+      }
+      pop.append(sk);
+      return;
+    }
+    if (state === 'ok') {
+      const meta = [res.pos, res.word.toLowerCase() !== word.toLowerCase() ? t('dictFrom', { w: word }) : ''].filter(Boolean).join(' · ');
+      if (meta) pop.append(el('div', 'dict-meta', meta));
+      const ol = el('ol', 'dict-senses');
+      for (const sense of res.senses) ol.append(el('li', '', sense));
+      pop.append(ol);
+      const foot = el('div', 'dict-foot');
+      foot.append(el('span', '', res.source.startsWith('ru.') ? 'Викисловарь' : 'Wiktionary'));
+      const open = el('button', '', t('dictOpen') + ' ↗');
+      open.addEventListener('click', () => api.openExternal(res.url));
+      foot.append(open);
+      pop.append(foot);
+      return;
+    }
+    const note = el('div', 'dict-note', state === 'none' ? t('dictNotFound') + ' ' : t('dictOffline'));
+    if (state === 'none') {
+      const search = el('button', '', t('dictSearch'));
+      search.addEventListener('click', () => api.openExternal(`https://${wiki}.wiktionary.org/w/index.php?search=${encodeURIComponent(word)}`));
+      note.append(search);
+    }
+    pop.append(note);
+  }
+
+  function closeDict() {
+    dictToken++;
+    ui.dictPop.hidden = true;
   }
 
   function addNote(range, color, text) {
@@ -3201,6 +3291,7 @@
     else if (gotoOpen()) closeGoto();
     else if (endOpen()) closeEndCard(false);
     else if (!ui.trPop.hidden) closeTranslate();
+    else if (!ui.dictPop.hidden) closeDict();
     else if (!ui.notePop.hidden) closeNote();
     else if (!ui.selBar.hidden) hideSelBar();
     else if (anyPanelOpen()) closePanels();
@@ -5197,6 +5288,7 @@
       openNoteEditor(note, true);
     });
     $('#sel-translate').addEventListener('click', translateSelection);
+    $('#sel-dict').addEventListener('click', lookUpSelection);
     $('#tr-prepare').addEventListener('click', prepareLanguages);
     $('#tr-download').addEventListener('click', () => {
       if (trState) runTranslation(trState);
@@ -5313,6 +5405,7 @@ ${sentence}` : translation);
       if (!ui.annotPop.hidden && !ui.annotPop.contains(e.target)) closeNoteEditor();
       if (gotoOpen() && !ui.gotoPop.contains(e.target) && !e.target.closest('#page-btn')) closeGoto();
       if (!ui.trPop.hidden && !ui.trPop.contains(e.target) && !ui.selBar.contains(e.target)) closeTranslate();
+      if (!ui.dictPop.hidden && !ui.dictPop.contains(e.target) && !ui.selBar.contains(e.target) && performance.now() - dictOpenedAt > 300) closeDict();
       if (selNote && !ui.selBar.contains(e.target)) hideSelBar();
       if (before && !popupOpen()) popupClosedAt = performance.now();
     });
