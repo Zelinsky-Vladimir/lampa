@@ -123,6 +123,63 @@ public class DictionaryPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 }
 
+@objc(FolderPickerPlugin)
+public class FolderPickerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPickerDelegate {
+    public let identifier = "FolderPickerPlugin"
+    public let jsName = "FolderPicker"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "pick", returnType: CAPPluginReturnPromise)
+    ]
+    private static let exts: Set<String> = ["fb2", "epub", "txt", "zip", "pdf", "mobi", "azw", "azw3", "djvu", "rtf", "doc", "docx"]
+    private var pending: CAPPluginCall?
+
+    @objc func pick(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            guard let host = self.bridge?.viewController else {
+                call.reject("NO_VIEW")
+                return
+            }
+            self.pending = call
+            let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder])
+            picker.delegate = self
+            host.present(picker, animated: true)
+        }
+    }
+
+    public func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        pending?.resolve(["files": []])
+        pending = nil
+    }
+
+    public func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard let call = pending, let dir = urls.first else { return }
+        pending = nil
+        DispatchQueue.global(qos: .userInitiated).async {
+            let scoped = dir.startAccessingSecurityScopedResource()
+            defer { if scoped { dir.stopAccessingSecurityScopedResource() } }
+            let fm = FileManager.default
+            let tmp = fm.temporaryDirectory.appendingPathComponent("lampa-import-\(UUID().uuidString)")
+            var files: [String] = []
+            if let walker = fm.enumerator(at: dir, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]) {
+                for case let url as URL in walker {
+                    if files.count >= 2000 { break }
+                    guard FolderPickerPlugin.exts.contains(url.pathExtension.lowercased()) else { continue }
+                    let slot = tmp.appendingPathComponent(String(files.count))
+                    let dest = slot.appendingPathComponent(url.lastPathComponent)
+                    do {
+                        try fm.createDirectory(at: slot, withIntermediateDirectories: true)
+                        try fm.copyItem(at: url, to: dest)
+                        files.append(dest.absoluteString)
+                    } catch {
+                        continue
+                    }
+                }
+            }
+            call.resolve(["name": dir.lastPathComponent, "files": files])
+        }
+    }
+}
+
 class LampaBridgeViewController: CAPBridgeViewController {
     override open func webView(with frame: CGRect, configuration: WKWebViewConfiguration) -> WKWebView {
         LampaWebView(frame: frame, configuration: configuration)
@@ -134,5 +191,6 @@ class LampaBridgeViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(AppleTranslatePlugin())
         bridge?.registerPluginInstance(ReaderMenuPlugin())
         bridge?.registerPluginInstance(DictionaryPlugin())
+        bridge?.registerPluginInstance(FolderPickerPlugin())
     }
 }

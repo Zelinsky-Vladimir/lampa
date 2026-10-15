@@ -10,6 +10,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(LampaWindowPlugin.class);
+        registerPlugin(FolderPickerPlugin.class);
         super.onCreate(savedInstanceState);
     }
 

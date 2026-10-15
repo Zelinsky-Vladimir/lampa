@@ -20,6 +20,38 @@ let state = {};
 
 const extOf = (p) => path.extname(p).slice(1).toLowerCase();
 const isBookPath = (p) => typeof p === 'string' && BOOK_EXTS.has(extOf(p));
+const IMPORT_EXTS = new Set([...BOOK_EXTS, 'pdf', 'mobi', 'azw', 'azw3', 'djvu', 'rtf', 'doc', 'docx']);
+const IMPORT_LIMIT = 2000;
+
+async function collectBooks(paths) {
+  const out = [];
+  for (const p of paths) {
+    if (out.length >= IMPORT_LIMIT) break;
+    let st;
+    try {
+      st = await fsp.stat(p);
+    } catch {
+      continue;
+    }
+    if (st.isFile()) {
+      if (IMPORT_EXTS.has(extOf(p))) out.push(p);
+      continue;
+    }
+    if (!st.isDirectory()) continue;
+    let names = [];
+    try {
+      names = await fsp.readdir(p, { recursive: true });
+    } catch {
+      continue;
+    }
+    for (const n of names.sort()) {
+      if (out.length >= IMPORT_LIMIT) break;
+      if (n.split(path.sep).some((part) => part.startsWith('.')) || !IMPORT_EXTS.has(extOf(n))) continue;
+      out.push(path.join(p, n));
+    }
+  }
+  return out;
+}
 
 const booksDir = () => path.join(app.getPath('userData'), 'Books');
 
@@ -300,6 +332,26 @@ function registerIpc() {
     });
     return r.canceled ? null : r.filePaths[0];
   });
+
+  ipcMain.handle('dialog:open-many', async (_e, labels = {}) => {
+    const r = await dialog.showOpenDialog(win, {
+      title: String(labels.title || 'Open books'),
+      properties: ['openFile', 'multiSelections'],
+      filters: [
+        { name: String(labels.books || 'Books'), extensions: ['fb2', 'epub', 'txt', 'zip'] },
+        { name: String(labels.all || 'All files'), extensions: ['*'] },
+      ],
+    });
+    return r.canceled ? [] : r.filePaths;
+  });
+
+  ipcMain.handle('dialog:open-folder', async (_e, labels = {}) => {
+    const r = await dialog.showOpenDialog(win, { title: String(labels.title || 'Open folder'), properties: ['openDirectory'] });
+    if (r.canceled || !r.filePaths[0]) return null;
+    return { name: path.basename(r.filePaths[0]), files: await collectBooks([r.filePaths[0]]) };
+  });
+
+  ipcMain.handle('books:collect', (_e, paths) => collectBooks((Array.isArray(paths) ? paths : []).filter((p) => typeof p === 'string')));
 
   ipcMain.handle('book:load', async (_e, p) => {
     if (!isBookPath(p)) throw new Error('UNSUPPORTED');

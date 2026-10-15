@@ -61,6 +61,7 @@
     [['Ctrl +', 'Ctrl −', 'Ctrl+@keyWheel'], 'kZoom'],
     [['Ctrl+Shift+←', 'Ctrl+Shift+→'], 'kWidth'],
     [['Ctrl+O'], 'kOpen'],
+    [['Ctrl+Shift+O'], 'kOpenFolder'],
     [['F11'], 'kFull'],
   ];
 
@@ -90,7 +91,7 @@
 
   const LS = { settings: 'lampa.settings', library: 'lampa.library', marks: 'lampa.marks' };
   const LS_OLD = { settings: 'svitok.settings', library: 'svitok.library', marks: 'svitok.marks' };
-  const LIBRARY_LIMIT = 200;
+  const LIBRARY_LIMIT = 1000;
   const CHARS_PER_PAGE = 1800;
   const SEARCH_LIMIT = 5000;
   const SEARCH_LIST_LIMIT = 300;
@@ -1383,13 +1384,12 @@
     await Promise.race([Promise.all(imgs.map((img) => img.decode().catch(() => {}))), sleep(timeout)]);
   }
 
-  async function makeThumb(url) {
+  async function makeThumb(url, w = 150) {
     if (!url) return null;
     try {
       const img = new Image();
       img.src = url;
       await img.decode();
-      const w = 150;
       const h = Math.round(w * 1.5);
       const c = document.createElement('canvas');
       c.width = w;
@@ -1687,6 +1687,9 @@
     star: 'M12 3.6l2.55 5.2 5.75.83-4.16 4.05.98 5.72L12 16.7l-5.12 2.7.98-5.72L3.7 9.63l5.75-.83z',
     move: 'M4 7h12M12 3l4 4-4 4M20 17H8M12 13l-4 4 4 4',
     up: 'M12 19V5M6 11l6-6 6 6',
+    file: 'M7 3h7l5 5v13H7zM14 3v5h5',
+    folder: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+    globe: 'M12 3.5a8.5 8.5 0 1 0 0 17a8.5 8.5 0 1 0 0-17zM3.5 12h17M12 3.5c2.3 2.4 3.5 5.2 3.5 8.5s-1.2 6.1-3.5 8.5M12 3.5c-2.3 2.4-3.5 5.2-3.5 8.5s1.2 6.1 3.5 8.5',
   };
   let clickBlockUntil = 0;
   const blockClick = () => (clickBlockUntil = performance.now() + 600);
@@ -2027,6 +2030,152 @@
   let allView = false;
   let allSort = loadJSON('lampa.allSort', 'recent');
   if (!ALL_SORTS.some(([id]) => id === allSort)) allSort = 'recent';
+
+  function openAddMenu(e) {
+    const items = [{ label: t('addFiles'), sub: t('addFilesSub'), icon: 'file', run: pickBooks }];
+    if (api.pickFolder) items.push({ label: t('addFolder'), sub: t('addFolderSub'), icon: 'folder', run: pickFolder });
+    const node = e.currentTarget;
+    const r = node.getBoundingClientRect();
+    openContextMenu(node, items, coarsePointer() ? undefined : { x: r.left + 56, y: r.bottom + 6 });
+  }
+
+  async function pickBooks() {
+    if (!api.pickBooks) return openDialog();
+    const refs = await api.pickBooks({ title: t('dialogTitle'), books: t('dialogBooks'), all: t('dialogAll') });
+    if (!refs || !refs.length) return;
+    if (refs.length === 1) {
+      const p = await api.importRef(refs[0]).catch((err) => {
+        toast(t('openFailed', { e: errorText(err) }), 5000);
+        return null;
+      });
+      if (p) openPath(p);
+      return;
+    }
+    importBooks(refs, '');
+  }
+
+  async function pickFolder() {
+    if (!api.pickFolder) return;
+    const res = await api.pickFolder({ title: t('addFolder') }).catch((err) => {
+      toast(t('openFailed', { e: errorText(err) }), 5000);
+      return null;
+    });
+    if (!res) return;
+    if (!res.files.length) {
+      toast(t('importNone'), 4000);
+      return;
+    }
+    importBooks(res.files, res.name);
+  }
+
+  const refName = (ref) => (api.refName ? api.refName(ref) : String(ref).split(/[\\/]/).pop());
+  let importJob = null;
+
+  async function importBooks(refs, folder) {
+    if (importJob) {
+      toast(t('importBusy'), 3000);
+      return;
+    }
+    const job = (importJob = { refs, folder, total: refs.length, done: 0, added: 0, existed: 0, full: 0, failed: [], stop: false, finished: false, name: '' });
+    renderImportCard();
+    for (const ref of refs) {
+      if (job.stop) break;
+      job.name = refName(ref);
+      renderImportCard();
+      try {
+        const p = await api.importRef(ref);
+        const data = await loadBookFile(p);
+        const book = Parsers.parseBook(data);
+        const key = `${data.size}|${book.title}|${book.author}`;
+        if (library.some((x) => x.key === key || (data.hash && x.hash === data.hash))) job.existed++;
+        else if (library.length >= LIBRARY_LIMIT) job.full++;
+        else {
+          const thumb = book.coverUrl ? await makeThumb(book.coverUrl, 100) : null;
+          library.push({ key, path: data.path, source: data.source, hash: data.hash, name: data.name, title: book.title, author: book.author, progress: 0, pos: null, openedAt: 0, addedAt: Date.now(), thumb });
+          job.added++;
+        }
+        book.urls.forEach((u) => URL.revokeObjectURL(u));
+      } catch (err) {
+        const msg = String((err && err.message) || err);
+        job.failed.push({ name: job.name, reason: /UNSUPPORTED/.test(msg) ? t('errUnsupported') : /TOO_LARGE/.test(msg) ? t('errTooLarge') : t('importBroken') });
+      }
+      job.done++;
+      if (job.added && job.done % 10 === 0) {
+        saveLibrary();
+        refreshHome();
+      }
+      await sleep(0);
+    }
+    job.finished = true;
+    importJob = null;
+    if (job.added) {
+      saveLibrary();
+      refreshHome();
+    }
+    renderImportCard(job);
+  }
+
+  function renderImportCard(job = importJob) {
+    const card = $('#import-card');
+    if (!job) {
+      card.hidden = true;
+      return;
+    }
+    card.replaceChildren();
+    card.hidden = false;
+    card.dataset.state = job.finished ? 'done' : 'busy';
+    if (!job.finished) {
+      const head = el('div', 'imp-head');
+      head.append(el('b', '', job.folder ? t('importFolder', { name: job.folder }) : t('importFiles')));
+      const stop = el('button', 'imp-link', t('importStop'));
+      stop.addEventListener('click', () => (job.stop = true));
+      head.append(stop);
+      const bar = el('div', 'imp-bar');
+      const fill = el('i');
+      fill.style.width = Math.round((job.done / Math.max(1, job.total)) * 100) + '%';
+      bar.append(fill);
+      card.append(head, bar, el('div', 'imp-sub', t('importProgress', { done: Math.min(job.done + 1, job.total), total: job.total }) + (job.name ? ' · ' + job.name : '')));
+      return;
+    }
+    const head = el('div', 'imp-head');
+    head.append(el('b', '', job.added ? t('importAdded', { n: job.added }) : t('importNothing')));
+    const close = el('button', 'imp-close');
+    close.setAttribute('aria-label', t('close'));
+    close.append(svgIcon('M6 6l12 12M18 6 6 18'));
+    close.addEventListener('click', () => (card.hidden = true));
+    head.append(close);
+    card.append(head);
+    const parts = [];
+    if (job.existed) parts.push(t('importExisted', { n: job.existed }));
+    if (job.failed.length) parts.push(t('importFailed', { n: job.failed.length }));
+    if (job.full) parts.push(t('importFull', { n: job.full }));
+    if (job.stop) parts.push(t('importStopped'));
+    if (parts.length) card.append(el('div', 'imp-sub', parts.join(' · ')));
+    const acts = el('div', 'imp-acts');
+    if (job.added) {
+      const show = el('button', 'imp-link', t('importShow'));
+      show.addEventListener('click', () => {
+        card.hidden = true;
+        if (root.dataset.mode !== 'home') showHome();
+        openAll();
+      });
+      acts.append(show);
+    }
+    if (job.failed.length) {
+      const what = el('button', 'imp-link', t('importWhat'));
+      what.addEventListener('click', () => {
+        const list = el('div', 'imp-fails');
+        for (const f of job.failed.slice(0, 50)) {
+          const row = el('div', 'imp-fail');
+          row.append(el('span', '', f.name), el('span', '', f.reason));
+          list.append(row);
+        }
+        what.replaceWith(list);
+      });
+      acts.append(what);
+    }
+    if (acts.children.length) card.append(acts);
+  }
 
   function openAll() {
     allView = true;
@@ -3338,7 +3487,8 @@
       return;
     }
     if (ctrl) {
-      if (e.code === 'KeyO') openDialog();
+      if (e.code === 'KeyO' && e.shiftKey) pickFolder();
+      else if (e.code === 'KeyO') pickBooks();
       else if (e.code === 'KeyG') focusPageInput();
       else if (e.code === 'KeyD') toggleBookmark();
       else if (e.code === 'Equal' || e.code === 'NumpadAdd') zoom(1);
@@ -3421,8 +3571,18 @@
       e.preventDefault();
       depth = 0;
       ui.dropOverlay.classList.remove('show');
-      const file = e.dataTransfer.files[0];
-      if (file) openPath(api.pathForFile(file));
+      const files = Array.from(e.dataTransfer.files || []);
+      if (!files.length) return;
+      const paths = files.map((f) => api.pathForFile(f)).filter(Boolean);
+      if (!api.collectBooks || !paths.length) {
+        if (paths[0]) openPath(paths[0]);
+        return;
+      }
+      api.collectBooks(paths).then((found) => {
+        if (found.length === 1 && paths.length === 1 && found[0] === paths[0]) openPath(found[0]);
+        else if (found.length) importBooks(found, files.length === 1 && found[0] !== paths[0] ? files[0].name : '');
+        else toast(t('importNone'), 4000);
+      });
     });
   }
 
@@ -5156,8 +5316,8 @@
   function bindUI() {
     bindShelf();
     bindSync();
-    $('#home-add').addEventListener('click', openDialog);
-    $('#home-open').addEventListener('click', openDialog);
+    $('#home-add').addEventListener('click', openAddMenu);
+    $('#home-open').addEventListener('click', openAddMenu);
     $('#btn-home').addEventListener('click', showHome);
     $('#btn-toc').addEventListener('click', () => openPanel(ui.tocPanel));
     $('#btn-settings').addEventListener('click', () => openPanel(ui.settingsPanel));

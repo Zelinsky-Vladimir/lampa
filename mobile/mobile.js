@@ -16,6 +16,7 @@
   const android = native && Cap.getPlatform() === 'android';
   const LampaWindow = (native && P.LampaWindow) || null;
   const Dictionary = (native && P.Dictionary) || null;
+  const FolderPicker = (native && P.FolderPicker) || null;
   let backHandler = null;
   let authCallback = () => {};
 
@@ -391,6 +392,45 @@
         input.click();
       });
     },
+
+    pickBooks() {
+      return new Promise((resolve) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.multiple = true;
+        if (!android) input.accept = '.fb2,.epub,.txt,.zip';
+        input.hidden = true;
+        document.body.append(input);
+        const done = (v) => {
+          input.remove();
+          resolve(v);
+        };
+        input.addEventListener('change', () => done(Array.from(input.files || [])));
+        input.addEventListener('cancel', () => done([]));
+        input.click();
+      });
+    },
+    pickFolder: FolderPicker
+      ? async () => {
+          const res = await FolderPicker.pick();
+          return res && Array.isArray(res.files) && (res.files.length || res.name) ? { name: res.name || '', files: res.files } : null;
+        }
+      : null,
+    async importRef(ref) {
+      if (typeof File !== 'undefined' && ref instanceof File) return importBook(ref.name, new Uint8Array(await ref.arrayBuffer()));
+      if (/^(file|content):/i.test(String(ref))) {
+        const ext = extOf(decodeURIComponent(baseName(String(ref))));
+        if (/^file:/i.test(String(ref)) && !BOOK_EXTS.has(ext)) {
+          Filesystem.deleteFile({ path: String(ref) }).catch(() => {});
+          throw new Error('UNSUPPORTED');
+        }
+        const p = await importUrl(String(ref));
+        if (!p) throw new Error('UNREADABLE');
+        return p;
+      }
+      return ref;
+    },
+    refName: (ref) => (typeof File !== 'undefined' && ref instanceof File ? ref.name : decodeURIComponent(baseName(String(ref)))),
 
     async loadBook(p) {
       const ext = extOf(p);

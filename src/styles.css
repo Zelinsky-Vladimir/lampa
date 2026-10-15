@@ -1153,6 +1153,32 @@ kbd {
 #tr-orig mark { background: color-mix(in srgb, var(--accent) 25%, transparent); color: var(--fg); border-radius: 2px; }
 #tr-sentence { margin-top: 6px; font-family: var(--font); font-size: 15px; line-height: 1.45; }
 .tr-actions { display: flex; gap: 8px; margin-top: 10px; }
+#import-card {
+  position: fixed;
+  z-index: 44;
+  right: 20px;
+  bottom: 20px;
+  width: min(420px, calc(100vw - 32px));
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  font-size: 14px;
+}
+.imp-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.imp-head b { font-size: 15px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imp-bar { height: 6px; margin: 12px 0 8px; border-radius: 3px; background: color-mix(in srgb, var(--fg) 10%, var(--panel)); overflow: hidden; }
+.imp-bar i { display: block; height: 100%; border-radius: 3px; background: var(--accent); transition: width 0.2s; }
+.imp-sub { margin-top: 4px; font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imp-acts { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; }
+.imp-link { flex: none; padding: 0; border: none; background: none; color: var(--accent); font: 600 14px var(--ui); cursor: pointer; }
+.imp-close { flex: none; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: none; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
+.imp-close svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.imp-fails { width: 100%; max-height: 160px; overflow-y: auto; font-size: 13px; line-height: 1.6; }
+.imp-fail { display: flex; justify-content: space-between; gap: 12px; }
+.imp-fail span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imp-fail span:last-child { flex: none; color: var(--muted); }
 #dict-pop {
   position: fixed;
   z-index: 43;
