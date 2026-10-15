@@ -294,8 +294,8 @@
     return job;
   }
 
-  async function pruneCovers(books) {
-    const used = new Set(books.map((b) => b && b.cover).filter(Boolean));
+  async function pruneCovers(books, keep) {
+    const used = new Set([...books.map((b) => b && b.cover), ...keep].filter(Boolean));
     for (const n of await store.list('covers')) if (COVER_NAME.test(n) && !used.has(n)) store.removeFile('covers/' + n);
   }
 
@@ -584,9 +584,9 @@
     },
     capture: async () => null,
 
-    async shelfLoad() {
+    async shelfLoad(keep) {
       const books = await readShelf();
-      pruneCovers(books);
+      pruneCovers(books, Array.isArray(keep) ? keep.map(String) : []);
       return books;
     },
     shelfSave(books) {

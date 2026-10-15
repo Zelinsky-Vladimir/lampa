@@ -1384,7 +1384,7 @@
     await Promise.race([Promise.all(imgs.map((img) => img.decode().catch(() => {}))), sleep(timeout)]);
   }
 
-  async function makeThumb(url, w = 150) {
+  async function makeThumb(url, w = 150, quality = 0.78) {
     if (!url) return null;
     try {
       const img = new Image();
@@ -1398,9 +1398,23 @@
       const dw = img.naturalWidth * scale;
       const dh = img.naturalHeight * scale;
       c.getContext('2d').drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
-      return c.toDataURL('image/jpeg', 0.78);
+      return c.toDataURL('image/jpeg', quality);
     } catch {
       return null;
+    }
+  }
+
+  const coverFileSrc = (name) => (api.coverUrl ? api.coverUrl(name) : 'lampa-cover://c/' + name);
+
+  async function saveLibraryCover(entry, url) {
+    if (entry.cover || !url || !api.shelfCover) return false;
+    const big = await makeThumb(url, 400, 0.9);
+    if (!big) return false;
+    try {
+      entry.cover = await api.shelfCover(big);
+      return true;
+    } catch {
+      return false;
     }
   }
 
@@ -1560,11 +1574,10 @@
     ui.toast.classList.remove('show');
     ui.scroller.focus({ preventScroll: true });
 
-    if (!entry.thumb && book.coverUrl) {
-      makeThumb(book.coverUrl).then((thumb) => {
-        if (!thumb) return;
-        entry.thumb = thumb;
-        saveLibrary();
+    if (book.coverUrl && (!entry.thumb || !entry.cover)) {
+      Promise.all([entry.thumb ? null : makeThumb(book.coverUrl), saveLibraryCover(entry, book.coverUrl)]).then(([thumb, saved]) => {
+        if (thumb) entry.thumb = thumb;
+        if (thumb || saved) saveLibrary();
       });
     }
     api.rendered();
@@ -1633,15 +1646,18 @@
   }
 
   function libraryThumb(entry) {
-    if (entry.thumb) {
-      const img = el('img', 'thumb');
-      img.src = entry.thumb;
-      img.alt = '';
-      return img;
-    }
     const ph = el('div', 'thumb ph', (entry.title || '?').trim().charAt(0).toUpperCase());
     ph.style.setProperty('--h', hue(entry.title));
-    return ph;
+    const src = entry.cover ? coverFileSrc(entry.cover) : entry.thumb;
+    if (!src) return ph;
+    const img = el('img', 'thumb');
+    img.src = src;
+    img.alt = '';
+    img.addEventListener('error', () => {
+      if (entry.thumb && img.src !== entry.thumb) img.src = entry.thumb;
+      else img.replaceWith(ph);
+    });
+    return img;
   }
 
   function libraryStatus(entry) {
@@ -2082,6 +2098,7 @@
       if (library.length >= LIBRARY_LIMIT) return { status: 'full' };
       const thumb = book.coverUrl ? await makeThumb(book.coverUrl, 100) : null;
       const entry = { key, path: data.path, source: data.source, hash: data.hash, name: data.name, title: book.title, author: book.author, progress: 0, pos: null, openedAt: 0, addedAt: Date.now(), thumb };
+      await saveLibraryCover(entry, book.coverUrl);
       library.push(entry);
       return { status: 'added', entry };
     } finally {
@@ -4179,7 +4196,7 @@
 
   async function loadShelf() {
     try {
-      const books = await api.shelfLoad();
+      const books = await api.shelfLoad([...library, ...purgeList()].map((e) => e.cover).filter(Boolean));
       shelf = books.filter((b) => b && typeof b.title === 'string' && (b.list === 'read' || b.list === 'want'));
       shelfReady = true;
     } catch (e) {
@@ -4629,8 +4646,7 @@
   }
 
   function bookThumb(b, thumb) {
-    const coverSrc = (name) => (api.coverUrl ? api.coverUrl(name) : 'lampa-cover://c/' + name);
-    const src = thumb || pendingThumbs.get(b) || (b.cover ? coverSrc(b.cover) : '');
+    const src = thumb || pendingThumbs.get(b) || (b.cover ? coverFileSrc(b.cover) : '');
     if (src) {
       const img = el('img', 'thumb');
       img.src = src;
@@ -4858,7 +4874,7 @@
     book.lib = { key: e.key, title: e.title || '', author: e.author || '', hash: e.hash || '', name: e.name || '', pos: e.pos || null, posAt: e.posAt || 0, progress: e.progress || 0, page: e.page || 0, pages: e.pages || 0, openedAt: e.openedAt || 0, readAt: e.readAt || 0, until };
     saveShelf();
     const list = purgeList().filter((x) => x.key !== e.key);
-    list.push({ key: e.key, hash: e.hash || '', name: e.name || '', path: e.path || null, source: e.source || null, thumb: e.thumb || null, at: until });
+    list.push({ key: e.key, hash: e.hash || '', name: e.name || '', path: e.path || null, source: e.source || null, thumb: e.thumb || null, cover: e.cover || null, at: until });
     saveJSON(PURGE_KEY, list);
     refreshHome();
     showUndo(t('movedToReadUndo', { title: book.title }), () => restoreToLibrary(book));
@@ -4870,7 +4886,7 @@
     if (!library.some((x) => x.key === l.key)) {
       const kept = purgeList().find((x) => x.key === l.key || (l.hash && x.hash === l.hash)) || {};
       const { until, ...data } = l;
-      library.push({ ...data, path: kept.path || null, source: kept.source || null, thumb: kept.thumb || null });
+      library.push({ ...data, path: kept.path || null, source: kept.source || null, thumb: kept.thumb || null, cover: kept.cover || null });
       saveLibrary();
     }
     saveJSON(PURGE_KEY, purgeList().filter((x) => x.key !== l.key && !(l.hash && x.hash === l.hash)));

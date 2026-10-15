@@ -258,8 +258,8 @@ function writeShelf(books) {
   return job;
 }
 
-async function pruneCovers(books) {
-  const used = new Set(books.map((b) => b && b.cover).filter(Boolean));
+async function pruneCovers(books, keep) {
+  const used = new Set([...books.map((b) => b && b.cover), ...keep].filter(Boolean));
   let names;
   try {
     names = await fsp.readdir(coversDir());
@@ -384,9 +384,9 @@ function registerIpc() {
     return done;
   });
 
-  ipcMain.handle('shelf:load', async () => {
+  ipcMain.handle('shelf:load', async (_e, keep) => {
     const books = await readShelf();
-    pruneCovers(books);
+    pruneCovers(books, Array.isArray(keep) ? keep.map(String) : []);
     return books;
   });
   ipcMain.handle('shelf:save', (_e, books) => {

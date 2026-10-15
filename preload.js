@@ -15,7 +15,7 @@ contextBridge.exposeInMainWorld('api', {
   onAuthCallback: (cb) => ipcRenderer.on('auth-callback', (_e, url) => cb(url)),
   authRedirect: 'lampa://auth-callback',
   cloudUrl: ipcRenderer.sendSync('dev:cloud-url'),
-  shelfLoad: () => ipcRenderer.invoke('shelf:load'),
+  shelfLoad: (keep) => ipcRenderer.invoke('shelf:load', keep),
   shelfSave: (books) => ipcRenderer.invoke('shelf:save', books),
   shelfSearch: (q) => ipcRenderer.invoke('shelf:search', q),
   shelfLookup: (title, author) => ipcRenderer.invoke('shelf:lookup', { title, author }),
