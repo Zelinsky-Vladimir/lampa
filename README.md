@@ -16,6 +16,10 @@
 </p>
 
 <p align="center">
+  <a href="https://lampa-reader.github.io">lampa-reader.github.io</a>
+</p>
+
+<p align="center">
   <b>English</b> · <a href="README.ru.md">Русский</a>
 </p>
 

@@ -5,16 +5,17 @@ Lampa is a book reader (FB2, EPUB, TXT) for Windows, macOS and Linux (Electron) 
 ## Repositories
 
 - `Zelinsky-Vladimir/lampa` — **public** since 2026-10-15 (MIT), all source code (this repo). Never commit secrets: keys live in Supabase function secrets and GitHub Actions secrets.
-- `Zelinsky-Vladimir/lampa-releases` — **public**, no code: the download page, installers and auto-update files. Its README is generated from ours with `node scripts/public-readme.js <clone of lampa-releases>` (drops build-from-source parts and swaps links).
+- `Zelinsky-Vladimir/lampa-releases` — **public**, no code: installers and auto-update files (its `docs/` only redirects to the website).
+- `lampa-reader/lampa-reader.github.io` — **public**, the website. Its README is generated from ours with `node scripts/public-readme.js <clone of lampa-releases>` (drops build-from-source parts and swaps links).
 
 ## Website
 
-`lampa-releases/docs` on GitHub Pages (https://zelinsky-vladimir.github.io/lampa-releases/, own domain still to buy): `index.html` (features, themes, per-platform downloads via `releases/latest/download/<file>`, store badges), `support.html`, `privacy.html`, `site.css`, `site.js` (strings for en/ru/fr/de/es, language from the browser with a switcher; OS detection for the main button; release version from the GitHub API cached for an hour). Fonts are self-hosted in `docs/fonts`. Store links are empty in `CONFIG` until the apps are public, so the badges show «soon». Every page has all five languages; keep them in step, including the privacy policy. The `lampa` repo is public since 2026-10-15 so GitHub Actions minutes are free (the private repo ran out and desktop builds 0.13.19–0.13.29 never ran).
+Repo `lampa-reader/lampa-reader.github.io` (GitHub organization `lampa-reader`, owned by him), served at https://lampa-reader.github.io from `main` / root; own domain still to buy. Files: `index.html` (features, themes, per-platform downloads via `releases/latest/download/<file>`, store badges), `support.html`, `privacy.html`, `site.css`, `site.js` (strings for en/ru/fr/de/es, language from the browser with a switcher; OS detection for the main button; release version from the GitHub API cached for an hour). Fonts are self-hosted in `fonts/`; app screenshots in `shots/` (`<ru|en>-tablet.webp`, `<ru|en>-phone-read.webp`, Russian page shows the ru set, other languages en; taken in the iOS simulators with the sample classics, Paper theme). Downloads still point at `Zelinsky-Vladimir/lampa-releases` releases. The old address `zelinsky-vladimir.github.io/lampa-releases/` (`lampa-releases/docs`) keeps only redirect pages for index, privacy and support, keeping `?lang` and anchors. Store links are empty in `CONFIG` until the apps are public, so the badges show «soon». Every page has all five languages; keep them in step, including the privacy policy. The `lampa` repo is public since 2026-10-15 so GitHub Actions minutes are free (the private repo ran out and desktop builds 0.13.19–0.13.29 never ran).
 
 ## Rules
 
 - Commit as `Vladimir <34725004+Zelinsky-Vladimir@users.noreply.github.com>`. Never put his work email in commits or anything public.
-- End commit messages with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- No Claude/AI attribution in commits, PRs or docs.
 - Don't publish copyrighted book text (screenshots use public-domain samples).
 - Never sign in with passwords or create accounts on real services yourself; he approves logins himself (GitHub and the Supabase CLI were authorised through browser device flows).
 - New UI strings go into all five languages in `src/i18n.js` (en, ru, fr, de, es).
@@ -85,7 +86,7 @@ Not done yet, roughly in order:
 1. First run on his real iPhone and fix what comes up (gestures, selection, "Open in Lampa", sync).
 2. Sign in with Apple — code is done (`api.signInApple` → `Cloud.idTokenSignIn('apple', idToken, rawNonce)`, button shown only on iOS, closing the sheet counts as cancel). Still to do: Supabase → Apple provider enabled with Client IDs `io.github.zelinskyvladimir.lampa` (no secret needed for native-only), a build with his paid team, a real-device test.
    Account deletion (guideline 5.1.1(v)) is in Settings → Sync → Delete account (two taps): `Cloud.deleteAccount` removes the user's files in `books/` through the Storage API, then calls the `public.delete_account()` RPC (security definer, granted to `authenticated` only), which deletes the auth user; records go with it by cascade. With Sign in with Apple, Apple also expects the user's Apple tokens to be revoked on deletion — not done yet (needs a server-side call with the Apple key).
-3. Privacy policy and support pages are live on GitHub Pages (`lampa-releases/docs`, English + Russian, contact sunstrike1997@gmail.com): https://zelinsky-vladimir.github.io/lampa-releases/privacy.html and .../support.html. Google Auth Platform branding uses them and the Google OAuth app is published (In production), so any Google account can sign in. Next: prepare App Store Connect (record, screenshots, privacy labels). Keep the privacy page in sync with what the app sends where.
+3. Privacy policy and support pages are live on the website (all five languages, contact sunstrike1997@gmail.com): https://lampa-reader.github.io/privacy.html and .../support.html; the old lampa-releases URLs redirect there. Google Auth Platform branding uses them and the Google OAuth app is published (In production), so any Google account can sign in. Next: prepare App Store Connect (record, screenshots, privacy labels). Keep the privacy page in sync with what the app sends where.
 4. TestFlight: App Store Connect record "Lampa: Book Reader" (the name "Lampa" is taken; the home-screen name stays Lampa), SKU `lampa-ios`, iPhone and iPad (iPad needs all four orientations in Info.plist). Upload a build:
    ```
    npm run build:mobile && npx cap sync ios
