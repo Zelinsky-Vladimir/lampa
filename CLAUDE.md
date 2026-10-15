@@ -4,7 +4,7 @@ Lampa is a book reader (FB2, EPUB, TXT) for Windows, macOS and Linux (Electron) 
 
 ## Repositories
 
-- `Zelinsky-Vladimir/lampa` — **private**, all source code (this repo).
+- `Zelinsky-Vladimir/lampa` — **public** since 2026-10-15 (MIT), all source code (this repo). Never commit secrets: keys live in Supabase function secrets and GitHub Actions secrets.
 - `Zelinsky-Vladimir/lampa-releases` — **public**, no code: the download page, installers and auto-update files. Its README is generated from ours with `node scripts/public-readme.js <clone of lampa-releases>` (drops build-from-source parts and swaps links).
 
 ## Website
