@@ -7,6 +7,10 @@ Lampa is a book reader (FB2, EPUB, TXT) for Windows, macOS and Linux (Electron) 
 - `Zelinsky-Vladimir/lampa` — **private**, all source code (this repo).
 - `Zelinsky-Vladimir/lampa-releases` — **public**, no code: the download page, installers and auto-update files. Its README is generated from ours with `node scripts/public-readme.js <clone of lampa-releases>` (drops build-from-source parts and swaps links).
 
+## Website
+
+`lampa-releases/docs` on GitHub Pages (https://zelinsky-vladimir.github.io/lampa-releases/, own domain still to buy): `index.html` (features, themes, per-platform downloads via `releases/latest/download/<file>`, store badges), `support.html`, `privacy.html`, `site.css`, `site.js` (strings for en/ru/fr/de/es, language from the browser with a switcher; OS detection for the main button; release version from the GitHub API cached for an hour). Fonts are self-hosted in `docs/fonts`. Store links are empty in `CONFIG` until the apps are public, so the badges show «soon». Every page has all five languages; keep them in step, including the privacy policy. The `lampa` repo is public since 2026-10-15 so GitHub Actions minutes are free (the private repo ran out and desktop builds 0.13.19–0.13.29 never ran).
+
 ## Rules
 
 - Commit as `Vladimir <34725004+Zelinsky-Vladimir@users.noreply.github.com>`. Never put his work email in commits or anything public.
