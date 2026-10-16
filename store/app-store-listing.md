@@ -51,9 +51,9 @@ There are no ads, no tracking, no analytics and no in-app purchases.
 ```
 Your books on every device
 ```
-**Promotional Text** (154/170)
+**Promotional Text** (158/170)
 ```
-A calm reader for your own books. FB2, EPUB and TXT as they are, your page and notes on iPhone, iPad and your computer, and 70,000 classics to start with.
+A calm reader for your own books. Your page, notes and lists on iPhone, iPad and your computer — no ads, no account needed, and 70,000 classics to start with.
 ```
 **Keywords** (93/100)
 ```
@@ -104,9 +104,9 @@ Lampa: чтение книг
 ```
 Ваши книги на всех устройствах
 ```
-**Promotional Text** (149/170)
+**Promotional Text** (160/170)
 ```
-Спокойная читалка для ваших книг. FB2, EPUB и TXT как есть, место чтения и заметки на iPhone, iPad и компьютере, а для начала — 70 000 книг классики.
+Спокойное чтение ваших книг. Место, заметки и списки на iPhone, iPad и компьютере — без рекламы и без обязательного аккаунта, а для начала 70 000 книг классики.
 ```
 **Keywords** (96/100)
 ```
@@ -153,9 +153,9 @@ Project Gutenberg встроен: 70 000 бесплатных книг клас�
 ```
 Vos livres sur chaque appareil
 ```
-**Promotional Text** (152/170)
+**Promotional Text** (166/170)
 ```
-Une liseuse paisible pour vos propres livres. FB2, EPUB et TXT tels quels, votre page et vos notes sur iPhone, iPad et ordinateur, et 70 000 classiques.
+Une liseuse paisible pour vos livres. Votre page, vos notes et vos listes sur iPhone, iPad et ordinateur — sans publicité ni compte obligatoire, et 70 000 classiques.
 ```
 **Keywords** (95/100)
 ```
@@ -202,9 +202,9 @@ Sans publicité, sans statistiques, sans pistage. Vos livres restent sur votre a
 ```
 Ihre Bücher auf allen Geräten
 ```
-**Promotional Text** (153/170)
+**Promotional Text** (157/170)
 ```
-Ein ruhiger Reader für Ihre eigenen Bücher. FB2, EPUB und TXT, wie sie sind, Lesestelle und Notizen auf iPhone, iPad und Computer, dazu 70.000 Klassiker.
+Ein ruhiger Reader für Ihre Bücher. Lesestelle, Notizen und Listen auf iPhone, iPad und Computer — ohne Werbung, ohne Kontopflicht und mit 70.000 Klassikern.
 ```
 **Keywords** (98/100)
 ```
@@ -251,9 +251,9 @@ Keine Werbung, keine Analyse, kein Tracking. Ihre Bücher bleiben auf Ihrem Ger�
 ```
 Tus libros en cada dispositivo
 ```
-**Promotional Text** (153/170)
+**Promotional Text** (159/170)
 ```
-Un lector tranquilo para tus propios libros. FB2, EPUB y TXT tal cual, tu página y tus notas en iPhone, iPad y ordenador, y 70.000 clásicos para empezar.
+Un lector tranquilo para tus libros. Tu página, notas y listas en iPhone, iPad y ordenador: sin anuncios ni cuenta obligatoria, y 70.000 clásicos para empezar.
 ```
 **Keywords** (93/100)
 ```
