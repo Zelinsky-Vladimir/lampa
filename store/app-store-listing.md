@@ -47,9 +47,9 @@ There are no ads, no tracking, no analytics and no in-app purchases.
 
 ## English (U.S.) — также English (U.K.), если добавишь
 
-**Subtitle** (25/30)
+**Subtitle** (26/30)
 ```
-FB2 & EPUB reader, synced
+Your books on every device
 ```
 **Promotional Text** (154/170)
 ```
@@ -57,7 +57,7 @@ A calm reader for your own books. FB2, EPUB and TXT as they are, your page and n
 ```
 **Keywords** (93/100)
 ```
-ebook,txt,novel,library,gutenberg,opds,calibre,dictionary,highlight,notes,night mode,classics
+fb2,epub,ebook,txt,novel,library,gutenberg,opds,calibre,dictionary,highlight,notes,night mode
 ```
 **Description** (1796/4000)
 ```
@@ -100,17 +100,17 @@ No ads, no analytics, no tracking. Your books stay on your device; with an accou
 ```
 Lampa: чтение книг
 ```
-**Subtitle** (28/30)
+**Subtitle** (30/30)
 ```
-Книги FB2 и EPUB без рекламы
+Ваши книги на всех устройствах
 ```
 **Promotional Text** (149/170)
 ```
 Спокойная читалка для ваших книг. FB2, EPUB и TXT как есть, место чтения и заметки на iPhone, iPad и компьютере, а для начала — 70 000 книг классики.
 ```
-**Keywords** (100/100)
+**Keywords** (96/100)
 ```
-читалка,электронные книги,чтение,библиотека,txt,словарь,закладки,заметки,ночной режим,gutenberg,opds
+читалка,fb2,epub,электронные,закладки,библиотека,txt,словарь,заметки,ночной режим,gutenberg,opds
 ```
 **Description** (1818/4000)
 ```
@@ -149,9 +149,9 @@ Project Gutenberg встроен: 70 000 бесплатных книг клас�
 
 ## Français
 
-**Subtitle** (27/30)
+**Subtitle** (30/30)
 ```
-Liseuse FB2 et EPUB synchro
+Vos livres sur chaque appareil
 ```
 **Promotional Text** (152/170)
 ```
@@ -159,7 +159,7 @@ Une liseuse paisible pour vos propres livres. FB2, EPUB et TXT tels quels, votre
 ```
 **Keywords** (95/100)
 ```
-ebook,livres,lecture,txt,roman,bibliothèque,gutenberg,opds,calibre,dictionnaire,notes,mode nuit
+fb2,epub,signets,ebook,lecture,txt,roman,bibliothèque,gutenberg,opds,calibre,dictionnaire,notes
 ```
 **Description** (1882/4000)
 ```
@@ -198,17 +198,17 @@ Sans publicité, sans statistiques, sans pistage. Vos livres restent sur votre a
 
 ## Deutsch
 
-**Subtitle** (27/30)
+**Subtitle** (29/30)
 ```
-FB2- & EPUB-Reader mit Sync
+Ihre Bücher auf allen Geräten
 ```
 **Promotional Text** (153/170)
 ```
 Ein ruhiger Reader für Ihre eigenen Bücher. FB2, EPUB und TXT, wie sie sind, Lesestelle und Notizen auf iPhone, iPad und Computer, dazu 70.000 Klassiker.
 ```
-**Keywords** (92/100)
+**Keywords** (98/100)
 ```
-ebook,bücher,lesen,txt,roman,bibliothek,gutenberg,opds,calibre,wörterbuch,notizen,nachtmodus
+fb2,epub,lesen,txt,roman,bibliothek,gutenberg,opds,calibre,wörterbuch,notizen,nachtmodus,klassiker
 ```
 **Description** (1934/4000)
 ```
@@ -249,15 +249,15 @@ Keine Werbung, keine Analyse, kein Tracking. Ihre Bücher bleiben auf Ihrem Ger�
 
 **Subtitle** (30/30)
 ```
-Lector FB2 y EPUB sincronizado
+Tus libros en cada dispositivo
 ```
 **Promotional Text** (153/170)
 ```
 Un lector tranquilo para tus propios libros. FB2, EPUB y TXT tal cual, tu página y tus notas en iPhone, iPad y ordenador, y 70.000 clásicos para empezar.
 ```
-**Keywords** (100/100)
+**Keywords** (93/100)
 ```
-ebook,libros,leer,txt,novela,biblioteca,gutenberg,opds,calibre,diccionario,notas,modo noche,clásicos
+fb2,epub,marcadores,ebook,leer,txt,novela,biblioteca,gutenberg,opds,calibre,diccionario,notas
 ```
 **Description** (1866/4000)
 ```
