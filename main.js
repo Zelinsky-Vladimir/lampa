@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, dialog, ipcMain, shell, Menu, screen, net, session, protocol, nativeImage } = require('electron');
+const { app, BrowserWindow, WebContentsView, dialog, ipcMain, shell, Menu, screen, net, session, protocol, nativeImage } = require('electron');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
@@ -440,6 +440,26 @@ function registerIpc() {
     };
     const img = await win.webContents.capturePage(rect);
     return img.isEmpty() ? null : img.toJPEG(92);
+  });
+
+  let coverView = null;
+  ipcMain.handle('cover', async (_e, on) => {
+    if (!win) return false;
+    if (coverView) win.contentView.removeChildView(coverView);
+    if (!on) return true;
+    const img = await win.webContents.capturePage();
+    if (img.isEmpty()) return false;
+    if (!coverView || coverView.webContents.isDestroyed()) {
+      coverView = new WebContentsView();
+      await coverView.webContents.loadURL('data:text/html,<body style="margin:0;overflow:hidden"><img id="i" style="width:100vw;height:100vh;display:block">');
+    }
+    const src = 'data:image/jpeg;base64,' + img.toJPEG(90).toString('base64');
+    await coverView.webContents.executeJavaScript(`new Promise((r) => { const i = document.getElementById('i'); i.onload = () => r(true); i.onerror = () => r(false); i.src = ${JSON.stringify(src)}; })`);
+    const [width, height] = win.getContentSize();
+    coverView.setBounds({ x: 0, y: 0, width, height });
+    win.contentView.addChildView(coverView);
+    await new Promise((r) => setTimeout(r, 32));
+    return true;
   });
 
   ipcMain.handle('net:get', async (_e, req) => {

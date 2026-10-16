@@ -583,6 +583,15 @@
         throw new Error('TRANSLATE_FAILED');
       }
     },
+    cover: PageSnap && !android
+      ? async (on) => {
+          try {
+            return !!(await PageSnap.cover({ on })).on;
+          } catch {
+            return false;
+          }
+        }
+      : null,
     async capture(rect) {
       if (!PageSnap) return null;
       try {

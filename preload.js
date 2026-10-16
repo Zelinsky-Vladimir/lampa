@@ -40,4 +40,5 @@ contextBridge.exposeInMainWorld('api', {
   netGet: (url, opts) => ipcRenderer.invoke('net:get', { url, ...(opts || {}) }),
   lookUp: () => ipcRenderer.invoke('dict:look-up'),
   capture: (rect) => ipcRenderer.invoke('capture', rect),
+  cover: (on) => ipcRenderer.invoke('cover', on),
 });

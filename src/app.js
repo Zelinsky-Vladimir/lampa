@@ -686,7 +686,7 @@
   }
 
   const curlCanvas = $('#curl');
-  const curl = { gl: null, snap: null, gen: 0, pending: null, timer: 0 };
+  const curl = { gl: null, snaps: new Map(), gen: 0, cgen: 0, pending: null, timer: 0, queued: 0, behind: false };
 
   const CURL_VS = `
 attribute vec2 aPos;
@@ -742,7 +742,7 @@ void main() {
   function curlGL() {
     if (curl.gl && !curl.gl.isContextLost()) return curl.gl;
     curl.gl = null;
-    curl.snap = null;
+    curl.snaps.clear();
     const gl = curlCanvas.getContext('webgl', { antialias: true, alpha: true, premultipliedAlpha: true });
     if (!gl || gl.isContextLost()) return null;
     const shader = (type, src) => {
@@ -777,14 +777,18 @@ void main() {
       gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(idx), gl.STATIC_DRAW);
       return { vb, ib, n: idx.length };
     };
+    Object.assign(curl, { gl, U, aPos: gl.getAttribLocation(prog, 'aPos'), mesh: grid(60, 120), quad: grid(1, 1) });
+    return gl;
+  }
+
+  function newTexture(gl) {
     const tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    Object.assign(curl, { gl, U, aPos: gl.getAttribLocation(prog, 'aPos'), mesh: grid(60, 120), quad: grid(1, 1), tex });
-    return gl;
+    return tex;
   }
 
   function curlRect() {
@@ -796,14 +800,21 @@ void main() {
 
   const sameRect = (a, b) => a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
 
-  function validSnap() {
-    const s = curl.snap;
-    return s && curl.gl && !curl.gl.isContextLost() && s.gen === curl.gen && s.index === pg.index && sameRect(s.rect, curlRect()) ? s : null;
+  const glAlive = () => curl.gl && !curl.gl.isContextLost();
+
+  function currentSnap() {
+    const e = curl.snaps.get(pg.index);
+    return e && glAlive() && e.gen === curl.gen && sameRect(e.rect, curlRect()) ? e : null;
   }
 
-  async function takeSnap() {
+  function prevSnap() {
+    const e = curl.snaps.get(pg.index - 1);
+    return e && glAlive() && e.cgen === curl.cgen && sameRect(e.rect, curlRect()) ? e : null;
+  }
+
+  async function takeSnap(index) {
     const gen = curl.gen;
-    const index = pg.index;
+    const cgen = curl.cgen;
     const rect = curlRect();
     if (rect.h < 40) return null;
     try {
@@ -815,14 +826,57 @@ void main() {
         img.close();
         return null;
       }
-      gl.bindTexture(gl.TEXTURE_2D, curl.tex);
+      const old = curl.snaps.get(index);
+      const tex = old ? old.tex : newTexture(gl);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, img);
       img.close();
-      curl.snap = { gen, index, rect };
-      return curl.snap;
+      const e = { index, rect, gen, cgen, tex };
+      curl.snaps.set(index, e);
+      for (const [k, v] of curl.snaps) {
+        if (k !== pg.index && k !== pg.index - 1 && k !== index) {
+          gl.deleteTexture(v.tex);
+          curl.snaps.delete(k);
+        }
+      }
+      return e;
     } catch {
       return null;
     }
+  }
+
+  async function snapBehind() {
+    const n = pg.index;
+    if (n < 1 || !api.cover || !(await api.cover(true))) return null;
+    pg.turning = true;
+    curl.behind = true;
+    root.classList.add('snap-behind');
+    try {
+      ui.book.scrollTo({ left: (n - 1) * pg.step, behavior: 'instant' });
+      await nextFrame();
+      return await takeSnap(n - 1);
+    } finally {
+      root.classList.remove('snap-behind');
+      ui.book.scrollTo({ left: n * pg.step, behavior: 'instant' });
+      await nextFrame();
+      await api.cover(false);
+      curl.behind = false;
+      pg.turning = false;
+    }
+  }
+
+  function exclusive(job) {
+    if (!curl.pending) {
+      curl.pending = job().finally(() => {
+        curl.pending = null;
+        if (curl.queued) {
+          const dir = curl.queued;
+          curl.queued = 0;
+          pageTurn(dir);
+        }
+      });
+    }
+    return curl.pending;
   }
 
   function snapSoon(ms = 140) {
@@ -830,14 +884,13 @@ void main() {
     curl.timer = setTimeout(() => {
       if (!curlOn() || !paged() || !readerVisible() || !current || !current.ready || pg.turning || document.hidden || anyPanelOpen()) return;
       if (root.dataset.chrome !== 'hidden' && !chromeHover) return;
-      if (validSnap()) return;
-      if (curl.pending) {
-        snapSoon();
-        return;
+      if (curl.pending) return snapSoon();
+      if (!currentSnap()) {
+        const index = pg.index;
+        exclusive(() => takeSnap(index)).then(() => snapSoon());
+      } else if (pg.index > 0 && !prevSnap() && api.cover) {
+        exclusive(snapBehind);
       }
-      curl.pending = takeSnap().finally(() => {
-        curl.pending = null;
-      });
     }, ms);
   }
 
@@ -846,10 +899,12 @@ void main() {
     new MutationObserver((list) => {
       if (list.every((m) => m.target === curlCanvas)) return;
       curl.gen++;
+      if (list.some((m) => ui.book.contains(m.target))) curl.cgen++;
       snapSoon();
     }).observe(document.body, { subtree: true, childList: true, attributes: true, characterData: true });
-    new MutationObserver(() => {
+    new MutationObserver((list) => {
       curl.gen++;
+      if (list.some((m) => m.attributeName === 'style' || (m.attributeName.startsWith('data-') && m.attributeName !== 'data-chrome'))) curl.cgen++;
       snapSoon();
     }).observe(root, { attributes: true });
     document.addEventListener('selectionchange', () => {
@@ -858,12 +913,13 @@ void main() {
     });
     window.addEventListener('resize', () => {
       curl.gen++;
+      curl.cgen++;
       snapSoon(300);
     });
     document.addEventListener('visibilitychange', () => snapSoon(300));
     curlCanvas.addEventListener('webglcontextlost', (e) => {
       e.preventDefault();
-      curl.snap = null;
+      curl.snaps.clear();
     });
     curlCanvas.addEventListener('webglcontextrestored', () => {
       curl.gl = null;
@@ -877,7 +933,7 @@ void main() {
     return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
   }
 
-  function playCurl(snap, done) {
+  function playCurl(snap, back, done) {
     const gl = curl.gl;
     const { U } = curl;
     const W = snap.rect.w;
@@ -898,7 +954,7 @@ void main() {
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.clearColor(0, 0, 0, 0);
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, curl.tex);
+    gl.bindTexture(gl.TEXTURE_2D, snap.tex);
     gl.uniform1i(U.uTex, 0);
     gl.uniform2f(U.uRes, W, H);
     gl.uniform3f(U.uPaper, ...hexRgb(themeColors(settings.theme).bg));
@@ -906,8 +962,10 @@ void main() {
     const R = Math.max(11, W * 0.045);
     gl.uniform1f(U.uR, R);
     const C = { x: W, y: H * 0.62 };
-    const from = { x: C.x - 2, y: C.y };
-    const to = { x: -W * 1.05 - Math.PI * R, y: C.y };
+    const flat = { x: C.x - 2, y: C.y };
+    const away = { x: -W * 1.05 - Math.PI * R, y: C.y };
+    const from = back ? away : flat;
+    const to = back ? flat : away;
     const bind = (B) => {
       gl.bindBuffer(gl.ARRAY_BUFFER, B.vb);
       gl.enableVertexAttribArray(curl.aPos);
@@ -943,9 +1001,8 @@ void main() {
     const finish = () => {
       if (finished) return;
       finished = true;
-      curlCanvas.hidden = true;
-      curl.snap = null;
       done();
+      curlCanvas.hidden = true;
     };
     const MS = 620;
     setTimeout(finish, MS + 400);
@@ -954,7 +1011,7 @@ void main() {
       if (finished) return;
       const t = Math.min(1, (now - t0) / MS);
       const e = 1 - (1 - t) ** 3;
-      const lift = Math.sin(Math.PI * e) * H * 0.012;
+      const lift = Math.sin(Math.PI * e) * H * 0.012 * (back ? -1 : 1);
       draw({ x: from.x + (to.x - from.x) * e, y: from.y - lift });
       if (t < 1) requestAnimationFrame(step);
       else finish();
@@ -970,23 +1027,34 @@ void main() {
       await nextFrame();
       root.classList.remove('chrome-instant');
     }
-    let snap = validSnap();
-    pg.index = n;
+    const back = dir < 0 && n === pg.index - 1;
+    let snap = back ? prevSnap() : currentSnap();
     afterTurn(dir);
     if (!snap) {
-      if (curl.pending) await curl.pending;
       await nextFrame();
-      snap = await takeSnap();
+      snap = back ? await snapBehind() : await takeSnap(pg.index);
+      pg.turning = true;
     }
+    if (!snap && back) snap = currentSnap() || (await takeSnap(pg.index));
+    const reverse = back && snap && snap.index === n;
+    pg.index = n;
     if (!snap) {
       apply();
       pg.turning = false;
       return;
     }
-    playCurl(snap, () => {
+    const end = () => {
       pg.turning = false;
       snapSoon();
-    });
+    };
+    if (reverse) {
+      playCurl(snap, true, () => {
+        apply();
+        end();
+      });
+      return;
+    }
+    playCurl(snap, false, end);
     apply();
   }
 
@@ -1018,6 +1086,10 @@ void main() {
   }
 
   function pageTurn(dir) {
+    if (curl.pending && readerVisible()) {
+      curl.queued = dir;
+      return;
+    }
     if (pg.turning || !readerVisible()) return;
     const n = pg.index + dir;
     if (n < 0 || n >= pg.count) return;
@@ -6234,7 +6306,7 @@ ${sentence}` : translation);
       else setBar(root.dataset.chrome === 'hidden');
     });
     const settlePage = () => {
-      if (!paged()) return;
+      if (!paged() || curl.behind) return;
       const idx = clamp(Math.round(ui.book.scrollLeft / pg.step), 0, pg.count - 1);
       if (Math.abs(ui.book.scrollLeft - idx * pg.step) > 2) ui.book.scrollTo({ left: idx * pg.step, behavior: 'instant' });
       pg.index = idx;

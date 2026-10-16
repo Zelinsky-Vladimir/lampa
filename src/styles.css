@@ -1236,6 +1236,7 @@ kbd {
 
 #curl { position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; z-index: 19; pointer-events: none; }
 .chrome-instant #bar, .chrome-instant #footer { transition: none !important; }
+.snap-behind #mini-page { visibility: hidden; }
 
 .sync-box { padding-bottom: 18px; border-bottom: 1px solid var(--faint); }
 .sync-box .setting-hint:empty { display: none; }

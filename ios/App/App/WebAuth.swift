@@ -185,8 +185,28 @@ public class PageSnapPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "PageSnapPlugin"
     public let jsName = "PageSnap"
     public let pluginMethods: [CAPPluginMethod] = [
-        CAPPluginMethod(name: "capture", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "capture", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "cover", returnType: CAPPluginReturnPromise)
     ]
+
+    private var coverView: UIView?
+
+    @objc func cover(_ call: CAPPluginCall) {
+        let on = call.getBool("on") ?? false
+        DispatchQueue.main.async {
+            self.coverView?.removeFromSuperview()
+            self.coverView = nil
+            guard on, let web = self.bridge?.webView, let host = web.superview, let shot = web.snapshotView(afterScreenUpdates: false) else {
+                call.resolve(["on": false])
+                return
+            }
+            shot.frame = web.frame
+            shot.isUserInteractionEnabled = false
+            host.insertSubview(shot, aboveSubview: web)
+            self.coverView = shot
+            call.resolve(["on": true])
+        }
+    }
 
     @objc func capture(_ call: CAPPluginCall) {
         let x = call.getDouble("x") ?? 0
