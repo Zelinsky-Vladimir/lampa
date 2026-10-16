@@ -62,7 +62,7 @@ def slide(W,H,key,lang,shot,bez,rad,top,tsize,ssize,maxw):
     return c.convert('RGB')
 for lang in ['en','ru','fr','de','es']:
     s='ru' if lang=='ru' else 'en'
-    for dev,W,H,order,src,bez,rad,top,ts,ss,mw in [('iphone-6.9',1320,2868,ORDER_P,PHONE,22,120,190,104,58,1180),('ipad-13',2752,2064,ORDER_T,TABLET,30,64,120,112,60,2300)]:
+    for dev,W,H,order,src,bez,rad,top,ts,ss,mw in [('iphone-6.3',1206,2622,ORDER_P,PHONE,20,110,174,95,53,1080),('iphone-6.9',1320,2868,ORDER_P,PHONE,22,120,190,104,58,1180),('ipad-13',2752,2064,ORDER_T,TABLET,30,64,120,112,60,2300)]:
         os.makedirs(f'{OUT}/{lang}/{dev}',exist_ok=True)
         for i,k in enumerate(order,1):
             slide(W,H,k,lang,f'{S}/'+src[k].format(s=s),bez,rad,top,ts,ss,mw).save(f'{OUT}/{lang}/{dev}/{i:02d}-{k}.png')
