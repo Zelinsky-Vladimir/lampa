@@ -13,7 +13,7 @@ contextBridge.exposeInMainWorld('api', {
   saveBookFile: (name, bytes) => ipcRenderer.invoke('book:save', { name, bytes }),
   takeAuthCallback: () => ipcRenderer.invoke('app:take-auth'),
   onAuthCallback: (cb) => ipcRenderer.on('auth-callback', (_e, url) => cb(url)),
-  authRedirect: 'lampa://auth-callback',
+  authRedirect: 'https://lampa-reader.github.io/signed-in.html',
   cloudUrl: ipcRenderer.sendSync('dev:cloud-url'),
   shelfLoad: (keep) => ipcRenderer.invoke('shelf:load', keep),
   shelfSave: (books) => ipcRenderer.invoke('shelf:save', books),

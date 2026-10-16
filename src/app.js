@@ -6229,8 +6229,8 @@ ${sentence}` : translation);
       }
       const r = ui.scroller.getBoundingClientRect();
       const x = (e.clientX - r.left) / r.width;
-      if (x < 0.3) pageTurn(-1);
-      else if (x > 0.7) pageTurn(1);
+      if (x < 0.25) pageTurn(-1);
+      else if (x > 0.75) pageTurn(1);
       else setBar(root.dataset.chrome === 'hidden');
     });
     const settlePage = () => {
