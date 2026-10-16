@@ -690,12 +690,11 @@
 
   const CURL_VS = `
 attribute vec2 aPos;
-uniform vec2 uRes; uniform vec2 uL; uniform vec2 uD; uniform float uR; uniform float uLift; uniform float uFlat; uniform float uMirror;
+uniform vec2 uRes; uniform vec2 uL; uniform vec2 uD; uniform float uR; uniform float uLift; uniform float uFlat;
 varying vec2 vUV; varying float vTh; varying float vS;
 const float PI = 3.14159265;
 void main() {
   vec2 p = aPos * uRes;
-  if (uMirror > 0.5) p.x = uRes.x - p.x;
   float s = dot(p - uL, uD);
   vec3 q = vec3(p, 0.0);
   float th = 0.0;
@@ -704,7 +703,6 @@ void main() {
     if (th < PI) { q.xy = p - uD * s + uD * (uR * sin(th)); q.z = uR * (1.0 - cos(th)); }
     else { q.xy = p - uD * s - uD * (s - PI * uR); q.z = 2.0 * uR; }
   }
-  if (uMirror > 0.5) q.x = uRes.x - q.x;
   vUV = aPos; vTh = th; vS = s;
   float z = uFlat > 0.5 ? 0.98 : 0.5 - q.z / (4.0 * uR + 4.0);
   gl_Position = vec4(q.x / uRes.x * 2.0 - 1.0, 1.0 - q.y / uRes.y * 2.0, z, 1.0);
@@ -712,7 +710,7 @@ void main() {
 
   const CURL_FS = `
 precision highp float;
-uniform sampler2D uTex; uniform vec2 uD; uniform float uR; uniform float uFlat; uniform vec3 uPaper; uniform float uFlap; uniform float uMirror; uniform float uGain;
+uniform sampler2D uTex; uniform vec2 uD; uniform float uR; uniform float uFlat; uniform vec3 uPaper; uniform float uFlap; uniform float uGain;
 varying vec2 vUV; varying float vTh; varying float vS;
 const float PI = 3.14159265;
 void main() {
@@ -724,7 +722,6 @@ void main() {
   vec3 tex = min(texture2D(uTex, vUV).rgb * uGain, vec3(1.0));
   float th = min(vTh, PI);
   vec3 n = vec3(-uD * sin(th), cos(th));
-  if (uMirror > 0.5) n.x = -n.x;
   vec3 Ld = normalize(vec3(-0.35, -0.45, 0.82));
   vec3 col;
   if (gl_FrontFacing) {
@@ -761,7 +758,7 @@ void main() {
     if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null;
     gl.useProgram(prog);
     const U = {};
-    for (const n of ['uRes', 'uL', 'uD', 'uR', 'uLift', 'uFlat', 'uMirror', 'uTex', 'uPaper', 'uFlap', 'uGain']) U[n] = gl.getUniformLocation(prog, n);
+    for (const n of ['uRes', 'uL', 'uD', 'uR', 'uLift', 'uFlat', 'uTex', 'uPaper', 'uFlap', 'uGain']) U[n] = gl.getUniformLocation(prog, n);
     const grid = (nx, ny) => {
       const v = [];
       for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) v.push(i / nx, j / ny);
@@ -880,7 +877,7 @@ void main() {
     return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
   }
 
-  function playCurl(snap, dir, done) {
+  function playCurl(snap, done) {
     const gl = curl.gl;
     const { U } = curl;
     const W = snap.rect.w;
@@ -905,7 +902,6 @@ void main() {
     gl.uniform1i(U.uTex, 0);
     gl.uniform2f(U.uRes, W, H);
     gl.uniform3f(U.uPaper, ...hexRgb(themeColors(settings.theme).bg));
-    gl.uniform1f(U.uMirror, dir < 0 ? 1 : 0);
     gl.uniform1f(U.uGain, settings.brightness < 1 ? 1 / Math.max(0.05, settings.brightness) : 1);
     const R = Math.max(11, W * 0.045);
     gl.uniform1f(U.uR, R);
@@ -987,7 +983,7 @@ void main() {
       pg.turning = false;
       return;
     }
-    playCurl(snap, dir, () => {
+    playCurl(snap, () => {
       pg.turning = false;
       snapSoon();
     });
@@ -5948,24 +5944,27 @@ void main() {
       'touchstart',
       (e) => {
         const p = e.touches.length === 1 ? e.touches[0] : null;
-        start = p ? { x: p.clientX, y: p.clientY, time: Date.now() } : null;
+        start = p ? { x: p.clientX, y: p.clientY } : null;
       },
       { passive: true },
     );
     ui.scroller.addEventListener(
-      'touchend',
+      'touchmove',
       (e) => {
         if (!start || !paged() || !current || !current.ready) return;
-        const p = e.changedTouches[0];
+        const p = e.touches[0];
         const dx = p.clientX - start.x;
         const dy = p.clientY - start.y;
-        const quick = Date.now() - start.time < 700;
+        if (Math.abs(dx) < 24 || Math.abs(dx) < Math.abs(dy) * 1.3) return;
         start = null;
-        if (!quick || Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.3 || !window.getSelection().isCollapsed) return;
+        if (!window.getSelection().isCollapsed) return;
         pageTurn(dx < 0 ? 1 : -1);
       },
       { passive: true },
     );
+    ui.scroller.addEventListener('touchend', () => {
+      start = null;
+    });
 
     let tap = null;
     ui.book.addEventListener(
