@@ -1403,6 +1403,21 @@ kbd {
 .size-step button { width: 36px; font-family: Georgia, 'Times New Roman', serif; font-weight: 700; }
 .size-step .size-down { font-size: 13px; }
 .size-step .size-up { font-size: 19px; }
+.mode-btn { display: inline-grid; flex: none; place-items: center; width: 36px; height: 36px; padding: 0; border: none; border-radius: 18px; background: var(--panel-2); color: var(--fg); cursor: pointer; }
+.mode-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.mode-btn .sun, .mode-btn.night .moon { display: none; }
+.mode-btn.night .sun { display: block; }
+@media (min-width: 961px) { #foot-mode { display: none; } }
+.clear-wrap { position: relative; display: block; min-width: 0; }
+.clear-wrap > input { width: 100%; box-sizing: border-box; padding-right: 38px; }
+.clear-wrap > input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; display: none; }
+.clear-btn { position: absolute; top: 50%; right: 2px; display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: none; background: none; color: var(--muted); opacity: 0.75; cursor: pointer; transform: translateY(-50%); }
+.clear-btn:hover { opacity: 1; }
+.clear-btn svg { width: 18px; height: 18px; }
+.clear-btn circle { fill: currentColor; }
+.clear-btn path { fill: none; stroke: var(--bg); stroke-width: 2.2; stroke-linecap: round; }
+.clear-wrap > input:placeholder-shown + .clear-btn { display: none; }
+.cat-search .clear-wrap { flex: 1; }
 .size-val { min-width: 22px; text-align: center; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
 #bar-size { margin: 0 4px; }
 @media (min-width: 961px) { #foot-size { display: none; } }

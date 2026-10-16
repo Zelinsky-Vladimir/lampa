@@ -13,8 +13,8 @@ android {
         applicationId "io.github.zelinskyvladimir.lampa"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1331
-        versionName "0.13.31"
+        versionCode 1332
+        versionName "0.13.32"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

@@ -43,10 +43,12 @@ button, .card, .icon-btn, .home-tabs, .seg { -webkit-user-select: none; user-sel
   #bar > .bar-group:last-child { order: 4; }
   :root[data-mode="reader"] #btn-account, #btn-full { display: none !important; }
 
-  #footer { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "scrub scrub scrub" "size info page"; align-items: center; gap: 8px 12px; padding-top: 10px; padding-bottom: calc(10px + var(--safe-bottom)); }
+  #footer { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; grid-template-areas: "scrub scrub scrub scrub" "size mode info page"; align-items: center; gap: 8px 12px; padding-top: 10px; padding-bottom: calc(10px + var(--safe-bottom)); }
   #footer .scrub-wrap { grid-area: scrub; }
   #foot-size { grid-area: size; height: 42px; border-radius: 21px; }
   #foot-size button { width: 44px; }
+  #foot-mode { grid-area: mode; width: 44px; height: 42px; border-radius: 21px; }
+  .clear-btn { width: 44px; height: 44px; right: 0; }
   #foot-info { grid-area: info; display: flex; justify-content: flex-end; gap: 4px; min-width: 0; white-space: nowrap; font-size: 13px; color: var(--muted); }
   #fi-ch { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   #fi-pct { flex: none; }

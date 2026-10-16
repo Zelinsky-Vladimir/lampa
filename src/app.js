@@ -68,6 +68,7 @@
   const DEFAULTS = {
     lang: 'auto',
     theme: 'paper',
+    dayTheme: 'paper',
     customBg: '#efe6d2',
     customFg: '#2f2a24',
     font: 'literata',
@@ -346,6 +347,33 @@
     updateProgress();
   }
 
+  function toggleNight() {
+    if (settings.theme === 'night') updateSettings({ theme: settings.dayTheme && settings.dayTheme !== 'night' ? settings.dayTheme : 'paper' });
+    else updateSettings({ theme: 'night', dayTheme: settings.theme });
+  }
+
+  function clearInput(input) {
+    input.value = '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.focus();
+  }
+
+  function addClear(input) {
+    if (!input || input.parentElement.classList.contains('clear-wrap')) return;
+    const wrap = el('span', 'clear-wrap');
+    input.before(wrap);
+    wrap.append(input);
+    const b = el('button', 'clear-btn');
+    b.type = 'button';
+    b.tabIndex = -1;
+    b.dataset.i18nAria = 'clearField';
+    b.setAttribute('aria-label', t('clearField'));
+    b.innerHTML = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7"/></svg>';
+    b.addEventListener('pointerdown', (e) => e.preventDefault());
+    b.addEventListener('click', () => clearInput(input));
+    wrap.append(b);
+  }
+
   function buildSettingsUI() {
     const langSel = $('#lang');
     for (const l of I18n.LANGS) {
@@ -408,6 +436,12 @@
       b.classList.toggle('active', b.dataset.theme === settings.theme);
     }
     $('#lang').value = I18n.lang;
+    const night = settings.theme === 'night';
+    for (const b of document.querySelectorAll('.mode-btn')) {
+      b.classList.toggle('night', night);
+      b.title = t(night ? 'dayMode' : 'nightMode');
+      b.setAttribute('aria-label', b.title);
+    }
     syncColorControls();
     for (const b of document.querySelectorAll('#font-chips button')) b.classList.toggle('active', b.dataset.font === settings.font);
     for (const v of document.querySelectorAll('.size-val')) v.textContent = settings.fontSize;
@@ -2490,6 +2524,7 @@
       input.placeholder = t('catSearchIn', { name: cat ? cat.title : '' });
       input.enterKeyHint = 'search';
       form.append(svgIcon('M11 4.5a6.5 6.5 0 1 0 0 13a6.5 6.5 0 1 0 0-13zM20 20l-4.2-4.2'), input);
+      addClear(input);
       form.addEventListener('submit', (e) => {
         e.preventDefault();
         const q = input.value.trim();
@@ -4037,7 +4072,8 @@
     }
     if (e.target instanceof Element && e.target.closest('input, select, textarea')) {
       if (e.key === 'Escape') {
-        if (e.target === ui.searchInput) closeSearch();
+        if (e.target.closest('.clear-wrap') && e.target.value) clearInput(e.target);
+        else if (e.target === ui.searchInput) closeSearch();
         else if (e.target === ui.annotText) closeNoteEditor();
         else e.target.blur();
       }
@@ -4068,6 +4104,10 @@
     }
     if (e.code === 'KeyS' && !e.altKey) {
       openPanel(ui.settingsPanel);
+      return;
+    }
+    if (e.code === 'KeyN' && !e.altKey) {
+      toggleNight();
       return;
     }
     if (!readerVisible() || e.altKey) return;
@@ -5870,6 +5910,8 @@
   }
 
   function bindUI() {
+    for (const b of document.querySelectorAll('.mode-btn')) b.addEventListener('click', toggleNight);
+    for (const id of ['#all-filter', '#shelf-filter', '#search-input', '#book-q']) addClear($(id));
     bindShelf();
     bindSync();
     $('#home-add').addEventListener('click', openAddMenu);
