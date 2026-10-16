@@ -12,6 +12,7 @@
   const AppleSignIn = (native && P.AppleSignIn) || null;
   const AppleTranslate = (native && P.AppleTranslate) || null;
   const ReaderMenu = (native && P.ReaderMenu) || null;
+  const PageSnap = (native && P.PageSnap) || null;
   const Browser = (native && P.Browser) || null;
   const android = native && Cap.getPlatform() === 'android';
   const LampaWindow = (native && P.LampaWindow) || null;
@@ -364,8 +365,8 @@
 
   window.api = {
     platform: native ? Cap.getPlatform() : 'web',
-    features: { curl: false, fullscreen: false, updates: false, dragDrop: false },
-    defaults: { view: 'pages', pageAnim: 'slide' },
+    features: { curl: !!PageSnap, fullscreen: false, updates: false, dragDrop: false },
+    defaults: { view: 'pages' },
 
     openDialog() {
       return new Promise((resolve) => {
@@ -582,7 +583,19 @@
         throw new Error('TRANSLATE_FAILED');
       }
     },
-    capture: async () => null,
+    async capture(rect) {
+      if (!PageSnap) return null;
+      try {
+        const { data } = await PageSnap.capture(rect);
+        if (!data) return null;
+        const bin = atob(data);
+        const out = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+        return out;
+      } catch {
+        return null;
+      }
+    },
 
     async shelfLoad(keep) {
       const books = await readShelf();

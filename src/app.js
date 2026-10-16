@@ -83,8 +83,7 @@
     brightness: 1,
     translateTo: 'auto',
     view: 'scroll',
-    pageAnim: 'curl',
-    curlDefault: true,
+    pageCurl: true,
     progressLine: false,
     ...(api.defaults || {}),
   };
@@ -176,8 +175,12 @@
     settings.theme = OLD_THEMES[settings.theme];
     saveJSON(LS.settings, settings);
   }
-  if (savedSettings && !savedSettings.curlDefault) Object.assign(settings, { pageAnim: 'curl', curlDefault: true });
-  if (!features.curl && settings.pageAnim === 'curl') settings.pageAnim = 'slide';
+  if (savedSettings && 'pageAnim' in savedSettings) {
+    settings.pageCurl = savedSettings.pageAnim !== 'none';
+    delete settings.pageAnim;
+    delete settings.curlDefault;
+    saveJSON(LS.settings, settings);
+  }
   if (savedSettings && (savedSettings.layoutV || 0) < 3) {
     if (!savedSettings.layoutV) settings.footerAlways = false;
     settings.progressLine = false;
@@ -280,7 +283,6 @@
     $('#lang').value = I18n.lang;
     buildFontChips();
     fillTranslateSelect();
-    fillAnimSelect();
     for (const b of document.querySelectorAll('.theme-swatch')) {
       const th = THEMES.find((x) => x.id === b.dataset.theme);
       b.title = t(th.name);
@@ -382,8 +384,7 @@
       langSel.append(o);
     }
     langSel.addEventListener('change', () => updateSettings({ lang: langSel.value }));
-    const animSel = $('#page-anim');
-    animSel.addEventListener('change', () => updateSettings({ pageAnim: animSel.value }));
+    if (!features.curl) $('#page-curl-setting').style.display = 'none';
     const trSel = $('#translate-to');
     trSel.addEventListener('change', () => {
       updateSettings({ translateTo: trSel.value });
@@ -451,7 +452,6 @@
     $('#auto-speed').value = settings.autoSpeed;
     $('#auto-speed-val').textContent = t('pxs', { n: settings.autoSpeed });
     ui.autoSpeedLabel.textContent = t('pxs', { n: settings.autoSpeed });
-    $('#page-anim').value = settings.pageAnim;
     for (const seg of document.querySelectorAll('.seg')) {
       for (const b of seg.children) b.classList.toggle('active', b.dataset.value === String(settings[seg.dataset.key]));
     }
@@ -626,8 +626,9 @@
     if (!paged()) return;
     const sw = ui.scroller.clientWidth || window.innerWidth;
     const safe = safeInsets();
-    const top = 48 + 10 + safe.top;
-    const bottom = 46 + 12 + safe.bottom;
+    const phone = sw < 700;
+    const top = phone ? Math.max(safe.top, 10) + 18 : 48 + 10 + safe.top;
+    const bottom = phone ? Math.max(safe.bottom, 8) + 30 : 46 + 12 + safe.bottom;
     const h = Math.max(240, window.innerHeight - top - bottom);
     const cols = 1;
     const avail = sw - (sw < 600 ? 36 : 80) - 2 * Math.max(safe.left, safe.right);
@@ -685,158 +686,312 @@
   }
 
   const curlCanvas = $('#curl');
-  const CURL_MS = 680;
+  const curl = { gl: null, snap: null, gen: 0, pending: null, timer: 0 };
 
-  async function captureSheet() {
-    const keepBar = chromeHover && root.dataset.chrome !== 'hidden';
-    if (!keepBar) {
-      root.classList.add('chrome-instant');
-      setBar(false);
-    }
-    await nextFrame();
+  const CURL_VS = `
+attribute vec2 aPos;
+uniform vec2 uRes; uniform vec2 uL; uniform vec2 uD; uniform float uR; uniform float uLift; uniform float uFlat; uniform float uMirror;
+varying vec2 vUV; varying float vTh; varying float vS;
+const float PI = 3.14159265;
+void main() {
+  vec2 p = aPos * uRes;
+  if (uMirror > 0.5) p.x = uRes.x - p.x;
+  float s = dot(p - uL, uD);
+  vec3 q = vec3(p, 0.0);
+  float th = 0.0;
+  if (uLift > 0.5 && s > 0.0) {
+    th = s / uR;
+    if (th < PI) { q.xy = p - uD * s + uD * (uR * sin(th)); q.z = uR * (1.0 - cos(th)); }
+    else { q.xy = p - uD * s - uD * (s - PI * uR); q.z = 2.0 * uR; }
+  }
+  if (uMirror > 0.5) q.x = uRes.x - q.x;
+  vUV = aPos; vTh = th; vS = s;
+  float z = uFlat > 0.5 ? 0.98 : 0.5 - q.z / (4.0 * uR + 4.0);
+  gl_Position = vec4(q.x / uRes.x * 2.0 - 1.0, 1.0 - q.y / uRes.y * 2.0, z, 1.0);
+}`;
+
+  const CURL_FS = `
+precision highp float;
+uniform sampler2D uTex; uniform vec2 uD; uniform float uR; uniform float uFlat; uniform vec3 uPaper; uniform float uFlap; uniform float uMirror; uniform float uGain;
+varying vec2 vUV; varying float vTh; varying float vS;
+const float PI = 3.14159265;
+void main() {
+  if (uFlat > 0.5) {
+    float sh = vS > 0.0 ? 0.42 * exp(-max(vS - uR * 0.9, 0.0) / (uR * 0.9 + 8.0)) : 0.0;
+    gl_FragColor = vec4(0.0, 0.0, 0.0, sh);
+    return;
+  }
+  vec3 tex = min(texture2D(uTex, vUV).rgb * uGain, vec3(1.0));
+  float th = min(vTh, PI);
+  vec3 n = vec3(-uD * sin(th), cos(th));
+  if (uMirror > 0.5) n.x = -n.x;
+  vec3 Ld = normalize(vec3(-0.35, -0.45, 0.82));
+  vec3 col;
+  if (gl_FrontFacing) {
+    float dif = clamp(dot(n, Ld), 0.0, 1.0);
+    col = tex * (vTh > 0.0 ? 0.7 + 0.3 * dif : 1.0);
+    if (vTh <= 0.0 && uFlap > -1e4 && vS < uFlap) col *= 1.0 - 0.18 * exp(-(uFlap - vS) / 14.0);
+  } else {
+    vec3 nb = -n;
+    float dif = clamp(dot(nb, Ld), 0.0, 1.0);
+    float spec = pow(clamp(dot(reflect(-Ld, nb), vec3(0.0, 0.0, 1.0)), 0.0, 1.0), 18.0);
+    col = mix(uPaper, tex, 0.13) * (0.8 + 0.2 * dif) + vec3(0.12) * spec;
+  }
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+  const curlOn = () => features.curl && settings.pageCurl && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function curlGL() {
+    if (curl.gl && !curl.gl.isContextLost()) return curl.gl;
+    curl.gl = null;
+    curl.snap = null;
+    const gl = curlCanvas.getContext('webgl', { antialias: true, alpha: true, premultipliedAlpha: true });
+    if (!gl || gl.isContextLost()) return null;
+    const shader = (type, src) => {
+      const s = gl.createShader(type);
+      gl.shaderSource(s, src);
+      gl.compileShader(s);
+      return s;
+    };
+    const prog = gl.createProgram();
+    gl.attachShader(prog, shader(gl.VERTEX_SHADER, CURL_VS));
+    gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, CURL_FS));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null;
+    gl.useProgram(prog);
+    const U = {};
+    for (const n of ['uRes', 'uL', 'uD', 'uR', 'uLift', 'uFlat', 'uMirror', 'uTex', 'uPaper', 'uFlap', 'uGain']) U[n] = gl.getUniformLocation(prog, n);
+    const grid = (nx, ny) => {
+      const v = [];
+      for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) v.push(i / nx, j / ny);
+      const idx = [];
+      for (let j = 0; j < ny; j++) {
+        for (let i = 0; i < nx; i++) {
+          const a = j * (nx + 1) + i;
+          idx.push(a, a + nx + 1, a + 1, a + 1, a + nx + 1, a + nx + 2);
+        }
+      }
+      const vb = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, vb);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(v), gl.STATIC_DRAW);
+      const ib = gl.createBuffer();
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
+      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(idx), gl.STATIC_DRAW);
+      return { vb, ib, n: idx.length };
+    };
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    Object.assign(curl, { gl, U, aPos: gl.getAttribLocation(prog, 'aPos'), mesh: grid(60, 120), quad: grid(1, 1), tex });
+    return gl;
+  }
+
+  function curlRect() {
+    const top = root.dataset.chrome !== 'hidden' ? Math.max(0, Math.round(ui.bar.getBoundingClientRect().bottom)) : 0;
     const footer = $('#footer').getBoundingClientRect();
-    const top = keepBar ? ui.bar.getBoundingClientRect().bottom : 0;
-    const bottom = footer.top < window.innerHeight - 2 ? footer.top : window.innerHeight;
-    const rect = { x: 0, y: top, w: window.innerWidth, h: bottom - top };
+    const bottom = Math.round(footer.top < window.innerHeight - 2 ? footer.top : window.innerHeight);
+    return { x: 0, y: top, w: window.innerWidth, h: bottom - top };
+  }
+
+  const sameRect = (a, b) => a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
+
+  function validSnap() {
+    const s = curl.snap;
+    return s && curl.gl && !curl.gl.isContextLost() && s.gen === curl.gen && s.index === pg.index && sameRect(s.rect, curlRect()) ? s : null;
+  }
+
+  async function takeSnap() {
+    const gen = curl.gen;
+    const index = pg.index;
+    const rect = curlRect();
+    if (rect.h < 40) return null;
     try {
       const buf = await api.capture({ x: rect.x, y: rect.y, width: rect.w, height: rect.h });
       if (!buf) return null;
       const img = await createImageBitmap(new Blob([buf], { type: 'image/jpeg' }));
-      return { img, rect };
+      const gl = curlGL();
+      if (!gl) {
+        img.close();
+        return null;
+      }
+      gl.bindTexture(gl.TEXTURE_2D, curl.tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, img);
+      img.close();
+      curl.snap = { gen, index, rect };
+      return curl.snap;
     } catch {
       return null;
-    } finally {
-      root.classList.remove('chrome-instant');
     }
   }
 
-  const snapFilter = () => (settings.brightness < 1 ? `brightness(${1 / settings.brightness})` : 'none');
-
-  function clipHalf(poly, M, n, corner) {
-    const side = (q) => ((q[0] - M.x) * n.x + (q[1] - M.y) * n.y) * (corner ? 1 : -1);
-    const out = [];
-    for (let i = 0; i < poly.length; i++) {
-      const a = poly[i];
-      const b = poly[(i + 1) % poly.length];
-      const sa = side(a);
-      const sb = side(b);
-      if (sa >= 0) out.push(a);
-      if ((sa >= 0) !== (sb >= 0)) {
-        const k = sa / (sa - sb);
-        out.push([a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k]);
+  function snapSoon(ms = 140) {
+    clearTimeout(curl.timer);
+    curl.timer = setTimeout(() => {
+      if (!curlOn() || !paged() || !readerVisible() || !current || !current.ready || pg.turning || document.hidden || anyPanelOpen()) return;
+      if (root.dataset.chrome !== 'hidden' && !chromeHover) return;
+      if (validSnap()) return;
+      if (curl.pending) {
+        snapSoon();
+        return;
       }
-    }
-    return out;
+      curl.pending = takeSnap().finally(() => {
+        curl.pending = null;
+      });
+    }, ms);
   }
 
-  function tracePoly(ctx, poly) {
-    ctx.beginPath();
-    poly.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
-    ctx.closePath();
+  function setupCurl() {
+    if (!features.curl) return;
+    new MutationObserver((list) => {
+      if (list.every((m) => m.target === curlCanvas)) return;
+      curl.gen++;
+      snapSoon();
+    }).observe(document.body, { subtree: true, childList: true, attributes: true, characterData: true });
+    new MutationObserver(() => {
+      curl.gen++;
+      snapSoon();
+    }).observe(root, { attributes: true });
+    document.addEventListener('selectionchange', () => {
+      curl.gen++;
+      snapSoon();
+    });
+    window.addEventListener('resize', () => {
+      curl.gen++;
+      snapSoon(300);
+    });
+    document.addEventListener('visibilitychange', () => snapSoon(300));
+    curlCanvas.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault();
+      curl.snap = null;
+    });
+    curlCanvas.addEventListener('webglcontextrestored', () => {
+      curl.gl = null;
+      snapSoon();
+    });
   }
 
-  function drawCurl(snap, C0, P, fade) {
-    const dpr = window.devicePixelRatio || 1;
-    const ctx = curlCanvas.getContext('2d');
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, curlCanvas.width, curlCanvas.height);
-    ctx.setTransform(dpr, 0, 0, dpr, snap.rect.x * dpr, snap.rect.y * dpr);
+  function hexRgb(c) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(String(c || '').trim());
+    const n = m ? parseInt(m[1], 16) : 0xf8f5ee;
+    return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+  }
+
+  function playCurl(snap, dir, done) {
+    const gl = curl.gl;
+    const { U } = curl;
     const W = snap.rect.w;
     const H = snap.rect.h;
-    const len = Math.hypot(C0.x - P.x, C0.y - P.y);
-    if (len < 1) {
-      ctx.filter = snapFilter();
-      ctx.drawImage(snap.img, 0, 0, W, H);
-      ctx.filter = 'none';
-      return;
-    }
-    const n = { x: (C0.x - P.x) / len, y: (C0.y - P.y) / len };
-    const M = { x: (C0.x + P.x) / 2, y: (C0.y + P.y) / 2 };
-    const page = [[0, 0], [W, 0], [W, H], [0, H]];
-    const flat = clipHalf(page, M, n, false);
-    const lifted = clipHalf(page, M, n, true);
-
-    if (flat.length) {
-      ctx.save();
-      tracePoly(ctx, flat);
-      ctx.clip();
-      ctx.filter = snapFilter();
-      ctx.drawImage(snap.img, 0, 0, W, H);
-      ctx.filter = 'none';
-      ctx.restore();
-    }
-    if (!lifted.length) return;
-
-    ctx.save();
-    tracePoly(ctx, lifted);
-    ctx.clip();
-    const sh = ctx.createLinearGradient(M.x, M.y, M.x + n.x * 80, M.y + n.y * 80);
-    sh.addColorStop(0, `rgba(0,0,0,${0.2 * fade})`);
-    sh.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = sh;
-    ctx.fillRect(-W, -H, W * 3, H * 3);
-    ctx.restore();
-
-    const d = M.x * n.x + M.y * n.y;
-    ctx.save();
-    ctx.globalAlpha = fade;
-    ctx.transform(1 - 2 * n.x * n.x, -2 * n.x * n.y, -2 * n.x * n.y, 1 - 2 * n.y * n.y, 2 * d * n.x, 2 * d * n.y);
-    tracePoly(ctx, lifted);
-    ctx.shadowColor = 'rgba(0,0,0,0.2)';
-    ctx.shadowBlur = 26;
-    ctx.fillStyle = themeColors(settings.theme).bg;
-    ctx.fill();
-    ctx.shadowColor = 'transparent';
-    ctx.clip();
-    ctx.globalAlpha = 0.09 * fade;
-    ctx.filter = snapFilter();
-    ctx.drawImage(snap.img, 0, 0, W, H);
-    ctx.filter = 'none';
-    ctx.globalAlpha = fade;
-    const far = len / 2;
-    const g = ctx.createLinearGradient(M.x, M.y, M.x + n.x * far, M.y + n.y * far);
-    g.addColorStop(0, 'rgba(0,0,0,0.12)');
-    g.addColorStop(0.12, 'rgba(255,255,255,0.16)');
-    g.addColorStop(0.6, 'rgba(255,255,255,0.03)');
-    g.addColorStop(1, 'rgba(0,0,0,0.06)');
-    ctx.fillStyle = g;
-    ctx.fillRect(-W * 2, -H * 2, W * 5, H * 5);
-    ctx.restore();
-  }
-
-  function startCurl(snap, dir, done) {
     const dpr = window.devicePixelRatio || 1;
-    curlCanvas.width = Math.round(window.innerWidth * dpr);
-    curlCanvas.height = Math.round(window.innerHeight * dpr);
+    const pw = Math.round(W * dpr);
+    const ph = Math.round(H * dpr);
+    if (curlCanvas.width !== pw || curlCanvas.height !== ph) {
+      curlCanvas.width = pw;
+      curlCanvas.height = ph;
+    }
+    Object.assign(curlCanvas.style, { left: snap.rect.x + 'px', top: snap.rect.y + 'px', width: W + 'px', height: H + 'px' });
+    gl.viewport(0, 0, pw, ph);
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthFunc(gl.LEQUAL);
+    gl.disable(gl.CULL_FACE);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.clearColor(0, 0, 0, 0);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, curl.tex);
+    gl.uniform1i(U.uTex, 0);
+    gl.uniform2f(U.uRes, W, H);
+    gl.uniform3f(U.uPaper, ...hexRgb(themeColors(settings.theme).bg));
+    gl.uniform1f(U.uMirror, dir < 0 ? 1 : 0);
+    gl.uniform1f(U.uGain, settings.brightness < 1 ? 1 / Math.max(0.05, settings.brightness) : 1);
+    const R = Math.max(11, W * 0.045);
+    gl.uniform1f(U.uR, R);
+    const C = { x: W, y: H * 0.62 };
+    const from = { x: C.x - 2, y: C.y };
+    const to = { x: -W * 1.05 - Math.PI * R, y: C.y };
+    const bind = (B) => {
+      gl.bindBuffer(gl.ARRAY_BUFFER, B.vb);
+      gl.enableVertexAttribArray(curl.aPos);
+      gl.vertexAttribPointer(curl.aPos, 2, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, B.ib);
+    };
+    const draw = (F) => {
+      const dx = Math.max(0.5, C.x - F.x);
+      const dy = C.y - F.y;
+      const ang = clamp(Math.atan2(dy, dx), -0.06, 0.06);
+      const d = { x: Math.cos(ang), y: Math.sin(ang) };
+      const len = Math.max(0.5, dx * d.x + dy * d.y);
+      const sc = (len + Math.PI * R) / 2;
+      const L = { x: C.x - d.x * sc, y: C.y - d.y * sc };
+      let sMax = -1e9;
+      for (const [x, y] of [[0, 0], [W, 0], [0, H], [W, H]]) sMax = Math.max(sMax, (x - L.x) * d.x + (y - L.y) * d.y);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      gl.uniform2f(U.uL, L.x, L.y);
+      gl.uniform2f(U.uD, d.x, d.y);
+      gl.uniform1f(U.uFlap, sMax > Math.PI * R ? -(sMax - Math.PI * R) : -1e5);
+      bind(curl.quad);
+      gl.uniform1f(U.uFlat, 1);
+      gl.uniform1f(U.uLift, 0);
+      gl.drawElements(gl.TRIANGLES, curl.quad.n, gl.UNSIGNED_SHORT, 0);
+      bind(curl.mesh);
+      gl.uniform1f(U.uFlat, 0);
+      gl.uniform1f(U.uLift, 1);
+      gl.drawElements(gl.TRIANGLES, curl.mesh.n, gl.UNSIGNED_SHORT, 0);
+    };
+    draw(from);
     curlCanvas.hidden = false;
-    const W = snap.rect.w;
-    const H = snap.rect.h;
-    const C0 = dir > 0 ? { x: W, y: H } : { x: 0, y: H };
-    drawCurl(snap, C0, C0, 1);
-    const t0 = performance.now();
     let finished = false;
     const finish = () => {
       if (finished) return;
       finished = true;
       curlCanvas.hidden = true;
-      snap.img.close();
+      curl.snap = null;
       done();
     };
-    setTimeout(finish, CURL_MS + 300);
-    const ease = (x) => -(Math.cos(Math.PI * x) - 1) / 2;
-    const frame = (now) => {
-      const t = Math.min(1, (now - t0) / CURL_MS);
-      const e = ease(t);
-      const P = {
-        x: dir > 0 ? W - 2 * W * e : 2 * W * e,
-        y: H - H * 0.12 * Math.sin(Math.PI * e),
-      };
+    const MS = 620;
+    setTimeout(finish, MS + 400);
+    const t0 = performance.now();
+    const step = (now) => {
       if (finished) return;
-      drawCurl(snap, C0, P, e > 0.7 ? Math.cos(((e - 0.7) / 0.3) * Math.PI / 2) : 1);
-      if (t < 1) requestAnimationFrame(frame);
+      const t = Math.min(1, (now - t0) / MS);
+      const e = 1 - (1 - t) ** 3;
+      const lift = Math.sin(Math.PI * e) * H * 0.012;
+      draw({ x: from.x + (to.x - from.x) * e, y: from.y - lift });
+      if (t < 1) requestAnimationFrame(step);
       else finish();
     };
-    requestAnimationFrame(frame);
+    requestAnimationFrame(step);
+  }
+
+  async function curlTurn(dir, n, apply) {
+    pg.turning = true;
+    if (root.dataset.chrome !== 'hidden' && !chromeHover) {
+      root.classList.add('chrome-instant');
+      setBar(false);
+      await nextFrame();
+      root.classList.remove('chrome-instant');
+    }
+    let snap = validSnap();
+    pg.index = n;
+    afterTurn(dir);
+    if (!snap) {
+      if (curl.pending) await curl.pending;
+      await nextFrame();
+      snap = await takeSnap();
+    }
+    if (!snap) {
+      apply();
+      pg.turning = false;
+      return;
+    }
+    playCurl(snap, dir, () => {
+      pg.turning = false;
+      snapSoon();
+    });
+    apply();
   }
 
   const nextFrame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -853,60 +1008,17 @@
     if (dir > 0 && !chromeHover && !anyPanelOpen() && !gotoOpen()) setBar(false);
   }
 
-  function glideTo(el, left) {
-    const from = el.scrollLeft;
-    const t0 = performance.now();
-    const step = (now) => {
-      const t = Math.min(1, (now - t0) / 260);
-      el.scrollLeft = from + (left - from) * (1 - (1 - t) ** 3);
-      if (t < 1) requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  }
-
   function showPage(n, dir) {
     n = clamp(n, 0, pg.count - 1);
-    const b = ui.book;
-    const apply = (smooth) => {
-      if (smooth && api.platform === 'android') glideTo(b, n * pg.step);
-      else b.scrollTo({ left: n * pg.step, behavior: smooth ? 'smooth' : 'instant' });
-    };
-    pg.index = n;
-    const anim = dir && b.animate ? settings.pageAnim : 'none';
-    if (anim === 'curl') {
-      pg.turning = true;
-      afterTurn(dir);
-      nextFrame().then(captureSheet).then((snap) => {
-        if (!snap) {
-          apply(true);
-          pg.turning = false;
-          return;
-        }
-        startCurl(snap, dir, () => {
-          pg.turning = false;
-        });
-        apply(false);
-      });
+    const apply = () => ui.book.scrollTo({ left: n * pg.step, behavior: 'instant' });
+    if (dir && curlOn()) {
+      curlTurn(dir, n, apply);
       return;
     }
-    if (anim === 'fade' || anim === 'flip') {
-      const s = dir > 0 ? 1 : -1;
-      const out = anim === 'fade'
-        ? [{ opacity: 1 }, { opacity: 0 }]
-        : [{ transform: 'none', opacity: 1 }, { transform: `perspective(1800px) rotateY(${-14 * s}deg) translateX(${-30 * s}px)`, opacity: 0 }];
-      const back = anim === 'fade'
-        ? [{ opacity: 0 }, { opacity: 1 }]
-        : [{ transform: `perspective(1800px) rotateY(${14 * s}deg) translateX(${30 * s}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }];
-      pg.turning = true;
-      b.animate(out, { duration: anim === 'fade' ? 110 : 170, easing: 'ease-in' }).finished.then(() => {
-        apply(false);
-        pg.turning = false;
-        b.animate(back, { duration: anim === 'fade' ? 170 : 230, easing: 'ease-out' });
-      });
-    } else {
-      apply(anim === 'slide');
-    }
+    pg.index = n;
+    apply();
     afterTurn(dir);
+    snapSoon();
   }
 
   function pageTurn(dir) {
@@ -3949,18 +4061,6 @@
     if (!auto.on) toast(t('autoSpeedToast', { n: settings.autoSpeed }), 1400);
   }
 
-  function fillAnimSelect() {
-    const sel = $('#page-anim');
-    sel.replaceChildren();
-    for (const [id, key] of [['curl', 'animCurl'], ['slide', 'animSlide'], ['fade', 'animFade'], ['flip', 'animFlip'], ['none', 'animNone']]) {
-      if (id === 'curl' && !features.curl) continue;
-      const o = el('option', null, t(key));
-      o.value = id;
-      sel.append(o);
-    }
-    sel.value = settings.pageAnim;
-  }
-
   let viewMemo = null;
 
   function toggleView() {
@@ -6183,6 +6283,7 @@ ${sentence}` : translation);
       stampNow();
       syncNow();
     });
+    setupCurl();
     setupTouch();
     setupHomeSwipe();
     setupSheetDrag();

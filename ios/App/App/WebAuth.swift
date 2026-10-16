@@ -180,6 +180,41 @@ public class FolderPickerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPickerDe
     }
 }
 
+@objc(PageSnapPlugin)
+public class PageSnapPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "PageSnapPlugin"
+    public let jsName = "PageSnap"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "capture", returnType: CAPPluginReturnPromise)
+    ]
+
+    @objc func capture(_ call: CAPPluginCall) {
+        let x = call.getDouble("x") ?? 0
+        let y = call.getDouble("y") ?? 0
+        let w = call.getDouble("width") ?? 0
+        let h = call.getDouble("height") ?? 0
+        DispatchQueue.main.async {
+            guard let web = self.bridge?.webView, w > 0, h > 0 else {
+                call.resolve(["data": ""])
+                return
+            }
+            let config = WKSnapshotConfiguration()
+            config.rect = CGRect(x: x, y: y, width: w, height: h)
+            config.afterScreenUpdates = false
+            web.takeSnapshot(with: config) { image, _ in
+                guard let image = image else {
+                    call.resolve(["data": ""])
+                    return
+                }
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let data = image.jpegData(compressionQuality: 0.9)?.base64EncodedString() ?? ""
+                    call.resolve(["data": data])
+                }
+            }
+        }
+    }
+}
+
 class LampaBridgeViewController: CAPBridgeViewController {
     override open func webView(with frame: CGRect, configuration: WKWebViewConfiguration) -> WKWebView {
         LampaWebView(frame: frame, configuration: configuration)
@@ -192,5 +227,6 @@ class LampaBridgeViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(ReaderMenuPlugin())
         bridge?.registerPluginInstance(DictionaryPlugin())
         bridge?.registerPluginInstance(FolderPickerPlugin())
+        bridge?.registerPluginInstance(PageSnapPlugin())
     }
 }

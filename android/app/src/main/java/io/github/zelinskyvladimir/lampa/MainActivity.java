@@ -11,6 +11,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(LampaWindowPlugin.class);
         registerPlugin(FolderPickerPlugin.class);
+        registerPlugin(PageSnapPlugin.class);
         super.onCreate(savedInstanceState);
     }
 
