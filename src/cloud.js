@@ -1,10 +1,6 @@
-// Облако (Supabase): вход, записи для синхронизации и файлы книг — через обычные HTTP-запросы,
-// без клиентской библиотеки. Работает и в Electron, и в мобильной версии.
-// Ключ ниже открытый (publishable): он встраивается в приложение, данные защищают правила доступа в базе.
 (function (global) {
   'use strict';
 
-  // при разработке — Supabase на этом компьютере (supabase start, LAMPA_CLOUD_URL)
   const dev = (global.api && global.api.cloudUrl) || '';
   const URL_BASE = dev || 'https://lxztjateewlladvgzzlj.supabase.co';
   const KEY = dev ? 'dev' : 'sb_publishable_usZ2I_BM4dbq8gdVmXgSkQ_YQ8FXdmc';
@@ -37,9 +33,6 @@
     return text ? JSON.parse(text) : null;
   }
 
-  // ---------- вход ----------
-
-  // Ответ сервера → сессия, которую храним у себя.
   function toSession(j) {
     if (!j || !j.access_token) return null;
     return {
@@ -56,7 +49,6 @@
 
   const signIn = async (email, password) => toSession(await call('/auth/v1/token?grant_type=password', { method: 'POST', body: { email, password } }));
 
-  // Если подтверждение почты выключено — сразу сессия; иначе null (ждём подтверждения).
   const signUp = async (email, password) => toSession(await call('/auth/v1/signup', { method: 'POST', body: { email, password } }));
 
   const refresh = async (session) =>
@@ -68,7 +60,6 @@
     } catch {}
   }
 
-  // Вход через Google: PKCE — браузер возвращает код, код меняем на сессию.
   const b64url = (bytes) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
   async function oauthStart(provider, redirectTo) {
@@ -76,7 +67,8 @@
     const challenge = b64url(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))));
     const url =
       `${URL_BASE}/auth/v1/authorize?provider=${encodeURIComponent(provider)}` +
-      `&redirect_to=${encodeURIComponent(redirectTo)}&code_challenge=${challenge}&code_challenge_method=s256`;
+      `&redirect_to=${encodeURIComponent(redirectTo)}&code_challenge=${challenge}&code_challenge_method=s256` +
+      (provider === 'google' ? '&prompt=select_account' : '');
     return { url, verifier };
   }
 
@@ -86,9 +78,6 @@
   const oauthFinish = async (code, verifier) =>
     toSession(await call('/auth/v1/token?grant_type=pkce', { method: 'POST', body: { auth_code: code, code_verifier: verifier } }));
 
-  // ---------- записи ----------
-
-  // Всё, что пришло на сервер после since (ISO-время сервера), по порядку прихода.
   async function pull(token, since) {
     const out = [];
     let after = since || '1970-01-01T00:00:00Z';
@@ -104,7 +93,6 @@
     return out;
   }
 
-  // Отправить записи; более старая версия, чем на сервере, сервером отбрасывается (триггер в базе).
   async function push(token, rows) {
     for (let i = 0; i < rows.length; i += 200) {
       await call('/rest/v1/records', {
