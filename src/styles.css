@@ -134,13 +134,15 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 :root[data-chrome="hidden"][data-footer="auto"] #footer { transform: translateY(100%); opacity: 0; }
 
 #foot-chapter {
-  flex: 0 1 220px;
+  display: flex;
+  flex: 0 1 260px;
   min-width: 0;
   color: var(--muted);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
+#foot-chapter .fc-ch { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#foot-chapter .fc-pct { flex: none; }
+#foot-chapter .fc-ch:not(:empty) + .fc-pct::before { content: '\00a0· '; }
 @media (max-width: 720px) { #foot-chapter { display: none; } }
 
 .scrub-wrap { position: relative; flex: 1; min-width: 120px; display: flex; align-items: center; height: 32px; }
@@ -1423,7 +1425,6 @@ kbd {
 #bar-size { margin: 0 4px; }
 @media (min-width: 961px) { #foot-size { display: none; } }
 #foot-info { display: none; }
-#foot-chapter:empty { display: none; }
 .page-btn { display: inline-flex; flex: none; align-items: center; gap: 6px; height: 34px; padding: 0 10px 0 12px; border: none; border-radius: 10px; background: var(--panel-2); color: var(--fg); font: 600 13px var(--ui); font-variant-numeric: tabular-nums; cursor: pointer; }
 .page-btn svg { width: 12px; height: 12px; stroke-width: 2.6; }
 

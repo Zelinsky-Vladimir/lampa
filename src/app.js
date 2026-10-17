@@ -1267,6 +1267,15 @@ void main() {
   let lastInputAt = 0;
   let lastResizeAt = 0;
   const readingNow = () => auto.on || (Date.now() - lastInputAt < 6000 && Date.now() - lastResizeAt > 1500);
+  const NAV_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' ']);
+  const NAV_AREAS = '#scroller, #scrub, #toc-panel, #search-results, #bookmarks-list, #notes-list, #goto-pop';
+  function readingInput(e) {
+    const t = e.target instanceof Element ? e.target : null;
+    if (e.type !== 'keydown') return !!(t && t.closest(NAV_AREAS));
+    if (t && t.closest('#goto-pop')) return true;
+    if (t && t.closest('input, textarea, select, [contenteditable="true"]')) return false;
+    return NAV_KEYS.has(e.key);
+  }
 
   function savePosition() {
     if (!current || !current.ready || !readerVisible()) return;
@@ -1343,11 +1352,13 @@ void main() {
     if (ci !== lastChapter) {
       lastChapter = ci;
       ui.barChapter.textContent = chapter;
-      ui.footChapter.textContent = chapter;
       ui.footChapter.title = chapter;
     }
+    const pct = Math.round(current.ratio * 100) + '%';
+    ui.footChapter.firstChild.textContent = chapter;
+    ui.footChapter.lastChild.textContent = pct;
     $('#fi-ch').textContent = chapter;
-    $('#fi-pct').textContent = Math.round(current.ratio * 100) + '%';
+    $('#fi-pct').textContent = pct;
     if (atBookEnd()) maybeOfferEnd();
   }
 
@@ -5516,6 +5527,11 @@ void main() {
 
   async function pullChanges(s) {
     const rows = await Cloud.pull(s.access_token, cloud.lastPull);
+    const joining = !!cloud.joining;
+    if (joining) {
+      cloud.joining = false;
+      saveCloud();
+    }
     if (!rows.length) return;
     const applied = [];
     const covers = [];
@@ -5523,9 +5539,9 @@ void main() {
     let merged = false;
     for (const row of rows) {
       const local = Stamps.get(row.kind, row.id);
-      const older = !!local && local.t >= row.updated_at;
+      const older = !joining && !!local && local.t >= row.updated_at;
       if (row.kind === 'lib') {
-        const r = applyLib(row, older);
+        const r = applyLib(row, older, joining);
         offer = r.offer || offer;
         merged = merged || !!r.changed;
         if (!older && !r.mine) applied.push(row);
@@ -5574,7 +5590,7 @@ void main() {
   }
 
 
-  function applyLib(row, older) {
+  function applyLib(row, older, joining) {
     let e = library.find((x) => x.key === row.id);
     if (row.deleted) {
       if (older) return {};
@@ -5594,7 +5610,7 @@ void main() {
     const samePos = JSON.stringify(d.pos || null) === JSON.stringify(e.pos || null);
     const remoteAt = d.posAt || 0;
     const localAt = e.posAt || 0;
-    const takeRemote = d.pos && !samePos && (!e.pos || remoteAt > localAt || (!remoteAt && !localAt && !older));
+    const takeRemote = d.pos && !samePos && (joining || !e.pos || remoteAt > localAt || (!remoteAt && !localAt && !older));
     if (!takeRemote) return { changed: !older, mine: !older && !samePos };
     if (current && current.ready && current.key === row.id && readerVisible()) return { changed: !older, offer: { key: row.id, pos: d.pos, page: d.page, posAt: remoteAt } };
     Object.assign(e, { pos: d.pos, posAt: remoteAt, progress: d.progress, page: d.page, pages: d.pages, readAt: Math.max(e.readAt || 0, d.readAt || 0) });
@@ -5777,7 +5793,7 @@ void main() {
   }
 
   async function afterSignIn(session) {
-    cloud = { session, lastPull: null, uploaded: [] };
+    cloud = { session, lastPull: null, uploaded: [], joining: true };
     Stamps.resetPushed();
     saveCloud();
     renderSyncBox();
@@ -6371,8 +6387,8 @@ ${sentence}` : translation);
     }
     if (!features.fullscreen) $('#btn-full').hidden = true;
     for (const type of ['pointerdown', 'touchstart', 'keydown', 'wheel']) {
-      document.addEventListener(type, () => {
-        lastInputAt = Date.now();
+      document.addEventListener(type, (e) => {
+        if (readingInput(e)) lastInputAt = Date.now();
       }, { capture: true, passive: true });
     }
     window.addEventListener('resize', () => {
