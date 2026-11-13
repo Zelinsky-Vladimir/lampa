@@ -34,6 +34,15 @@ contextBridge.exposeInMainWorld('api', {
   rendered: () => ipcRenderer.send('dev:rendered'),
   onUpdateReady: (cb) => ipcRenderer.on('update-ready', (_e, version) => cb(version)),
   installUpdate: () => ipcRenderer.send('app:install-update'),
+  // перед выходом и перед сном: окно сохраняет и отправляет всё в облако, потом отвечает
+  onFlush: (cb) =>
+    ipcRenderer.on('app:flush', async (_e, reason) => {
+      try {
+        await cb(reason);
+      } finally {
+        ipcRenderer.send('app:flushed');
+      }
+    }),
   setUiLang: (lang) => ipcRenderer.send('app:ui-lang', lang),
   translate: (text, to) => ipcRenderer.invoke('translate', { text, to }),
   define: (word) => ipcRenderer.invoke('dict:define', String(word || '')),

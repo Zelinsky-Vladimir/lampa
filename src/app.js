@@ -1704,6 +1704,8 @@ void main() {
   async function openPath(p) {
     if (!p) return;
     const token = ++openToken;
+    // открываем книгу — сперва узнаём, не читали ли её дальше на другом устройстве
+    if (signedIn() && !syncing && Date.now() - (cloud.syncedAt || 0) > 10000) syncNow();
 
     let data;
     let book;
@@ -1834,7 +1836,13 @@ void main() {
   }
 
   function showHome() {
+    const leavingBook = root.dataset.mode === 'reader';
     savePosition();
+    // книгу закрыли — место чтения, закладки и заметки уходят в облако
+    if (leavingBook) {
+      stampNow();
+      syncNow();
+    }
     stopAuto();
     closePanels();
     closeSearch();
@@ -5449,7 +5457,10 @@ void main() {
     let changed = Stamps.stamp('lib', r.lib, (x) => x.openedAt);
     changed = Stamps.stamp('mark', r.mark, (x) => x.created) || changed;
     if (shelfReady) changed = Stamps.stamp('shelf', r.lists, (x) => x.added) || changed;
-    if (changed) syncSoon();
+    // Пока книга открыта, место чтения, закладки и заметки ждут закрытия книги, ухода из приложения
+    // или выхода. Правки в библиотеке и списках (добавили, удалили, оценили) уходят сразу:
+    // для них такого момента может и не быть.
+    if (changed && root.dataset.mode !== 'reader') syncSoon();
   }
 
   const CLOUD_KEY = 'lampa.cloud';
@@ -5485,6 +5496,14 @@ void main() {
       }
       throw e;
     }
+  }
+
+  // Выход из приложения или сон компьютера: сохранить место и отправить всё, что ещё не ушло (не дольше 3 с).
+  async function flushSync(reason) {
+    if (reason === 'quit') closeNoteEditor();
+    savePosition();
+    stampNow();
+    if (signedIn()) await Promise.race([syncNow(), sleep(3000)]);
   }
 
   async function syncNow() {
@@ -5809,6 +5828,9 @@ void main() {
     clearTimeout(syncTimer);
     usageAt = 0;
     setSyncState('idle');
+    // вход могли отозвать на сервере посреди работы — панель и кнопка аккаунта не должны показывать старую почту
+    renderSyncBox();
+    renderAccountButton();
     if (s) Cloud.signOut(s);
   }
 
@@ -6009,18 +6031,25 @@ void main() {
     });
     api.onAuthCallback(onAuthCallback);
     api.takeAuthCallback().then((url) => url && onAuthCallback(url));
-    setInterval(() => {
-      if (!document.hidden) syncNow();
-    }, 60000);
+    // Когда синхронизируемся:
+    //   забираем новое — при запуске, при возвращении в приложение, при открытии книги, после входа;
+    //   отправляем своё — при закрытии книги, при уходе из приложения (свернули, сменили приложение,
+    //   заблокировали экран, компьютер уснул), при выходе, и сразу после правок в библиотеке и списках.
+    // Опроса по таймеру нет.
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) return;
       const entry = current && current.ready ? libraryEntry() : null;
       if (entry) current.posAtOpen = entry.posAt || 0;
+      // вернулись в приложение; ещё раз через 5 и 15 с — вдруг другое устройство ещё отправляет
       syncNow();
       setTimeout(syncNow, 5000);
       setTimeout(syncNow, 15000);
     });
-    window.addEventListener('focus', () => syncSoon(300));
+    // компьютер: переключились обратно в окно, не сворачивая его
+    window.addEventListener('focus', () => {
+      if (Date.now() - (cloud.syncedAt || 0) > 20000) syncSoon(300);
+    });
+    if (api.onFlush) api.onFlush(flushSync);
     renderSyncBox();
   }
 
@@ -6424,9 +6453,9 @@ ${sentence}` : translation);
       $('#update-text').textContent = t('updateReady', { v: version });
       $('#update-banner').hidden = false;
     });
-    $('#update-restart').addEventListener('click', () => {
-      closeNoteEditor();
-      savePosition();
+    $('#update-restart').addEventListener('click', async () => {
+      // перезапуск ради обновления — тоже выход: сначала отправляем всё в облако
+      await flushSync('quit');
       api.installUpdate();
     });
     $('#update-later').addEventListener('click', () => {

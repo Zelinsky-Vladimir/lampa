@@ -56,7 +56,9 @@
 
   async function signOut(session) {
     try {
-      await call('/auth/v1/logout', { method: 'POST', token: session.access_token });
+      // только это устройство: без scope=local Supabase выходит на всех устройствах сразу,
+      // и остальные молча теряют вход
+      await call('/auth/v1/logout?scope=local', { method: 'POST', token: session.access_token });
     } catch {}
   }
 

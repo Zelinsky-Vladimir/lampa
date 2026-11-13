@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, WebContentsView, dialog, ipcMain, shell, Menu, screen, net, session, protocol, nativeImage } = require('electron');
+const { app, BrowserWindow, WebContentsView, dialog, ipcMain, shell, Menu, screen, net, session, protocol, nativeImage, powerMonitor } = require('electron');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
@@ -130,7 +130,29 @@ function isOnScreen(b) {
     b.x < a.x + a.width && b.x + b.width > a.x && b.y < a.y + a.height && b.y + b.height > a.y);
 }
 
+// ---------- последняя синхронизация: перед выходом и перед сном компьютера ----------
+
+let closeFlushed = false;
+let installingUpdate = false;
+let quitting = false;
+
+// Попросить окно сохранить и отправить всё в облако; ждём ответа, но не дольше 4 с.
+function flushRenderer(reason) {
+  if (!win || win.isDestroyed() || !rendererReady) return Promise.resolve();
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      ipcMain.removeListener('app:flushed', done);
+      resolve();
+    };
+    const timer = setTimeout(done, 4000);
+    ipcMain.once('app:flushed', done);
+    win.webContents.send('app:flush', reason);
+  });
+}
+
 function createWindow() {
+  closeFlushed = false;
   rendererReady = false;
   const bounds = state.bounds && isOnScreen(state.bounds) ? state.bounds : { width: 1100, height: 800 };
 
@@ -169,7 +191,18 @@ function createWindow() {
     });
   }
 
-  win.on('close', () => {
+  win.on('close', (e) => {
+    // Перед закрытием окно отправляет в облако последнее место чтения и заметки (до 4 с).
+    if (!closeFlushed && !installingUpdate && rendererReady) {
+      e.preventDefault();
+      closeFlushed = true;
+      flushRenderer('quit').then(() => {
+        if (win && !win.isDestroyed()) win.close();
+        // macOS: окно закрыли из «Выйти» (Cmd+Q) — выходим, как и просили
+        if (quitting) app.quit();
+      });
+      return;
+    }
     state.bounds = win.getNormalBounds();
     state.maximized = win.isMaximized();
     saveState();
@@ -427,7 +460,10 @@ function registerIpc() {
   });
 
   ipcMain.on('app:install-update', () => {
-    if (updateReady) autoUpdater.quitAndInstall(true, true);
+    if (!updateReady) return;
+    // окно уже отправило всё в облако перед этим вызовом
+    installingUpdate = true;
+    autoUpdater.quitAndInstall(true, true);
   });
 
   ipcMain.handle('capture', async (_e, r) => {
@@ -601,9 +637,15 @@ if (!app.requestSingleInstanceLock()) {
     registerIpc();
     createWindow();
     setupAutoUpdate();
+    // компьютер засыпает или экран блокируется — отправить в облако место чтения, пока есть сеть
+    for (const ev of ['suspend', 'lock-screen']) powerMonitor.on(ev, () => flushRenderer('sleep'));
     app.on('activate', () => {
       if (!BrowserWindow.getAllWindows().length) createWindow();
     });
+  });
+
+  app.on('before-quit', () => {
+    quitting = true;
   });
 
   app.on('window-all-closed', () => {
